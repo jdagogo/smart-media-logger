@@ -1,0 +1,152 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+  SIMPLE COLOR SCHEME:
+  - Blue (#2B5A8A) for all accents, labels, highlights
+  - Dark brown (#2C2416) for primary text
+  - Medium brown (#5C4B32) for secondary text
+  - Cream (#F5F1E8) for backgrounds
+  - Warm tan (#D4C9B5) for borders/rules
+*/
+
+:root {
+  --paper-bg: #F5F1E8;
+  --paper-light: #FDFCF9;
+  --paper-dark: #E8E2D5;
+  --ink-primary: #2C2416;
+  --ink-secondary: #5C4B32;
+  --rule-color: #D4C9B5;
+  --accent-blue: #2B5A8A;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background-color: var(--paper-bg);
+  color: var(--ink-primary);
+  font-size: 1.25rem;
+}
+
+/* Super-sized layout for easy use */
+.text-2xl { font-size: 2rem !important; line-height: 2.5rem !important; }
+.text-xl { font-size: 1.75rem !important; line-height: 2.25rem !important; }
+.text-lg { font-size: 1.5rem !important; line-height: 2rem !important; }
+.text-base { font-size: 1.25rem !important; line-height: 1.75rem !important; }
+.text-sm { font-size: 1.125rem !important; line-height: 1.5rem !important; }
+.text-xs { font-size: 1rem !important; line-height: 1.25rem !important; }
+
+/* Typewriter Labels - BLUE */
+.label-typewriter {
+  font-family: 'Courier New', Courier, monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 1rem;
+  color: var(--accent-blue);
+  font-weight: 600;
+}
+
+/* Paper Card */
+.paper-card {
+  background: var(--paper-light);
+  border: 2px solid var(--accent-blue);
+  box-shadow: 0 4px 12px rgba(43, 90, 138, 0.1);
+}
+
+/* Rule Lines - blue tinted */
+.rule-line {
+  border-bottom: 1px solid var(--rule-color);
+}
+
+/* Star Rating - BLUE */
+.star-empty {
+  color: var(--rule-color);
+}
+
+.star-filled {
+  color: var(--accent-blue);
+}
+
+/* Checkbox Styling - BLUE */
+.checkbox-lofi {
+  appearance: none;
+  width: 24px;
+  height: 24px;
+  border: 2px solid var(--accent-blue);
+  background: transparent;
+  cursor: pointer;
+  position: relative;
+  border-radius: 4px;
+}
+
+.checkbox-lofi:checked {
+  background: var(--accent-blue);
+}
+
+.checkbox-lofi:checked::after {
+  content: '✓';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 16px;
+  color: white;
+  font-weight: bold;
+}
+
+/* Input styling - better contrast */
+input[type="text"],
+input[type="date"],
+textarea {
+  background: var(--paper-light) !important;
+  border: 2px solid var(--accent-blue) !important;
+  color: var(--ink-primary) !important;
+}
+
+input[type="text"]::placeholder,
+textarea::placeholder {
+  color: var(--ink-secondary) !important;
+}
+
+input[type="text"]:focus,
+input[type="date"]:focus,
+textarea:focus {
+  outline: none !important;
+  border-color: var(--accent-blue) !important;
+  box-shadow: 0 0 0 3px rgba(43, 90, 138, 0.2) !important;
+}
+
+/* Rating Slider - BLUE */
+.rating-slider {
+  @apply w-full h-4 rounded-full appearance-none cursor-pointer;
+}
+
+.rating-slider::-webkit-slider-thumb {
+  @apply appearance-none w-8 h-8 rounded-full cursor-pointer;
+  background: var(--accent-blue);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+
+.rating-slider::-moz-range-thumb {
+  @apply w-8 h-8 rounded-full cursor-pointer border-0;
+  background: var(--accent-blue);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--paper-bg);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--accent-blue);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--ink-secondary);
+}

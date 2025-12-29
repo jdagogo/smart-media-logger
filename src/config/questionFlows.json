@@ -1,0 +1,386 @@
+{
+  "version": "1.0.0",
+  "lastUpdated": "2025-12-28",
+  "flows": {
+    "movie": {
+      "name": "Movie",
+      "icon": "film",
+      "questions": [
+        {
+          "id": "date",
+          "text": "When did you watch this?",
+          "type": "date",
+          "required": false,
+          "voiceEnabled": true,
+          "fieldKey": "consumptionDate"
+        },
+        {
+          "id": "location",
+          "text": "Where did you watch it?",
+          "type": "radio",
+          "required": false,
+          "voiceEnabled": false,
+          "fieldKey": "location",
+          "options": [
+            { "value": "theater", "label": "Theater" },
+            { "value": "home", "label": "Home" },
+            { "value": "other", "label": "Other" }
+          ],
+          "followup": {
+            "condition": "selected === 'theater'",
+            "question": {
+              "id": "theater_name",
+              "text": "Which theater? (optional)",
+              "type": "text",
+              "required": false,
+              "voiceEnabled": true,
+              "fieldKey": "locationDetail",
+              "placeholder": "e.g., Paris Theater, NYC"
+            }
+          }
+        },
+        {
+          "id": "firstTime",
+          "text": "Was this your first time watching it?",
+          "type": "radio",
+          "required": false,
+          "voiceEnabled": false,
+          "fieldKey": "firstTime",
+          "options": [
+            { "value": "true", "label": "Yes, first time" },
+            { "value": "false", "label": "No, I've seen it before" }
+          ]
+        },
+        {
+          "id": "social",
+          "text": "Who were you with?",
+          "type": "radio",
+          "required": false,
+          "voiceEnabled": false,
+          "fieldKey": "socialContext",
+          "options": [
+            { "value": "alone", "label": "Alone" },
+            { "value": "friends", "label": "Friends" },
+            { "value": "partner", "label": "Partner/Date" },
+            { "value": "family", "label": "Family" }
+          ],
+          "followup": {
+            "condition": "selected !== 'alone'",
+            "question": {
+              "id": "companion_names",
+              "text": "Names? (optional)",
+              "type": "text",
+              "required": false,
+              "voiceEnabled": true,
+              "fieldKey": "companionNames",
+              "placeholder": "e.g., Sarah, Mike"
+            }
+          }
+        },
+        {
+          "id": "rating",
+          "text": "How would you rate it overall?",
+          "type": "rating",
+          "required": false,
+          "voiceEnabled": false,
+          "fieldKey": "overallRating"
+        },
+        {
+          "id": "notes",
+          "text": "Any other thoughts to remember?",
+          "type": "textarea",
+          "required": false,
+          "voiceEnabled": true,
+          "fieldKey": "notes",
+          "placeholder": "What stood out? How did it make you feel?"
+        }
+      ],
+      "smartQuestions": {
+        "enabled": true,
+        "maxQuestions": 3,
+        "generatedByAI": true,
+        "insertAfter": "rating"
+      }
+    },
+    "book": {
+      "name": "Book",
+      "icon": "book",
+      "questions": [
+        {
+          "id": "format",
+          "text": "How did you read it?",
+          "type": "radio",
+          "required": false,
+          "voiceEnabled": false,
+          "fieldKey": "format",
+          "options": [
+            { "value": "physical", "label": "Physical book" },
+            { "value": "ebook", "label": "eBook" },
+            { "value": "audiobook", "label": "Audiobook" }
+          ]
+        },
+        {
+          "id": "date",
+          "text": "When did you finish it?",
+          "type": "date",
+          "required": false,
+          "voiceEnabled": true,
+          "fieldKey": "consumptionDate"
+        },
+        {
+          "id": "firstTime",
+          "text": "Was this your first time reading it?",
+          "type": "radio",
+          "required": false,
+          "voiceEnabled": false,
+          "fieldKey": "firstTime",
+          "options": [
+            { "value": "true", "label": "Yes, first time" },
+            { "value": "false", "label": "No, I've read it before" }
+          ]
+        },
+        {
+          "id": "rating",
+          "text": "How would you rate it overall?",
+          "type": "rating",
+          "required": false,
+          "voiceEnabled": false,
+          "fieldKey": "overallRating"
+        },
+        {
+          "id": "notes",
+          "text": "Any other thoughts to remember?",
+          "type": "textarea",
+          "required": false,
+          "voiceEnabled": true,
+          "fieldKey": "notes",
+          "placeholder": "What resonated with you? Favorite moments?"
+        }
+      ],
+      "smartQuestions": {
+        "enabled": true,
+        "maxQuestions": 3,
+        "generatedByAI": true,
+        "insertAfter": "rating"
+      }
+    },
+    "tv": {
+      "name": "TV Show",
+      "icon": "tv",
+      "questions": [
+        {
+          "id": "scope",
+          "text": "What are you logging?",
+          "type": "radio",
+          "required": false,
+          "voiceEnabled": false,
+          "fieldKey": "format",
+          "options": [
+            { "value": "episode", "label": "Single episode" },
+            { "value": "season", "label": "Complete season" },
+            { "value": "series", "label": "Entire series" }
+          ]
+        },
+        {
+          "id": "date",
+          "text": "When did you watch it?",
+          "type": "date",
+          "required": false,
+          "voiceEnabled": true,
+          "fieldKey": "consumptionDate"
+        },
+        {
+          "id": "firstTime",
+          "text": "Was this your first time watching?",
+          "type": "radio",
+          "required": false,
+          "voiceEnabled": false,
+          "fieldKey": "firstTime",
+          "options": [
+            { "value": "true", "label": "Yes, first time" },
+            { "value": "false", "label": "No, rewatching" }
+          ]
+        },
+        {
+          "id": "rating",
+          "text": "How would you rate it overall?",
+          "type": "rating",
+          "required": false,
+          "voiceEnabled": false,
+          "fieldKey": "overallRating"
+        },
+        {
+          "id": "notes",
+          "text": "Any other thoughts to remember?",
+          "type": "textarea",
+          "required": false,
+          "voiceEnabled": true,
+          "fieldKey": "notes"
+        }
+      ],
+      "smartQuestions": {
+        "enabled": true,
+        "maxQuestions": 3,
+        "generatedByAI": true,
+        "insertAfter": "rating"
+      }
+    },
+    "music": {
+      "name": "Music",
+      "icon": "music",
+      "questions": [
+        {
+          "id": "scope",
+          "text": "What are you logging?",
+          "type": "radio",
+          "required": false,
+          "voiceEnabled": false,
+          "fieldKey": "format",
+          "options": [
+            { "value": "album", "label": "Full album" },
+            { "value": "song", "label": "Single song" },
+            { "value": "concert", "label": "Concert/Live show" }
+          ]
+        },
+        {
+          "id": "date",
+          "text": "When did you listen?",
+          "type": "date",
+          "required": false,
+          "voiceEnabled": true,
+          "fieldKey": "consumptionDate"
+        },
+        {
+          "id": "firstTime",
+          "text": "First time hearing this?",
+          "type": "radio",
+          "required": false,
+          "voiceEnabled": false,
+          "fieldKey": "firstTime",
+          "options": [
+            { "value": "true", "label": "Yes, new to me" },
+            { "value": "false", "label": "No, I know it well" }
+          ]
+        },
+        {
+          "id": "rating",
+          "text": "How would you rate it overall?",
+          "type": "rating",
+          "required": false,
+          "voiceEnabled": false,
+          "fieldKey": "overallRating"
+        },
+        {
+          "id": "notes",
+          "text": "Any other thoughts to remember?",
+          "type": "textarea",
+          "required": false,
+          "voiceEnabled": true,
+          "fieldKey": "notes",
+          "placeholder": "Favorite tracks? How did it make you feel?"
+        }
+      ],
+      "smartQuestions": {
+        "enabled": true,
+        "maxQuestions": 3,
+        "generatedByAI": true,
+        "insertAfter": "rating"
+      }
+    },
+    "podcast": {
+      "name": "Podcast",
+      "icon": "mic",
+      "questions": [
+        {
+          "id": "scope",
+          "text": "What are you logging?",
+          "type": "radio",
+          "required": false,
+          "voiceEnabled": false,
+          "fieldKey": "format",
+          "options": [
+            { "value": "episode", "label": "Single episode" },
+            { "value": "series", "label": "Entire podcast series" }
+          ]
+        },
+        {
+          "id": "date",
+          "text": "When did you listen?",
+          "type": "date",
+          "required": false,
+          "voiceEnabled": true,
+          "fieldKey": "consumptionDate"
+        },
+        {
+          "id": "rating",
+          "text": "How would you rate it overall?",
+          "type": "rating",
+          "required": false,
+          "voiceEnabled": false,
+          "fieldKey": "overallRating"
+        },
+        {
+          "id": "notes",
+          "text": "Any other thoughts to remember?",
+          "type": "textarea",
+          "required": false,
+          "voiceEnabled": true,
+          "fieldKey": "notes",
+          "placeholder": "Key takeaways? Memorable moments?"
+        }
+      ],
+      "smartQuestions": {
+        "enabled": true,
+        "maxQuestions": 2,
+        "generatedByAI": true,
+        "insertAfter": "rating"
+      }
+    },
+    "article": {
+      "name": "Article",
+      "icon": "file-text",
+      "questions": [
+        {
+          "id": "date",
+          "text": "When did you read this?",
+          "type": "date",
+          "required": false,
+          "voiceEnabled": true,
+          "fieldKey": "consumptionDate"
+        },
+        {
+          "id": "rating",
+          "text": "How would you rate it?",
+          "type": "rating",
+          "required": false,
+          "voiceEnabled": false,
+          "fieldKey": "overallRating"
+        },
+        {
+          "id": "notes",
+          "text": "Key takeaways or thoughts?",
+          "type": "textarea",
+          "required": false,
+          "voiceEnabled": true,
+          "fieldKey": "notes",
+          "placeholder": "What did you learn? Worth sharing?"
+        }
+      ],
+      "smartQuestions": {
+        "enabled": false,
+        "maxQuestions": 0,
+        "generatedByAI": false
+      }
+    }
+  },
+  "greetings": {
+    "firstTime": "What did you watch, read, or listen to?",
+    "returning": "Welcome back! What did you experience this time?",
+    "streak": {
+      "director": "Another {name} film?",
+      "author": "Another {name} book?",
+      "artist": "More {name}?",
+      "genre": "Another {genre}?"
+    }
+  }
+}

@@ -1,0 +1,182 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model MediaLog {
+  id                String   @id @default(cuid())
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Core identity
+  mediaType         String   // 'movie', 'tv', 'book', 'music', 'podcast', 'article'
+  title             String
+  year              Int?
+  creators          String?  // JSON string: Array of creator objects
+
+  // External IDs
+  tmdbId            Int?
+  imdbId            String?
+  isbn              String?
+  spotifyId         String?
+  externalUrl       String?
+  coverImageUrl     String?
+
+  // Rich metadata (JSON string)
+  metadata          String?  // Genres, themes, cast, etc.
+
+  // User experience
+  consumptionDate   DateTime?
+  location          String?  // 'theater', 'home', 'streaming', etc.
+  locationDetail    String?  // Theater name, etc.
+  socialContext     String?  // 'alone', 'friends', etc.
+  companionNames    String?  // Names of people watched with
+  firstTime         Boolean  @default(true)
+  format            String?  // 'IMAX', '4K', 'paperback', 'audiobook', etc.
+
+  // Rating
+  overallRating     Int?     // 1-100
+  dimensionRatings  String?  // JSON: Content-specific ratings
+
+  // Responses to smart questions (JSON string)
+  responses         String?  // Array of Q&A objects
+
+  // User notes
+  notes             String?
+  favoriteMoments   String?  // JSON array
+
+  // Review aggregation (fetched at log time)
+  metacriticScore   Int?
+  rottenTomatoesScore Int?
+
+  // Streaming/purchase links (JSON string)
+  streamingLinks    String?
+  purchaseLinks     String?
+
+  // Discovery moment shown during logging (JSON)
+  discoveryMoment   String?
+
+  // Entities extracted
+  entities          EntityOnLog[]
+
+  @@index([mediaType])
+  @@index([overallRating])
+  @@index([consumptionDate])
+}
+
+model Entity {
+  id       String @id @default(cuid())
+  type     String // 'person', 'work', 'theme', 'song', etc.
+  name     String
+  slug     String // For UnitedTribes compatibility: type:slug
+  metadata String? // JSON: Additional details
+
+  logs     EntityOnLog[]
+
+  @@unique([type, slug])
+  @@index([type])
+}
+
+model EntityOnLog {
+  id        String   @id @default(cuid())
+  logId     String
+  entityId  String
+  role      String?  // 'director', 'actor', 'author', etc.
+
+  log       MediaLog @relation(fields: [logId], references: [id], onDelete: Cascade)
+  entity    Entity   @relation(fields: [entityId], references: [id], onDelete: Cascade)
+
+  @@unique([logId, entityId])
+}
+
+model WantToConsume {
+  id              String   @id @default(cuid())
+  createdAt       DateTime @default(now())
+
+  // Source
+  addedFrom       String?  // 'discovery', 'recommendation', 'manual'
+  sourceLogId     String?
+  reason          String?  // "Based on The Godfather", "Director's other work"
+
+  // Core data
+  mediaType       String
+  title           String
+  creators        String?  // JSON
+  year            Int?
+
+  // Rich metadata
+  coverImageUrl   String?
+  trailerUrl      String?
+  description     String?
+  streamingLinks  String?  // JSON
+  purchaseLinks   String?  // JSON
+
+  // User management
+  priority        String   @default("medium") // 'high', 'medium', 'low'
+  notes           String?
+
+  // Status
+  consumed        Boolean  @default(false)
+  consumedLogId   String?
+  consumedAt      DateTime?
+
+  @@index([consumed, priority])
+  @@index([mediaType])
+}
+
+model UserPreferences {
+  id              String   @id @default(cuid())
+  userId          String   @unique @default("default")
+
+  // Learned preferences (JSON strings)
+  favoriteGenres    String?
+  favoriteThemes    String?
+  favoriteCreators  String?
+  tasteDimensions   String?  // Pacing, complexity, etc.
+  recentPatterns    String?  // Detected streaks, preferences
+
+  updatedAt       DateTime @updatedAt
+}
+
+model QuestionFeedback {
+  id          String   @id @default(cuid())
+  createdAt   DateTime @default(now())
+
+  questionId  String   // Which question in the flow
+  mediaType   String   // Which media type flow
+  feedback    String   // User's suggestion
+  resolved    Boolean  @default(false)
+}
+
+// Known media - grows smarter with each search
+model KnownMedia {
+  id            String   @id @default(cuid())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // External IDs
+  externalId    String?  // TMDB ID, ISBN, etc.
+  imdbId        String?
+
+  // Core identity
+  mediaType     String   // 'movie', 'tv', 'book', 'audiobook', 'music', 'podcast'
+  title         String
+  year          Int?
+  director      String?
+  starring      String?  // JSON array
+  overview      String?
+  posterUrl     String?
+
+  // Search optimization
+  searchCount   Int      @default(1)  // How often this is searched
+  lastSearched  DateTime @default(now())
+
+  @@unique([mediaType, title, year])
+  @@index([mediaType])
+  @@index([title])
+  @@index([searchCount])
+}
