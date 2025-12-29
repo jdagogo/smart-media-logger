@@ -22,7 +22,7 @@ export default function RootLayout({
                 SMART MEDIA LOGGER
               </span>
               <a
-                href="/version-control.html"
+                href="/smart-media-logger-versions.html"
                 target="_blank"
                 className="ml-2 text-xs font-mono px-2 py-0.5 bg-amber-100 text-amber-800 rounded border border-amber-300 hover:bg-amber-200 transition-colors"
                 title="View version info and known issues"
