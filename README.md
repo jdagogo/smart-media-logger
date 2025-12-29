@@ -57,7 +57,7 @@ Open [http://localhost:3006](http://localhost:3006)
 
 ## Version History
 
-See [version-control.html](version-control.html) for detailed changelog and roadmap.
+See [Smart Media Logger Versions](public/smart-media-logger-versions.html) for detailed changelog and roadmap.
 
 ### v0.1.0-alpha (December 28-29, 2024)
 - Initial build with basic logging flow
