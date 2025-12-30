@@ -194,6 +194,9 @@ export interface LoggedItem extends QueueItem {
   companionNames?: string
   socialContext?: string
   location?: string
+  locationDetail?: string
+  firstTime?: boolean
+  isDraft?: boolean  // True if saved via Save & Exit before completing flow
 }
 
 interface RightPaneTabsProps {
@@ -208,6 +211,7 @@ interface RightPaneTabsProps {
     cinematographer?: string
     composer?: string
     starring?: string[]
+    cast?: Array<{ name: string; character: string; profilePath?: string }>
     distributor?: string
     runtime?: number
     rating?: number
@@ -275,6 +279,7 @@ interface RightPaneTabsProps {
   onAddLoggedItem?: (item: LoggedItem) => void
   onUpdateLoggedItem?: (id: number, changes: Partial<LoggedItem>) => void
   onRemoveLoggedItem?: (id: number) => void
+  onResumeDraft?: (item: LoggedItem) => void
   // Tab control from parent
   activeTabOverride?: 'logging' | 'upnext' | 'library' | 'recs' | 'profile'
   tabSwitchTrigger?: number
@@ -366,6 +371,7 @@ export default function RightPaneTabs({
   onAddLoggedItem,
   onUpdateLoggedItem,
   onRemoveLoggedItem,
+  onResumeDraft,
   activeTabOverride,
   tabSwitchTrigger,
   onTabChange,
@@ -871,15 +877,14 @@ export default function RightPaneTabs({
         {/* NOW LOGGING TAB */}
         {activeTab === 'logging' && (
           <div>
-            {/* Queue Mode - Show Queue Preview Card */}
-            {searchMode === 'queue' ? (
-              queuePreview && (queuePreview.title || queuePreview.isLoading || queuePreview.sourceUrl) ? (
-                <div className="bg-gradient-to-br from-orange-50 to-amber-50 border-2 border-orange-300 rounded-2xl overflow-hidden shadow-lg">
+            {/* Show Queue Preview Card in BOTH modes when there's preview data and not yet logging */}
+            {queuePreview && (queuePreview.title || queuePreview.isLoading || queuePreview.sourceUrl) && (searchMode === 'queue' || !(currentEntry && currentEntry.title)) ? (
+                <div className={`bg-gradient-to-br ${searchMode === 'queue' ? 'from-orange-50 to-amber-50 border-orange-300' : 'from-blue-50 to-indigo-50 border-accent-blue'} border-2 rounded-2xl overflow-hidden shadow-lg`}>
                   {/* Header */}
-                  <div className="bg-gradient-to-r from-orange-400 to-amber-500 px-5 py-3">
+                  <div className={`bg-gradient-to-r ${searchMode === 'queue' ? 'from-orange-400 to-amber-500' : 'from-accent-blue to-indigo-500'} px-5 py-3`}>
                     <div className="flex items-center gap-2 text-white">
-                      <span className="text-xl">📋</span>
-                      <span className="font-bold uppercase tracking-wide text-sm">Adding to Queue</span>
+                      <span className="text-xl">{searchMode === 'queue' ? '📋' : '🎬'}</span>
+                      <span className="font-bold uppercase tracking-wide text-sm">{searchMode === 'queue' ? 'Adding to Queue' : 'Media Preview'}</span>
                     </div>
                   </div>
 
@@ -1283,17 +1288,9 @@ export default function RightPaneTabs({
                     )}
                   </div>
                 </div>
-              ) : (
-                <div className="text-center py-16 text-ink-500">
-                  <div className="text-4xl mb-4">📋</div>
-                  <p className="text-lg">Add to your queue</p>
-                  <p className="text-sm mt-2">Search or paste a URL to preview</p>
-                </div>
-              )
-            ) : (
-              /* Log Mode - Show Media Card */
-              currentEntry && currentEntry.title ? (
-                <MediaCard
+            ) : currentEntry && currentEntry.title ? (
+              /* Log Mode - Show Media Card when logging in progress */
+              <MediaCard
                   entryNumber={currentEntry.entryNumber}
                   mediaType={currentEntry.mediaType}
                   title={currentEntry.title}
@@ -1303,6 +1300,7 @@ export default function RightPaneTabs({
                   cinematographer={currentEntry.cinematographer}
                   composer={currentEntry.composer}
                   starring={currentEntry.starring}
+                  cast={currentEntry.cast}
                   distributor={currentEntry.distributor}
                   runtime={currentEntry.runtime}
                   rating={currentEntry.rating}
@@ -1326,14 +1324,16 @@ export default function RightPaneTabs({
                   onEdit={onEdit}
                   onTalentPreferenceChange={onTalentPreferenceChange}
                   initialTalentPreferences={talentPreferences}
+                  onSaveTrack={handleSaveMusicTrack}
+                  onUnsaveTrack={handleUnsaveMusicTrack}
+                  savedTracks={savedMusicTracks}
                 />
-              ) : (
-                <div className="text-center py-16 text-ink-500">
-                  <div className="text-4xl mb-4">🎬</div>
-                  <p className="text-lg">Search for something to log</p>
-                  <p className="text-sm mt-2">Your entry will appear here</p>
-                </div>
-              )
+            ) : (
+              <div className="text-center py-16 text-ink-500">
+                <div className="text-4xl mb-4">{searchMode === 'queue' ? '📋' : '🎬'}</div>
+                <p className="text-lg">{searchMode === 'queue' ? 'Add to your queue' : 'Search for something to log'}</p>
+                <p className="text-sm mt-2">{searchMode === 'queue' ? 'Search or paste a URL to preview' : 'Your entry will appear here'}</p>
+              </div>
             )}
           </div>
         )}
@@ -1925,10 +1925,21 @@ export default function RightPaneTabs({
                           : 'border-paper-300 hover:border-accent-blue'
                     }`}
                   >
+                    {/* Draft Banner - Very prominent */}
+                    {item.isDraft && (
+                      <div className="bg-gradient-to-r from-amber-500 to-orange-500 px-4 py-2 flex items-center justify-between">
+                        <div className="flex items-center gap-2 text-white">
+                          <span className="text-lg">⚠️</span>
+                          <span className="font-bold uppercase tracking-wide text-sm">Draft - Incomplete</span>
+                        </div>
+                        <span className="text-white/80 text-xs">Click to resume</span>
+                      </div>
+                    )}
+
                     {/* Collapsed Header - Click to expand */}
                     <button
                       onClick={() => setExpandedLibraryId(isExpanded ? null : item.id)}
-                      className="w-full p-4 text-left flex justify-between items-center hover:bg-paper-50 transition-colors"
+                      className={`w-full p-4 text-left flex justify-between items-center hover:bg-paper-50 transition-colors ${item.isDraft ? 'border-l-4 border-amber-500' : ''}`}
                     >
                       <div className="flex-1">
                         {/* Media type badge for songs */}
@@ -2140,6 +2151,38 @@ export default function RightPaneTabs({
                                 </div>
                               )}
                             </div>
+                            {/* Draft Actions - Resume and Delete */}
+                            {item.isDraft && (
+                              <div className="bg-amber-50 border-2 border-amber-300 rounded-xl p-4 space-y-3">
+                                <div className="flex items-center gap-2 text-amber-700">
+                                  <span className="text-xl">⚠️</span>
+                                  <div>
+                                    <p className="font-bold">This entry is incomplete</p>
+                                    <p className="text-sm">Resume to finish logging your experience</p>
+                                  </div>
+                                </div>
+                                <div className="flex gap-3">
+                                  <button
+                                    onClick={() => onResumeDraft?.(item)}
+                                    className="flex-1 px-4 py-3 bg-amber-500 text-white rounded-xl font-bold hover:bg-amber-600 transition-colors"
+                                  >
+                                    ▶️ Resume Logging
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      if (confirm(`Delete "${item.title}" draft? This cannot be undone.`)) {
+                                        onRemoveLoggedItem?.(item.id)
+                                        setExpandedLibraryId(null)
+                                      }
+                                    }}
+                                    className="px-4 py-3 bg-red-500 text-white rounded-xl font-bold hover:bg-red-600 transition-colors"
+                                  >
+                                    🗑️ Delete
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+
                             <div className="flex gap-3 pt-3 border-t border-paper-200">
                               <button
                                 onClick={() => handleAddToQueue({ title: item.title, year: item.year, mediaType: item.mediaType, director: item.director })}
@@ -2162,6 +2205,18 @@ export default function RightPaneTabs({
                                 className="px-4 py-3 bg-accent-blue text-white rounded-xl font-bold hover:bg-blue-700 transition-colors"
                               >
                                 ✏️ Edit
+                              </button>
+                              {/* Delete button for all items */}
+                              <button
+                                onClick={() => {
+                                  if (confirm(`Remove "${item.title}" from My Stuff?`)) {
+                                    onRemoveLoggedItem?.(item.id)
+                                    setExpandedLibraryId(null)
+                                  }
+                                }}
+                                className="px-4 py-3 bg-red-100 text-red-600 rounded-xl font-bold hover:bg-red-200 transition-colors"
+                              >
+                                🗑️
                               </button>
                             </div>
                           </div>

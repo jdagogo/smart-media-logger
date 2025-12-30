@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 
 const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY || 'AIzaSyAcAPLUflo9lDlsexKFzr5FHvvgGvF0xb8'
 
+// Manual playlist overrides for movies where auto-search returns wrong results
+const PLAYLIST_OVERRIDES: Record<string, string> = {
+  'american hustle': 'PLdDuA6zKmNDNkQOJhYugEL2BfxqL6So-t',
+}
+
 export async function GET(request: NextRequest) {
   const playlistId = request.nextUrl.searchParams.get('playlistId')
   const movieTitle = request.nextUrl.searchParams.get('movieTitle')
@@ -9,7 +14,16 @@ export async function GET(request: NextRequest) {
   try {
     let targetPlaylistId = playlistId
 
-    // If no playlist ID provided, search for "[Movie Title] Soundtrack" playlist
+    // Check for manual override first
+    if (!targetPlaylistId && movieTitle) {
+      const normalizedTitle = movieTitle.toLowerCase().trim()
+      if (PLAYLIST_OVERRIDES[normalizedTitle]) {
+        targetPlaylistId = PLAYLIST_OVERRIDES[normalizedTitle]
+        console.log('Using manual override for:', movieTitle, '-> Playlist ID:', targetPlaylistId)
+      }
+    }
+
+    // If no playlist ID and no override, search for "[Movie Title] Soundtrack" playlist
     if (!targetPlaylistId && movieTitle) {
       const searchQuery = `${movieTitle} soundtrack playlist`
       const searchUrl = new URL('https://www.googleapis.com/youtube/v3/search')

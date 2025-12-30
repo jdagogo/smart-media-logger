@@ -5,6 +5,8 @@ import VoiceInput from '@/components/shared/VoiceInput'
 import RatingSlider from '@/components/shared/RatingSlider'
 import RightPaneTabs, { LoggedItem } from '@/components/right-pane/RightPaneTabs'
 import QuestionCard from '@/components/left-pane/QuestionCard'
+import CharacterGallery, { CharacterSceneNote } from '@/components/CharacterGallery'
+import SoundtrackModal from '@/components/right-pane/SoundtrackModal'
 
 // Types
 interface StreamingOption {
@@ -75,20 +77,52 @@ interface LogData {
   title: string
   year?: number
   tmdbId?: number
+  // Crew
   director?: string
+  directors?: string[]
   cinematographer?: string
   composer?: string
+  writers?: string[]
+  producers?: Array<{ name: string; job: string }>
+  editor?: string
+  // Cast
   starring?: string[]
+  cast?: Array<{ name: string; character: string; profilePath?: string }>
+  genres?: string[]
   distributor?: string
   runtime?: number
-  trailerUrl?: string
+  // Ratings & Scores
+  tmdbRating?: number
+  tmdbVoteCount?: number
   metacriticScore?: number
   rottenTomatoesScore?: number
   metacriticUrl?: string
   rottenTomatoesUrl?: string
   metacriticData?: MetacriticData
   rottenTomatoesData?: RottenTomatoesData
+  imdbUrl?: string
+  imdbRating?: string
+  imdbVotes?: string
+  rated?: string
+  // Content
+  plot?: string
+  overview?: string
+  awards?: string
+  boxOffice?: string
+  production?: string
+  country?: string
+  language?: string
+  // Media
+  trailerUrl?: string
+  trailerVideoId?: string
+  videoId?: string
+  poster?: string
+  thumbnail?: string
+  description?: string
+  duration?: string
+  sourceUrl?: string
   streamingOptions?: StreamingOption[]
+  // Logging
   consumptionDate?: string
   location?: string
   locationDetail?: string
@@ -399,6 +433,7 @@ function CompleteStep({
             setSelectedMedia(null)
             updateLogData({ mediaType: 'movie', title: '' })
             setQuestionIndex(0)
+            setCharacterSceneNotes([])
           }}
           className="px-6 py-3 bg-accent-blue text-white rounded-lg hover:bg-blue-600 transition-colors font-bold"
         >
@@ -567,6 +602,63 @@ export default function Home() {
     title: '',
   })
 
+  // Structured character/scene notes for preference learning
+  const [characterSceneNotes, setCharacterSceneNotes] = useState<CharacterSceneNote[]>([])
+
+  // Soundtrack modal state (for URL preview)
+  const [soundtrackMovie, setSoundtrackMovie] = useState<{ title: string; year: number; composer?: string } | null>(null)
+
+  // Auto-save log data to localStorage as user progresses
+  useEffect(() => {
+    if (logData.title) {
+      const draftData = {
+        logData,
+        characterSceneNotes,
+        step,
+        savedAt: new Date().toISOString(),
+      }
+      localStorage.setItem('smartMediaLogger_draft', JSON.stringify(draftData))
+      console.log('Auto-saved draft:', logData.title)
+    }
+  }, [logData, characterSceneNotes, step])
+
+  // Track if we've already initialized (to prevent overwrites)
+  const hasInitialized = useRef(false)
+
+  // Restore draft on mount - ONLY if we have no current data
+  useEffect(() => {
+    if (hasInitialized.current) return
+    hasInitialized.current = true
+
+    // Only restore if we're starting completely fresh
+    if (logData.title) {
+      console.log('Already have data, skipping draft restore')
+      return
+    }
+
+    try {
+      const saved = localStorage.getItem('smartMediaLogger_draft')
+      if (saved) {
+        const draft = JSON.parse(saved)
+        if (draft.logData?.title) {
+          // Ask user if they want to restore
+          const shouldRestore = window.confirm(`Restore your draft for "${draft.logData.title}"?`)
+          if (shouldRestore) {
+            setLogData(draft.logData)
+            setCharacterSceneNotes(draft.characterSceneNotes || [])
+            setStep(draft.step || 'date')
+            console.log('Restored draft:', draft.logData.title)
+          } else {
+            // User declined, clear the draft
+            localStorage.removeItem('smartMediaLogger_draft')
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Failed to restore draft:', e)
+    }
+  }, [])
+
   // Entry number (would come from database in real app)
   const [entryNumber] = useState(1)
 
@@ -617,6 +709,163 @@ export default function Home() {
   // Remove logged item callback
   const removeLoggedItem = (id: number) => {
     setLoggedItems(prev => prev.filter(item => item.id !== id))
+  }
+
+  // Resume draft - load draft data back into logging flow
+  const handleResumeDraft = (item: LoggedItem) => {
+    // Load all the data back into logData
+    updateLogData({
+      mediaType: item.mediaType,
+      title: item.title,
+      year: item.year,
+      tmdbId: item.tmdbId,
+      // Crew
+      director: item.director,
+      directors: item.directors,
+      cinematographer: item.cinematographer,
+      composer: item.composer,
+      writers: item.writers,
+      producers: item.producers,
+      editor: item.editor,
+      // Cast
+      cast: item.cast,
+      starring: item.cast?.map(c => c.name), // Convert cast to starring
+      genres: item.genres,
+      runtime: item.runtime,
+      // Ratings
+      tmdbRating: item.tmdbRating,
+      tmdbVoteCount: item.tmdbVoteCount,
+      metacriticScore: item.metacriticScore,
+      rottenTomatoesScore: item.rottenTomatoesScore,
+      metacriticUrl: item.metacriticUrl,
+      rottenTomatoesUrl: item.rottenTomatoesUrl,
+      metacriticData: item.metacriticData,
+      rottenTomatoesData: item.rottenTomatoesData,
+      imdbUrl: item.imdbUrl,
+      imdbRating: item.imdbRating,
+      imdbVotes: item.imdbVotes,
+      rated: item.rated,
+      // Content
+      plot: item.plot,
+      overview: item.overview,
+      awards: item.awards,
+      boxOffice: item.boxOffice,
+      production: item.production,
+      country: item.country,
+      language: item.language,
+      // Media
+      trailerUrl: item.trailerUrl,
+      trailerVideoId: item.trailerVideoId,
+      videoId: item.videoId,
+      poster: item.poster,
+      thumbnail: item.thumbnail,
+      description: item.description,
+      duration: item.duration,
+      sourceUrl: item.sourceUrl,
+      // Logging data already captured
+      consumptionDate: item.dateConsumed,
+      location: item.location,
+      locationDetail: item.locationDetail,
+      firstTime: item.firstTime,
+      socialContext: item.socialContext,
+      companionNames: item.companionNames,
+      overallRating: item.rating,
+      notes: item.notes,
+    })
+
+    // Remove from loggedItems since we're resuming
+    removeLoggedItem(item.id)
+
+    // Start from the beginning of the logging flow
+    setStep('date')
+
+    // Switch to logging tab
+    setRightPaneTab('logging')
+  }
+
+  // Save & Exit - save current progress and return to search
+  const saveAndExit = () => {
+    if (!logData.title) return
+
+    // Create logged item with ALL metadata
+    const newLoggedItem: LoggedItem = {
+      id: Date.now(),
+      title: logData.title,
+      year: logData.year || new Date().getFullYear(),
+      mediaType: logData.mediaType,
+      // Crew
+      director: logData.director,
+      directors: logData.directors,
+      cinematographer: logData.cinematographer,
+      composer: logData.composer,
+      writers: logData.writers,
+      producers: logData.producers,
+      editor: logData.editor,
+      // Cast
+      cast: logData.cast,
+      genres: logData.genres,
+      runtime: logData.runtime,
+      // Ratings & Scores
+      tmdbRating: logData.tmdbRating,
+      tmdbVoteCount: logData.tmdbVoteCount,
+      metacriticScore: logData.metacriticScore,
+      rottenTomatoesScore: logData.rottenTomatoesScore,
+      metacriticUrl: logData.metacriticUrl,
+      rottenTomatoesUrl: logData.rottenTomatoesUrl,
+      metacriticData: logData.metacriticData,
+      rottenTomatoesData: logData.rottenTomatoesData,
+      imdbUrl: logData.imdbUrl,
+      imdbRating: logData.imdbRating,
+      imdbVotes: logData.imdbVotes,
+      rated: logData.rated,
+      // Content
+      plot: logData.plot,
+      overview: logData.overview,
+      awards: logData.awards,
+      boxOffice: logData.boxOffice,
+      production: logData.production,
+      country: logData.country,
+      language: logData.language,
+      // Media
+      trailerUrl: logData.trailerUrl,
+      trailerVideoId: logData.trailerVideoId,
+      videoId: logData.videoId || urlMetadata?.videoId,
+      poster: logData.poster,
+      thumbnail: logData.thumbnail,
+      description: logData.description,
+      duration: logData.duration,
+      sourceUrl: logData.sourceUrl || (isUrl(searchQuery) ? searchQuery : undefined),
+      // Logging data
+      rating: logData.overallRating,
+      dateConsumed: logData.consumptionDate || new Date().toISOString().split('T')[0],
+      addedAt: new Date().toISOString().split('T')[0],
+      notes: logData.notes,
+      companionNames: logData.companionNames,
+      socialContext: logData.socialContext,
+      location: logData.location,
+      locationDetail: logData.locationDetail,
+      firstTime: logData.firstTime,
+      // Mark as draft/incomplete
+      isDraft: true,
+    }
+
+    addLoggedItem(newLoggedItem)
+    console.log('Saved & Exited:', newLoggedItem)
+
+    // Clear draft since we've saved
+    localStorage.removeItem('smartMediaLogger_draft')
+
+    // Show feedback to user
+    alert(`"${logData.title}" saved to My Stuff! You can find it in the My Stuff tab to continue later.`)
+
+    // Reset and return to search
+    setStep('search')
+    setSearchQuery('')
+    setSelectedMedia(null)
+    updateLogData({ mediaType: 'movie', title: '' })
+    setQuestionIndex(0)
+    setCharacterSceneNotes([])
+    savedEntryIdRef.current = newLoggedItem.id.toString() // Prevent double-save
   }
 
   // Add to queue function with toast feedback, duplicate prevention, and form reset
@@ -1132,6 +1381,9 @@ export default function Home() {
       savedEntryIdRef.current = entryUniqueId
       addLoggedItem(newLoggedItem)
       console.log('Saved to My Stuff:', newLoggedItem)
+
+      // Clear draft since we've completed
+      localStorage.removeItem('smartMediaLogger_draft')
     }
   }, [step, logData.title, logData.tmdbId, logData.consumptionDate, logData.overallRating, logData.notes, logData.companionNames, logData.socialContext, logData.location, logData.year, logData.mediaType, logData.director, entryNumber, userInteractions, addLoggedItem, urlMetadata?.videoId, searchQuery])
 
@@ -1521,31 +1773,93 @@ export default function Home() {
                           ))}
                         </div>
 
-                        <button
-                          onClick={() => {
-                            const titleInput = document.getElementById('url-title-input') as HTMLInputElement
-                            const title = titleInput?.value || urlMetadata?.title || 'Untitled'
-                            setSearchMode('queue')
-                            addToQueue({
-                              title,
-                              year: urlMetadata?.mediaYear || new Date().getFullYear(),
-                              mediaType: urlMetadata?.detectedMediaType || logData.mediaType,
-                              director: urlMetadata?.director || urlMetadata?.author,
-                              sourceUrl: searchQuery.trim(),
-                              videoId: urlMetadata?.videoId,
-                              author: urlMetadata?.author,
-                              authorUrl: urlMetadata?.authorUrl,
-                              thumbnail: urlMetadata?.thumbnail,
-                              description: urlMetadata?.description,
-                              duration: urlMetadata?.duration,
-                              viewCount: urlMetadata?.viewCount,
-                              publishDate: urlMetadata?.publishDate,
-                            })
-                          }}
-                          className="w-full py-3 bg-orange-500 text-white rounded-lg font-bold hover:bg-orange-600 transition-colors"
-                        >
-                          📋 Add to Queue
-                        </button>
+                        {searchMode === 'log' ? (
+                          <button
+                            onClick={() => {
+                              const titleInput = document.getElementById('url-title-input') as HTMLInputElement
+                              const title = titleInput?.value || urlMetadata?.title || 'Untitled'
+                              // Set up log data with ALL metadata - same as queue mode
+                              updateLogData({
+                                title,
+                                year: urlMetadata?.mediaYear || new Date().getFullYear(),
+                                mediaType: urlMetadata?.detectedMediaType || logData.mediaType,
+                                tmdbId: urlMetadata?.tmdbId,
+                                // Crew
+                                director: urlMetadata?.director || urlMetadata?.author,
+                                directors: urlMetadata?.directors,
+                                cinematographer: urlMetadata?.cinematographer,
+                                composer: urlMetadata?.composer,
+                                writers: urlMetadata?.writers,
+                                producers: urlMetadata?.producers,
+                                editor: urlMetadata?.editor,
+                                // Cast
+                                cast: urlMetadata?.cast,
+                                starring: urlMetadata?.starring,
+                                genres: urlMetadata?.genres,
+                                runtime: urlMetadata?.runtime,
+                                // Ratings & scores
+                                tmdbRating: urlMetadata?.tmdbRating,
+                                tmdbVoteCount: urlMetadata?.tmdbVoteCount,
+                                metacriticScore: urlMetadata?.metacriticScore,
+                                metacriticData: urlMetadata?.metacriticData,
+                                rottenTomatoesScore: urlMetadata?.rottenTomatoesScore,
+                                rottenTomatoesData: urlMetadata?.rottenTomatoesData,
+                                metacriticUrl: urlMetadata?.metacriticUrl,
+                                rottenTomatoesUrl: urlMetadata?.rottenTomatoesUrl,
+                                imdbUrl: urlMetadata?.imdbUrl,
+                                imdbRating: urlMetadata?.imdbRating,
+                                imdbVotes: urlMetadata?.imdbVotes,
+                                rated: urlMetadata?.rated,
+                                // Content
+                                plot: urlMetadata?.plot,
+                                overview: urlMetadata?.overview,
+                                awards: urlMetadata?.awards,
+                                boxOffice: urlMetadata?.boxOffice,
+                                production: urlMetadata?.production,
+                                country: urlMetadata?.country,
+                                language: urlMetadata?.language,
+                                // Media
+                                trailerUrl: urlMetadata?.trailerUrl,
+                                trailerVideoId: urlMetadata?.trailerVideoId || urlMetadata?.videoId,
+                                poster: urlMetadata?.poster || urlMetadata?.thumbnail,
+                                thumbnail: urlMetadata?.thumbnail,
+                                description: urlMetadata?.description,
+                                duration: urlMetadata?.duration,
+                                videoId: urlMetadata?.videoId,
+                                sourceUrl: searchQuery.trim(),
+                              })
+                              setStep('date')
+                            }}
+                            className="w-full py-3 bg-accent-blue text-white rounded-lg font-bold hover:bg-blue-600 transition-colors"
+                          >
+                            ✓ Confirm & Log This
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => {
+                              const titleInput = document.getElementById('url-title-input') as HTMLInputElement
+                              const title = titleInput?.value || urlMetadata?.title || 'Untitled'
+                              addToQueue({
+                                title,
+                                year: urlMetadata?.mediaYear || new Date().getFullYear(),
+                                mediaType: urlMetadata?.detectedMediaType || logData.mediaType,
+                                director: urlMetadata?.director || urlMetadata?.author,
+                                sourceUrl: searchQuery.trim(),
+                                videoId: urlMetadata?.videoId,
+                                author: urlMetadata?.author,
+                                authorUrl: urlMetadata?.authorUrl,
+                                thumbnail: urlMetadata?.thumbnail,
+                                description: urlMetadata?.description,
+                                duration: urlMetadata?.duration,
+                                viewCount: urlMetadata?.viewCount,
+                                publishDate: urlMetadata?.publishDate,
+                              })
+                            }}
+                            className="w-full py-3 bg-orange-500 text-white rounded-lg font-bold hover:bg-orange-600 transition-colors"
+                          >
+                            📋 Add to Queue
+                          </button>
+                        )}
                       </div>
                     </>
                   )}
@@ -1850,6 +2164,7 @@ export default function Home() {
               onSkip={goToNextStep}
               onContinue={goToNextStep}
               onFeedback={handleQuestionFeedback}
+              onSaveExit={saveAndExit}
             >
               <h3 className="text-xl font-semibold text-ink-800 mb-4">
                 When did you watch this?
@@ -1906,6 +2221,7 @@ export default function Home() {
               onBack={goToPrevStep}
               onSkip={goToNextStep}
               onContinue={goToNextStep}
+              onSaveExit={saveAndExit}
               canContinue={!!logData.location}
               onFeedback={handleQuestionFeedback}
             >
@@ -1956,6 +2272,7 @@ export default function Home() {
               onSkip={goToNextStep}
               onContinue={goToNextStep}
               onFeedback={handleQuestionFeedback}
+              onSaveExit={saveAndExit}
             >
               <h3 className="text-xl font-semibold text-ink-800 mb-4">
                 Which theater? (optional)
@@ -1981,6 +2298,7 @@ export default function Home() {
               onContinue={goToNextStep}
               canContinue={logData.firstTime !== undefined}
               onFeedback={handleQuestionFeedback}
+              onSaveExit={saveAndExit}
             >
               <h3 className="text-xl font-semibold text-ink-800 mb-4">
                 Was this your first time watching it?
@@ -2029,6 +2347,7 @@ export default function Home() {
               onContinue={goToNextStep}
               canContinue={!!logData.socialContext}
               onFeedback={handleQuestionFeedback}
+              onSaveExit={saveAndExit}
             >
               <h3 className="text-xl font-semibold text-ink-800 mb-4">
                 Who were you with?
@@ -2078,6 +2397,7 @@ export default function Home() {
               onSkip={goToNextStep}
               onContinue={goToNextStep}
               onFeedback={handleQuestionFeedback}
+              onSaveExit={saveAndExit}
             >
               <h3 className="text-xl font-semibold text-ink-800 mb-4">
                 Who did you see it with?
@@ -2109,6 +2429,7 @@ export default function Home() {
               onSkip={goToNextStep}
               onContinue={goToNextStep}
               onFeedback={handleQuestionFeedback}
+              onSaveExit={saveAndExit}
             >
               <h3 className="text-xl font-semibold text-ink-800 mb-6">
                 How would you rate it overall?
@@ -2130,6 +2451,7 @@ export default function Home() {
               onSkip={() => setStep('complete')}
               onContinue={() => setStep('complete')}
               onFeedback={handleQuestionFeedback}
+              onSaveExit={saveAndExit}
             >
               <div className="bg-accent-blue/10 border-2 border-accent-blue rounded-xl p-4 mb-6">
                 <div className="flex items-start gap-3">
@@ -2145,6 +2467,66 @@ export default function Home() {
                   </div>
                 </div>
               </div>
+
+              {/* Character Gallery - Click to add thoughts about specific characters/scenes */}
+              {logData.mediaType === 'movie' && logData.title && (
+                <div className="mb-6">
+                  <CharacterGallery
+                    movieTitle={logData.title}
+                    movieYear={logData.year}
+                    onNoteAdded={(note) => {
+                      // Store structured note for preference learning
+                      setCharacterSceneNotes(prev => [...prev, note])
+
+                      // Also append to free-form notes for display
+                      const prefix = note.type === 'character'
+                        ? `About ${note.characterName} (${note.actorName}): `
+                        : `About Scene ${note.sceneIndex}: `
+                      const newNote = prefix + note.note
+                      updateLogData({
+                        notes: logData.notes
+                          ? logData.notes + '\n\n' + newNote
+                          : newNote
+                      })
+
+                      // Log structured data for debugging/analysis
+                      console.log('=== CHARACTER/SCENE NOTE (Structured) ===')
+                      console.log(JSON.stringify(note, null, 2))
+                      console.log('=========================================')
+                    }}
+                  />
+
+                  {/* Display structured notes with visual context */}
+                  {characterSceneNotes.length > 0 && (
+                    <div className="mt-4 space-y-2">
+                      <p className="text-sm font-medium text-paper-600">Your notes on characters & scenes:</p>
+                      {characterSceneNotes.map((note) => (
+                        <div key={note.id} className="flex items-start gap-3 bg-white rounded-lg p-3 border border-paper-300">
+                          {/* Thumbnail */}
+                          {(note.actorThumbnail || note.sceneThumbnail) && (
+                            <img
+                              src={note.actorThumbnail || note.sceneThumbnail}
+                              alt=""
+                              className="w-12 h-12 rounded object-cover flex-shrink-0"
+                            />
+                          )}
+                          <div className="flex-1 min-w-0">
+                            {/* Entity label */}
+                            <p className="text-sm font-bold text-accent-blue">
+                              {note.type === 'character'
+                                ? `${note.characterName} (${note.actorName})`
+                                : `Scene ${note.sceneIndex}`
+                              }
+                            </p>
+                            {/* Note text */}
+                            <p className="text-sm text-paper-700 mt-1">{note.note}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div className="space-y-3 mb-6">
                 <p className="text-ink-800 font-medium">Consider:</p>
@@ -2204,6 +2586,7 @@ export default function Home() {
             cinematographer: logData.cinematographer,
             composer: logData.composer,
             starring: logData.starring,
+            cast: logData.cast,
             distributor: logData.distributor,
             runtime: logData.runtime,
             rating: logData.overallRating,
@@ -2279,6 +2662,7 @@ export default function Home() {
           onAddLoggedItem={addLoggedItem}
           onUpdateLoggedItem={updateLoggedItem}
           onRemoveLoggedItem={removeLoggedItem}
+          onResumeDraft={handleResumeDraft}
           activeTabOverride={rightPaneTab}
           tabSwitchTrigger={tabSwitchTrigger}
           onTabChange={setRightPaneTab}

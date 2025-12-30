@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import SoundtrackModal from './SoundtrackModal'
 
 interface StreamingOption {
   service: string
@@ -78,6 +79,7 @@ interface MediaCardProps {
   cinematographer?: string
   composer?: string
   starring?: string[]
+  cast?: Array<{ name: string; character: string; profilePath?: string }>
   distributor?: string
   runtime?: number
   rating?: number
@@ -103,6 +105,10 @@ interface MediaCardProps {
   videoId?: string
   poster?: string
   sourceUrl?: string
+  // Soundtrack
+  onSaveTrack?: (track: { title: string; artist: string; videoId: string; thumbnail: string; fromMovie: string }) => void
+  onUnsaveTrack?: (videoId: string) => void
+  savedTracks?: Set<string>
 }
 
 // Talent preference types
@@ -194,6 +200,7 @@ export default function MediaCard({
   cinematographer,
   composer,
   starring,
+  cast,
   distributor,
   runtime,
   rating,
@@ -218,8 +225,12 @@ export default function MediaCard({
   videoId,
   poster,
   sourceUrl,
+  onSaveTrack,
+  onUnsaveTrack,
+  savedTracks = new Set(),
 }: MediaCardProps) {
   const [showTrailer, setShowTrailer] = useState(false)
+  const [showSoundtrack, setShowSoundtrack] = useState(false)
   const [expandedPanel, setExpandedPanel] = useState<'metacritic' | 'rt' | null>(null)
   const [isEditing, setIsEditing] = useState(false)
   const [editData, setEditData] = useState<EditableFields>({})
@@ -329,7 +340,7 @@ export default function MediaCard({
       {videoId && (
         <div className="bg-black">
           <iframe
-            src={`https://www.youtube.com/embed/${videoId}`}
+            src={`https://www.youtube.com/embed/${videoId}?enablejsapi=1`}
             title={title}
             className="w-full aspect-video"
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
@@ -391,20 +402,53 @@ export default function MediaCard({
         </div>
 
         {/* Title - Big and bold, blue when filled */}
-        <h1 className="text-3xl font-bold mb-1">
-          {isEditing ? (
-            <input
-              type="text"
-              value={editData.title || ''}
-              onChange={(e) => setEditData({ ...editData, title: e.target.value })}
-              className="w-full text-accent-blue bg-white border-2 border-accent-blue rounded-lg px-3 py-1"
-            />
-          ) : title ? (
-            <span className="text-accent-blue">{title}</span>
-          ) : (
-            <span className="text-ink-800 italic font-normal">Waiting for title...</span>
+        <div className="flex items-start gap-3 mb-1">
+          <h1 className="text-3xl font-bold flex-1">
+            {isEditing ? (
+              <input
+                type="text"
+                value={editData.title || ''}
+                onChange={(e) => setEditData({ ...editData, title: e.target.value })}
+                className="w-full text-accent-blue bg-white border-2 border-accent-blue rounded-lg px-3 py-1"
+              />
+            ) : title ? (
+              <span className="text-accent-blue">{title}</span>
+            ) : (
+              <span className="text-ink-800 italic font-normal">Waiting for title...</span>
+            )}
+          </h1>
+
+          {/* Soundtrack Button - next to title with callout */}
+          {(mediaType === 'movie' || mediaType === 'tv') && title && (
+            <div className="relative group">
+              <button
+                onClick={() => {
+                  // Pause all YouTube iframes on the page
+                  document.querySelectorAll('iframe').forEach((iframe) => {
+                    if (iframe.src.includes('youtube.com')) {
+                      iframe.contentWindow?.postMessage('{"event":"command","func":"pauseVideo","args":""}', '*')
+                    }
+                  })
+                  setShowTrailer(false)
+                  setShowSoundtrack(true)
+                }}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-all font-bold text-sm hover:scale-105"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+                </svg>
+                Soundtrack
+              </button>
+              {/* Fun callout pointer - above the button */}
+              <div className="absolute -top-9 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                <div className="bg-gradient-to-r from-purple-500 to-pink-500 text-white text-xs px-2 py-1 rounded-full whitespace-nowrap shadow-lg">
+                  Rate the music!
+                </div>
+                <div className="w-2 h-2 bg-pink-500 rotate-45 absolute -bottom-1 left-1/2 -translate-x-1/2" />
+              </div>
+            </div>
           )}
-        </h1>
+        </div>
 
         {/* Year & Runtime */}
         <div className="flex gap-3 text-ink-800 mb-6 text-lg">
@@ -507,32 +551,26 @@ export default function MediaCard({
               )}
             </div>
 
-            {/* Starring - Multiple pills */}
-            <div>
-              <span className="text-accent-blue font-bold mr-2">Starring:</span>
-              {isEditing ? (
-                <input
-                  type="text"
-                  value={editData.starring?.join(', ') || ''}
-                  onChange={(e) => setEditData({ ...editData, starring: e.target.value.split(',').map(s => s.trim()).filter(Boolean) })}
-                  placeholder="Comma-separated names"
-                  className="w-full bg-white border-2 border-accent-blue rounded-lg px-3 py-1 text-sm"
-                />
-              ) : starring && starring.length > 0 ? (
-                <div className="inline-flex flex-wrap gap-2 mt-1">
-                  {starring.map((actor, idx) => (
-                    <TalentPill
-                      key={idx}
-                      name={actor}
-                      preference={talentPreferences[actor]}
-                      onPreferenceChange={handleTalentPreference}
-                    />
+            {/* Cast - Full cast with character names */}
+            {cast && cast.length > 0 && (
+              <div className="mt-4 pt-4 border-t border-paper-300">
+                <span className="text-accent-blue font-bold block mb-2">Cast:</span>
+                <div className="grid grid-cols-2 gap-2">
+                  {cast.slice(0, 8).map((member, idx) => (
+                    <div key={idx} className="flex items-center gap-2 p-2 bg-paper-100 rounded-lg">
+                      <div className="flex-1 min-w-0">
+                        <TalentPill
+                          name={member.name}
+                          preference={talentPreferences[member.name]}
+                          onPreferenceChange={handleTalentPreference}
+                        />
+                        <p className="text-xs text-ink-500 mt-0.5 truncate">as {member.character}</p>
+                      </div>
+                    </div>
                   ))}
                 </div>
-              ) : (
-                <span className="text-ink-800">—</span>
-              )}
-            </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -702,7 +740,7 @@ export default function MediaCard({
           </div>
         )}
 
-        {/* Trailer Button & Embed */}
+        {/* Trailer Button */}
         {youtubeId && (
           <div className="mb-6">
             <button
@@ -711,17 +749,20 @@ export default function MediaCard({
             >
               <span>{showTrailer ? '✕ Close' : '▶ Watch Trailer'}</span>
             </button>
-            {showTrailer && (
-              <div className="mt-4 rounded-xl overflow-hidden border-2 border-accent-blue aspect-video">
-                <iframe
-                  src={`https://www.youtube.com/embed/${youtubeId}?autoplay=1&rel=0`}
-                  title="Official Trailer"
-                  className="w-full h-full"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                  allowFullScreen
-                />
-              </div>
-            )}
+          </div>
+        )}
+
+        {/* Trailer Embed */}
+        {showTrailer && youtubeId && (
+          <div className="mb-6 rounded-xl overflow-hidden border-2 border-accent-blue aspect-video">
+            <iframe
+              key={`trailer-${showTrailer}`}
+              src={`https://www.youtube.com/embed/${youtubeId}?autoplay=1&rel=0&enablejsapi=1`}
+              title="Official Trailer"
+              className="w-full h-full"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+            />
           </div>
         )}
 
@@ -959,6 +1000,18 @@ export default function MediaCard({
           )}
         </div>
       </div>
+
+      {/* Soundtrack Modal */}
+      <SoundtrackModal
+        isOpen={showSoundtrack}
+        onClose={() => setShowSoundtrack(false)}
+        movieTitle={title}
+        movieYear={year}
+        composer={composer}
+        onSaveTrack={onSaveTrack}
+        onUnsaveTrack={onUnsaveTrack}
+        savedTracks={savedTracks}
+      />
     </div>
   )
 }
