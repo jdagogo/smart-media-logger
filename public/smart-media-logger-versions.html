@@ -442,11 +442,58 @@
 
         <!-- VERSION CARDS -->
         <div class="version-grid">
+            <!-- v0.1.0-alpha - Baseline -->
+            <div class="version-card">
+                <div class="version-header">
+                    <div class="version-title">v0.1.0-alpha</div>
+                    <div class="status stable">BASELINE</div>
+                </div>
+
+                <div class="info-section">
+                    <div class="info-row">
+                        <span class="info-label">Commit:</span>
+                        <span>0846668</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Date:</span>
+                        <span>December 28, 2024</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Focus:</span>
+                        <span>Core movie logging flow</span>
+                    </div>
+                </div>
+
+                <p style="margin-bottom: 15px; font-weight: 600;">Working (mostly):</p>
+                <div class="features">
+                    <div class="feature-tag done">Two-pane layout</div>
+                    <div class="feature-tag done">Basic question flow</div>
+                    <div class="feature-tag done">Voice input (basic)</div>
+                    <div class="feature-tag done">Rating slider</div>
+                    <div class="feature-tag done">Movie search (mock TMDB)</div>
+                    <div class="feature-tag done">MediaCard display</div>
+                </div>
+
+                <p style="margin-bottom: 15px; font-weight: 600;">Broken / Not implemented:</p>
+                <div class="features">
+                    <div class="feature-tag broken">Claude API integration</div>
+                    <div class="feature-tag broken">Data persistence</div>
+                    <div class="feature-tag broken">Smart questions</div>
+                    <div class="feature-tag broken">Discovery moments</div>
+                </div>
+
+                <div class="action-buttons">
+                    <button class="btn btn-secondary" onclick="alert('Run: git checkout 0846668')">
+                        Rollback Command
+                    </button>
+                </div>
+            </div>
+
             <!-- v1.5.0-alpha - Soundtrack Feature -->
             <div class="version-card" style="border: 3px solid #f59e0b;">
                 <div class="version-header">
                     <div class="version-title">v1.5.0-alpha</div>
-                    <div class="status development">UNSTABLE</div>
+                    <div class="status development">DEVELOPMENT</div>
                 </div>
 
                 <div class="info-section">
@@ -504,53 +551,6 @@
                     <a href="https://github.com/jdagogo/smart-media-logger" target="_blank" class="btn btn-secondary">
                         GitHub
                     </a>
-                </div>
-            </div>
-
-            <!-- Previous: v0.1.0-alpha -->
-            <div class="version-card">
-                <div class="version-header">
-                    <div class="version-title">v0.1.0-alpha</div>
-                    <div class="status stable">BASELINE</div>
-                </div>
-
-                <div class="info-section">
-                    <div class="info-row">
-                        <span class="info-label">Commit:</span>
-                        <span>0846668</span>
-                    </div>
-                    <div class="info-row">
-                        <span class="info-label">Date:</span>
-                        <span>December 28, 2024</span>
-                    </div>
-                    <div class="info-row">
-                        <span class="info-label">Focus:</span>
-                        <span>Core movie logging flow</span>
-                    </div>
-                </div>
-
-                <p style="margin-bottom: 15px; font-weight: 600;">Working (mostly):</p>
-                <div class="features">
-                    <div class="feature-tag done">Two-pane layout</div>
-                    <div class="feature-tag done">Basic question flow</div>
-                    <div class="feature-tag done">Voice input (basic)</div>
-                    <div class="feature-tag done">Rating slider</div>
-                    <div class="feature-tag done">Movie search (mock TMDB)</div>
-                    <div class="feature-tag done">MediaCard display</div>
-                </div>
-
-                <p style="margin-bottom: 15px; font-weight: 600;">Broken / Not implemented:</p>
-                <div class="features">
-                    <div class="feature-tag broken">Claude API integration</div>
-                    <div class="feature-tag broken">Data persistence</div>
-                    <div class="feature-tag broken">Smart questions</div>
-                    <div class="feature-tag broken">Discovery moments</div>
-                </div>
-
-                <div class="action-buttons">
-                    <button class="btn btn-secondary" onclick="alert('Run: git checkout 0846668')">
-                        Rollback Command
-                    </button>
                 </div>
             </div>
 
