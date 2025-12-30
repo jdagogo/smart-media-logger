@@ -14,41 +14,20 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="min-h-screen bg-paper-200">
-        <nav className="bg-paper-100 border-b border-paper-400 px-6 py-4">
+        <nav className="bg-gradient-to-r from-orange-400 via-orange-500 to-amber-500 px-6 py-4 shadow-md">
           <div className="max-w-7xl mx-auto flex items-center justify-between">
             <div className="flex items-center gap-2">
               <span className="text-2xl">📓</span>
-              <span className="font-typewriter text-ink-800 text-lg tracking-wide">
+              <span className="font-bold text-blue-900 text-lg tracking-wide">
                 SMART MEDIA LOGGER
               </span>
               <a
                 href="/smart-media-logger-versions.html"
                 target="_blank"
-                className="ml-2 text-xs font-mono px-2 py-0.5 bg-amber-100 text-amber-800 rounded border border-amber-300 hover:bg-amber-200 transition-colors"
+                className="ml-2 text-xs font-mono px-2 py-0.5 bg-blue-900/20 text-blue-900 rounded hover:bg-blue-900/30 transition-colors"
                 title="View version info and known issues"
               >
-                v0.1.0-alpha
-              </a>
-            </div>
-            <div className="flex items-center gap-6">
-              <a
-                href="/"
-                className="font-typewriter text-sm text-ink-600 hover:text-ink-800 transition-colors"
-              >
-                LOG
-              </a>
-              <a
-                href="/library"
-                className="font-typewriter text-sm text-ink-600 hover:text-ink-800 transition-colors"
-              >
-                LIBRARY
-              </a>
-              <a
-                href="/queue"
-                className="font-typewriter text-sm text-ink-600 hover:text-ink-800 transition-colors flex items-center gap-1"
-              >
-                QUEUE
-                <span className="bg-accent-sky text-white text-xs px-2 py-0.5 rounded-full">0</span>
+                v1.5.0-alpha
               </a>
             </div>
           </div>

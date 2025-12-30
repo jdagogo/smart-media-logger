@@ -133,6 +133,108 @@ interface QueueItem {
   mediaType: string
   director?: string
   addedAt: string
+  sourceUrl?: string      // URL where this was found (trailer, article, etc.)
+  videoId?: string        // YouTube/Vimeo video ID for embedding
+  author?: string         // Channel/creator name
+  authorUrl?: string      // Link to channel/creator
+  thumbnail?: string      // Thumbnail image URL
+  description?: string    // Full description
+  duration?: string       // Duration string (e.g., "12:34")
+  viewCount?: string      // View count
+  publishDate?: string    // Publish date
+  // Enhanced trailer metadata
+  isTrailer?: boolean
+  detectedMediaType?: 'movie' | 'tv'
+  tmdbId?: number
+  cast?: Array<{ name: string; character: string; profilePath?: string }>
+  genres?: string[]
+  poster?: string
+  overview?: string
+  runtime?: number
+  mediaTitle?: string
+  mediaYear?: number
+  trailerVideoId?: string
+  trailerUrl?: string      // Full YouTube embed URL for trailer
+  tmdbRating?: number
+  tmdbVoteCount?: number
+  // Full crew data
+  directors?: string[]
+  cinematographer?: string
+  composer?: string
+  writers?: string[]
+  producers?: Array<{ name: string; job: string }>
+  editor?: string
+  // OMDB rich metadata
+  imdbRating?: string
+  imdbVotes?: string
+  rated?: string
+  plot?: string
+  awards?: string
+  boxOffice?: string
+  production?: string
+  country?: string
+  language?: string
+  // External review site links
+  metacriticUrl?: string
+  rottenTomatoesUrl?: string
+  imdbUrl?: string
+  // Real critic scores
+  metacriticScore?: number
+  metacriticData?: {
+    score: number
+    criticReviews?: number
+    userScore?: number
+    url: string
+  }
+  rottenTomatoesScore?: number
+  rottenTomatoesData?: {
+    tomatometer?: number
+    audienceScore?: number
+    criticReviews?: number
+    consensus?: string
+    url: string
+  }
+  // OMDB rich metadata
+  imdbRating?: string
+  imdbVotes?: string
+  rated?: string
+  plot?: string
+  awards?: string
+  boxOffice?: string
+  production?: string
+  country?: string
+  language?: string
+}
+
+// URL detection helper
+function isUrl(str: string): boolean {
+  try {
+    const url = new URL(str.trim())
+    return url.protocol === 'http:' || url.protocol === 'https:'
+  } catch {
+    return false
+  }
+}
+
+// Extract domain from URL for display
+function getDomain(url: string): string {
+  try {
+    const parsed = new URL(url)
+    return parsed.hostname.replace('www.', '')
+  } catch {
+    return ''
+  }
+}
+
+// Guess media type from URL
+function guessMediaTypeFromUrl(url: string): string {
+  const domain = getDomain(url).toLowerCase()
+  if (domain.includes('youtube') || domain.includes('vimeo')) return 'video'
+  if (domain.includes('spotify') || domain.includes('soundcloud')) return 'music'
+  if (domain.includes('netflix') || domain.includes('hulu') || domain.includes('max') || domain.includes('primevideo')) return 'movie'
+  if (domain.includes('goodreads') || domain.includes('amazon')) return 'book'
+  if (domain.includes('podcasts.apple') || domain.includes('spotify')) return 'podcast'
+  return 'video' // default for URLs
 }
 
 type FlowStep =
@@ -318,6 +420,147 @@ export default function Home() {
   const [searchResults, setSearchResults] = useState<MediaResult[]>([])
   const [selectedMedia, setSelectedMedia] = useState<MediaResult | null>(null)
 
+  // Mode: 'log' for logging consumed media, 'queue' for adding to wishlist
+  const [searchMode, setSearchMode] = useState<'log' | 'queue'>('log')
+  const [rightPaneTab, setRightPaneTab] = useState<'logging' | 'upnext' | 'library' | 'recs' | 'profile'>('logging')
+  const [tabSwitchTrigger, setTabSwitchTrigger] = useState(0)
+
+  // Force switch to a tab (works even if already that tab value)
+  const forceTabSwitch = (tab: 'logging' | 'upnext' | 'library' | 'recs' | 'profile') => {
+    setRightPaneTab(tab)
+    setTabSwitchTrigger(prev => prev + 1)
+  }
+
+  // Toast for queue additions
+  const [queueToast, setQueueToast] = useState<{ title: string; show: boolean }>({ title: '', show: false })
+
+  // URL metadata fetching state
+  const [urlLoading, setUrlLoading] = useState(false)
+
+  // Persisted queue preview - stays visible after adding to queue
+  const [persistedQueuePreview, setPersistedQueuePreview] = useState<{
+    title?: string
+    author?: string
+    authorUrl?: string
+    thumbnail?: string
+    videoId?: string
+    description?: string
+    duration?: string
+    viewCount?: string
+    publishDate?: string
+    sourceUrl?: string
+    mediaType?: string
+    isTrailer?: boolean
+    detectedMediaType?: 'movie' | 'tv'
+    tmdbId?: number
+    director?: string
+    cast?: Array<{ name: string; character: string; profilePath?: string }>
+    genres?: string[]
+    poster?: string
+    trailerVideoId?: string
+    tmdbRating?: number
+    tmdbVoteCount?: number
+    overview?: string
+    runtime?: number
+    mediaTitle?: string
+    mediaYear?: number
+    // External review site links
+    metacriticUrl?: string
+    rottenTomatoesUrl?: string
+    imdbUrl?: string
+    // Real critic scores
+    metacriticScore?: number
+    metacriticData?: {
+      score: number
+      criticReviews?: number
+      userScore?: number
+      url: string
+    }
+    rottenTomatoesScore?: number
+    rottenTomatoesData?: {
+      tomatometer?: number
+      audienceScore?: number
+      criticReviews?: number
+      consensus?: string
+      url: string
+    }
+  } | null>(null)
+
+  const [urlMetadata, setUrlMetadata] = useState<{
+    title?: string
+    author?: string
+    authorUrl?: string
+    thumbnail?: string
+    embedHtml?: string
+    videoId?: string
+    description?: string
+    duration?: string
+    viewCount?: string
+    publishDate?: string
+    category?: string
+    // Enhanced trailer metadata (when movie/TV trailer detected)
+    isTrailer?: boolean
+    detectedMediaType?: 'movie' | 'tv'
+    tmdbId?: number
+    director?: string
+    directors?: string[]
+    cinematographer?: string
+    composer?: string
+    writers?: string[]
+    producers?: Array<{ name: string; job: string }>
+    editor?: string
+    cast?: Array<{ name: string; character: string; profilePath?: string }>
+    genres?: string[]
+    poster?: string
+    trailerVideoId?: string
+    mediaTitle?: string
+    mediaYear?: number
+    overview?: string
+    runtime?: number
+    tmdbRating?: number
+    tmdbVoteCount?: number
+    // OMDB rich metadata
+    imdbRating?: string
+    imdbVotes?: string
+    rated?: string
+    plot?: string
+    awards?: string
+    boxOffice?: string
+    production?: string
+    country?: string
+    language?: string
+    // External review site links
+    metacriticUrl?: string
+    rottenTomatoesUrl?: string
+    imdbUrl?: string
+    // Real critic scores from scraping
+    metacriticScore?: number
+    metacriticData?: {
+      score: number
+      criticReviews?: number
+      userScore?: number
+      url: string
+    }
+    rottenTomatoesScore?: number
+    rottenTomatoesData?: {
+      tomatometer?: number
+      audienceScore?: number
+      criticReviews?: number
+      consensus?: string
+      url: string
+    }
+    // OMDB rich metadata
+    imdbRating?: string
+    imdbVotes?: string
+    rated?: string
+    plot?: string
+    awards?: string
+    boxOffice?: string
+    production?: string
+    country?: string
+    language?: string
+  } | null>(null)
+
   // Log data state
   const [logData, setLogData] = useState<LogData>({
     mediaType: 'movie',
@@ -328,18 +571,36 @@ export default function Home() {
   const [entryNumber] = useState(1)
 
   // Up Next queue - shared between search and RightPaneTabs
-  const [upNextQueue, setUpNextQueue] = useState<QueueItem[]>([
-    { id: 1, title: 'Nosferatu', year: 2024, mediaType: 'movie', director: 'Robert Eggers', addedAt: '2024-12-20' },
-    { id: 2, title: 'Severance', year: 2022, mediaType: 'tv', director: 'Ben Stiller', addedAt: '2024-12-18' },
-    { id: 3, title: 'The Three-Body Problem', year: 2008, mediaType: 'book', director: 'Liu Cixin', addedAt: '2024-12-15' },
-  ])
+  // Initialize from localStorage or empty array
+  const [upNextQueue, setUpNextQueue] = useState<QueueItem[]>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('smartMediaLogger_queue')
+      if (saved) {
+        try {
+          return JSON.parse(saved)
+        } catch (e) {
+          console.error('Failed to parse queue from localStorage:', e)
+        }
+      }
+    }
+    return []
+  })
 
   // Logged items - My Stuff (shared with RightPaneTabs)
-  const [loggedItems, setLoggedItems] = useState<LoggedItem[]>([
-    { id: 101, title: 'One Battle After Another', year: 2024, mediaType: 'movie', director: 'Paul Thomas Anderson', rating: 92, dateConsumed: '2024-12-27', addedAt: '2024-12-27', companionNames: 'Sarah, Keith', socialContext: 'friends', notes: 'Anderson at his most ambitious. The long takes were mesmerizing. Joaquin Phoenix was incredible as always - his transformation in the third act was breathtaking. The score was haunting and stayed with me for days.' },
-    { id: 102, title: 'Anora', year: 2024, mediaType: 'movie', director: 'Sean Baker', rating: 88, dateConsumed: '2024-12-20', addedAt: '2024-12-20', companionNames: 'J.D.', socialContext: 'partner', notes: 'Mikey Madison is a revelation. Sean Baker captures the energy of New York like nobody else. Funny and heartbreaking in equal measure. The ending destroyed me.' },
-    { id: 103, title: 'The Brutalist', year: 2024, mediaType: 'movie', director: 'Brady Corbet', rating: 95, dateConsumed: '2024-12-15', addedAt: '2024-12-15', socialContext: 'alone', notes: 'An absolute epic. 3.5 hours flew by. The cinematography was stunning - every frame a painting. The score by Daniel Blumberg elevated everything. Adrien Brody should win every award.' },
-  ])
+  // Initialize from localStorage or empty array
+  const [loggedItems, setLoggedItems] = useState<LoggedItem[]>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('smartMediaLogger_logged')
+      if (saved) {
+        try {
+          return JSON.parse(saved)
+        } catch (e) {
+          console.error('Failed to parse logged items from localStorage:', e)
+        }
+      }
+    }
+    return []
+  })
 
   // Add logged item callback
   const addLoggedItem = (item: LoggedItem) => {
@@ -353,40 +614,490 @@ export default function Home() {
     ))
   }
 
-  // Add to queue function
-  const addToQueue = (title: string, year: number, mediaType: string, director?: string) => {
+  // Remove logged item callback
+  const removeLoggedItem = (id: number) => {
+    setLoggedItems(prev => prev.filter(item => item.id !== id))
+  }
+
+  // Add to queue function with toast feedback, duplicate prevention, and form reset
+  const addToQueue = (metadata: {
+    title: string
+    year: number
+    mediaType: string
+    director?: string
+    sourceUrl?: string
+    videoId?: string
+    author?: string
+    authorUrl?: string
+    thumbnail?: string
+    description?: string
+    duration?: string
+    viewCount?: string
+    publishDate?: string
+    skipTabSwitch?: boolean
+    // Additional fields for recommendations
+    cinematographer?: string
+    composer?: string
+    starring?: string[]
+    runtime?: number
+    metacriticScore?: number
+    rottenTomatoesScore?: number
+    metacriticUrl?: string
+    rottenTomatoesUrl?: string
+    trailerUrl?: string
+    // OMDB data
+    rated?: string
+    awards?: string
+    boxOffice?: string
+    plot?: string
+    language?: string
+    country?: string
+    imdbRating?: string
+  }) => {
+    // Check for duplicates - by URL or title
+    const isDuplicate = upNextQueue.some(item =>
+      (metadata.sourceUrl && item.sourceUrl === metadata.sourceUrl) ||
+      (!metadata.sourceUrl && item.title === metadata.title && item.mediaType === metadata.mediaType)
+    )
+
+    if (isDuplicate) {
+      // Show "already in queue" toast instead of adding
+      setQueueToast({ title: `"${metadata.title}" is already in your queue`, show: true })
+      setTimeout(() => setQueueToast({ title: '', show: false }), 3000)
+      return
+    }
+
+    // Convert starring array to cast format if provided from recommendations
+    const castFromStarring = metadata.starring?.map(name => ({ name, character: '' }))
+
+    // For recommendations (no sourceUrl), use metadata directly - don't use stale urlMetadata!
+    // urlMetadata could have leftover data from a previous search
+    const isFromRecommendation = !metadata.sourceUrl && metadata.skipTabSwitch
+    const source = isFromRecommendation ? null : urlMetadata
+
     const newItem: QueueItem = {
       id: Date.now(),
-      title,
-      year,
-      mediaType,
-      director,
+      title: metadata.title,
+      year: metadata.year,
+      mediaType: metadata.mediaType,
+      director: source?.director || metadata.director,
       addedAt: new Date().toISOString().split('T')[0],
+      sourceUrl: metadata.sourceUrl,
+      videoId: metadata.videoId,
+      author: metadata.author,
+      authorUrl: metadata.authorUrl,
+      thumbnail: source?.poster || metadata.thumbnail,
+      description: source?.overview || metadata.description,
+      duration: metadata.duration,
+      viewCount: metadata.viewCount,
+      publishDate: metadata.publishDate,
+      // Enhanced trailer metadata
+      isTrailer: source?.isTrailer,
+      detectedMediaType: source?.detectedMediaType,
+      tmdbId: source?.tmdbId,
+      cast: source?.cast || castFromStarring,
+      genres: source?.genres,
+      poster: source?.poster,
+      overview: source?.overview || metadata.plot,
+      runtime: source?.runtime || metadata.runtime,
+      mediaTitle: source?.mediaTitle,
+      mediaYear: source?.mediaYear,
+      trailerVideoId: source?.trailerVideoId || metadata.videoId,
+      trailerUrl: metadata.trailerUrl,  // YouTube embed URL from recommendations
+      tmdbRating: source?.tmdbRating,
+      tmdbVoteCount: source?.tmdbVoteCount,
+      // Crew data - use metadata directly for recommendations
+      directors: source?.directors,
+      cinematographer: source?.cinematographer || metadata.cinematographer,
+      composer: source?.composer || metadata.composer,
+      writers: source?.writers,
+      producers: source?.producers,
+      editor: source?.editor,
+      // OMDB rich metadata - use metadata directly for recommendations
+      imdbRating: source?.imdbRating || metadata.imdbRating,
+      imdbVotes: source?.imdbVotes,
+      rated: source?.rated || metadata.rated,
+      plot: source?.plot || metadata.plot,
+      awards: source?.awards || metadata.awards,
+      boxOffice: source?.boxOffice || metadata.boxOffice,
+      production: source?.production,
+      country: source?.country || metadata.country,
+      language: source?.language || metadata.language,
+      // External review site links
+      metacriticUrl: source?.metacriticUrl || metadata.metacriticUrl,
+      rottenTomatoesUrl: source?.rottenTomatoesUrl || metadata.rottenTomatoesUrl,
+      imdbUrl: source?.imdbUrl,
+      // Real critic scores
+      metacriticScore: source?.metacriticScore || metadata.metacriticScore,
+      metacriticData: source?.metacriticData,
+      rottenTomatoesScore: source?.rottenTomatoesScore || metadata.rottenTomatoesScore,
+      rottenTomatoesData: source?.rottenTomatoesData,
     }
+    console.log('Adding to queue with data:', newItem)
     setUpNextQueue(prev => [newItem, ...prev])
-    console.log('Added to Up Next:', newItem)
+
+    // Show success toast
+    setQueueToast({ title: metadata.title, show: true })
+    setTimeout(() => setQueueToast({ title: '', show: false }), 3000)
+
+    // Save the preview data BEFORE clearing the search
+    // This way the right pane can still show what was just added
+    const previewData = {
+      title: metadata.title,
+      author: metadata.author,
+      authorUrl: metadata.authorUrl,
+      thumbnail: urlMetadata?.poster || metadata.thumbnail,
+      videoId: metadata.videoId,
+      description: urlMetadata?.overview || urlMetadata?.description || metadata.description,
+      duration: metadata.duration,
+      viewCount: metadata.viewCount,
+      publishDate: metadata.publishDate,
+      sourceUrl: metadata.sourceUrl,
+      mediaType: metadata.mediaType,
+      // Include enhanced metadata from urlMetadata if available
+      isTrailer: urlMetadata?.isTrailer,
+      detectedMediaType: urlMetadata?.detectedMediaType,
+      tmdbId: urlMetadata?.tmdbId,
+      director: urlMetadata?.director,
+      cast: urlMetadata?.cast,
+      genres: urlMetadata?.genres,
+      poster: urlMetadata?.poster,
+      trailerVideoId: urlMetadata?.trailerVideoId || urlMetadata?.videoId,
+      // Additional TMDB data
+      tmdbRating: urlMetadata?.tmdbRating,
+      tmdbVoteCount: urlMetadata?.tmdbVoteCount,
+      runtime: urlMetadata?.runtime,
+      overview: urlMetadata?.overview,
+      mediaTitle: urlMetadata?.mediaTitle,
+      mediaYear: urlMetadata?.mediaYear,
+      // External review site links
+      metacriticUrl: urlMetadata?.metacriticUrl,
+      rottenTomatoesUrl: urlMetadata?.rottenTomatoesUrl,
+      imdbUrl: urlMetadata?.imdbUrl,
+      // Real critic scores
+      metacriticScore: urlMetadata?.metacriticScore,
+      metacriticData: urlMetadata?.metacriticData,
+      rottenTomatoesScore: urlMetadata?.rottenTomatoesScore,
+      rottenTomatoesData: urlMetadata?.rottenTomatoesData,
+    }
+    setPersistedQueuePreview(previewData)
+
+    // Switch to Now tab to show what was added (unless skipped, e.g., from Recommendations)
+    if (!metadata.skipTabSwitch) {
+      forceTabSwitch('logging')
+
+      // Clear the left side form after a brief delay so user knows action is complete
+      // and they're ready to add something else
+      setTimeout(() => {
+        setSearchQuery('')
+        setUrlMetadata(null)
+      }, 1000)
+    }
+  }
+
+  // Log from queue - pre-populate the logging form with queue item data
+  const handleLogFromQueue = async (item: QueueItem) => {
+    // Pre-populate log data with all metadata including crew and scores
+    setLogData(prev => ({
+      ...prev,
+      mediaType: item.mediaType,
+      title: item.title,
+      year: item.year,
+      director: item.director || item.author || '',
+      cinematographer: item.cinematographer,
+      composer: item.composer,
+      starring: item.cast?.map(c => c.name),
+      runtime: item.runtime,
+      // Critic scores
+      metacriticScore: item.metacriticScore,
+      rottenTomatoesScore: item.rottenTomatoesScore,
+      metacriticUrl: item.metacriticUrl,
+      rottenTomatoesUrl: item.rottenTomatoesUrl,
+      metacriticData: item.metacriticData,
+      rottenTomatoesData: item.rottenTomatoesData,
+    }))
+
+    // Create a selected media result to show the card
+    const mediaResult: MediaResult = {
+      id: item.id,
+      title: item.title,
+      year: item.year,
+      mediaType: item.mediaType,
+      director: item.director,
+      poster: item.videoId ? `https://img.youtube.com/vi/${item.videoId}/maxresdefault.jpg` : undefined,
+    }
+    setSelectedMedia(mediaResult)
+
+    // Switch to log mode first
+    setSearchMode('log')
+
+    // Switch right pane to "Now" tab
+    forceTabSwitch('logging')
+
+    // Start from rating step - they already selected what to log
+    setStep('rating')
+
+    // Remove from queue since they're logging it now
+    setUpNextQueue(prev => prev.filter(q => q.id !== item.id))
+
+    // Set ALL metadata from queue item immediately - don't lose the data!
+    // This works for both items with sourceUrl AND items from recommendations
+    setSearchQuery(item.sourceUrl || item.title)
+    setUrlMetadata({
+      title: item.title,
+      author: item.author,
+      videoId: item.videoId,
+      thumbnail: item.videoId ? `https://img.youtube.com/vi/${item.videoId}/maxresdefault.jpg` : item.thumbnail,
+      description: item.overview || item.description,
+      duration: item.duration,
+      viewCount: item.viewCount,
+      publishDate: item.publishDate,
+      // Enhanced trailer metadata
+      isTrailer: item.isTrailer,
+      detectedMediaType: item.detectedMediaType,
+      tmdbId: item.tmdbId,
+      director: item.director,
+      cast: item.cast,
+      genres: item.genres,
+      poster: item.poster,
+      overview: item.overview,
+      runtime: item.runtime,
+      mediaTitle: item.mediaTitle,
+      mediaYear: item.mediaYear,
+      trailerVideoId: item.trailerVideoId || item.videoId,
+      trailerUrl: item.trailerUrl,  // Include trailer URL!
+      tmdbRating: item.tmdbRating,
+      tmdbVoteCount: item.tmdbVoteCount,
+      // Crew data
+      directors: item.directors,
+      cinematographer: item.cinematographer,
+      composer: item.composer,
+      writers: item.writers,
+      producers: item.producers,
+      editor: item.editor,
+      // OMDB rich metadata
+      imdbRating: item.imdbRating,
+      imdbVotes: item.imdbVotes,
+      rated: item.rated,
+      plot: item.plot,
+      awards: item.awards,
+      boxOffice: item.boxOffice,
+      production: item.production,
+      country: item.country,
+      language: item.language,
+      // External review site links
+      metacriticUrl: item.metacriticUrl,
+      rottenTomatoesUrl: item.rottenTomatoesUrl,
+      imdbUrl: item.imdbUrl,
+      // Real critic scores
+      metacriticScore: item.metacriticScore,
+      metacriticData: item.metacriticData,
+      rottenTomatoesScore: item.rottenTomatoesScore,
+      rottenTomatoesData: item.rottenTomatoesData,
+    })
+    // Don't re-fetch - we already have all the data from the queue item
+
+    console.log('Logging from queue:', item)
+  }
+
+  // Fetch metadata from URL (especially YouTube)
+  const fetchUrlMetadata = async (url: string) => {
+    setUrlLoading(true)
+    // Don't clear metadata here - let new data replace it when ready
+
+    try {
+      // YouTube - use our custom API for full metadata
+      if (url.includes('youtube.com') || url.includes('youtu.be')) {
+        const response = await fetch(`/api/youtube-metadata?url=${encodeURIComponent(url)}`)
+        if (response.ok) {
+          const data = await response.json()
+
+          // If this is a detected trailer, use the movie/TV metadata
+          if (data.isTrailer && data.mediaTitle) {
+            console.log('Detected trailer for:', data.mediaTitle, data)
+            setUrlMetadata({
+              title: data.mediaTitle,  // Use the movie/TV title, not the YouTube title
+              author: data.author,     // Keep the YouTube channel name
+              authorUrl: data.authorUrl,
+              thumbnail: data.poster || data.thumbnail,  // Prefer movie poster
+              videoId: data.videoId,
+              description: data.overview || data.description,  // Use movie overview
+              duration: data.runtime ? `${data.runtime} min` : data.duration,
+              viewCount: data.viewCount,
+              publishDate: data.mediaYear?.toString(),
+              category: data.category,
+              // Enhanced trailer metadata
+              isTrailer: true,
+              detectedMediaType: data.detectedMediaType,
+              tmdbId: data.tmdbId,
+              director: data.director,
+              directors: data.directors,
+              cinematographer: data.cinematographer,
+              composer: data.composer,
+              writers: data.writers,
+              producers: data.producers,
+              editor: data.editor,
+              cast: data.cast,
+              genres: data.genres,
+              poster: data.poster,
+              trailerVideoId: data.trailerVideoId || data.videoId,
+              mediaYear: data.mediaYear,
+              overview: data.overview,
+              runtime: data.runtime,
+              tmdbRating: data.tmdbRating,
+              tmdbVoteCount: data.tmdbVoteCount,
+              // External review site links
+              metacriticUrl: data.metacriticUrl,
+              rottenTomatoesUrl: data.rottenTomatoesUrl,
+              imdbUrl: data.imdbUrl,
+              // Real critic scores
+              metacriticScore: data.metacriticScore,
+              metacriticData: data.metacriticData,
+              rottenTomatoesScore: data.rottenTomatoesScore,
+              rottenTomatoesData: data.rottenTomatoesData,
+              // OMDB rich metadata
+              imdbRating: data.imdbRating,
+              imdbVotes: data.imdbVotes,
+              rated: data.rated,
+              plot: data.plot,
+              awards: data.awards,
+              boxOffice: data.boxOffice,
+              production: data.production,
+              country: data.country,
+              language: data.language,
+            })
+            // Auto-fill title with movie name
+            const titleInput = document.getElementById('url-title-input') as HTMLInputElement
+            if (titleInput) {
+              titleInput.value = data.mediaTitle
+            }
+            // Auto-set media type to movie or tv
+            if (data.detectedMediaType) {
+              updateLogData({ mediaType: data.detectedMediaType })
+            }
+          } else {
+            // Regular YouTube video (not a trailer)
+            setUrlMetadata({
+              title: data.title,
+              author: data.author,
+              authorUrl: data.authorUrl,
+              thumbnail: data.thumbnail,
+              videoId: data.videoId,
+              description: data.description,
+              duration: data.duration,
+              viewCount: data.viewCount,
+              publishDate: data.publishDate,
+              category: data.category,
+            })
+            // Auto-fill the title input
+            const titleInput = document.getElementById('url-title-input') as HTMLInputElement
+            if (titleInput && data.title) {
+              titleInput.value = data.title
+            }
+          }
+        }
+      }
+      // Vimeo - use oEmbed
+      else if (url.includes('vimeo.com')) {
+        const oembedUrl = `https://vimeo.com/api/oembed.json?url=${encodeURIComponent(url)}`
+        const response = await fetch(oembedUrl)
+        if (response.ok) {
+          const data = await response.json()
+          setUrlMetadata({
+            title: data.title,
+            author: data.author_name,
+            authorUrl: data.author_url,
+            thumbnail: data.thumbnail_url,
+            description: data.description,
+            duration: data.duration ? `${Math.floor(data.duration / 60)}:${(data.duration % 60).toString().padStart(2, '0')}` : undefined,
+          })
+          const titleInput = document.getElementById('url-title-input') as HTMLInputElement
+          if (titleInput && data.title) {
+            titleInput.value = data.title
+          }
+        }
+      }
+    } catch (error) {
+      console.log('Could not fetch URL metadata:', error)
+    } finally {
+      setUrlLoading(false)
+    }
+  }
+
+  // Extract YouTube video ID from URL
+  const extractYouTubeId = (url: string): string => {
+    const patterns = [
+      /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/,
+    ]
+    for (const pattern of patterns) {
+      const match = url.match(pattern)
+      if (match) return match[1]
+    }
+    return ''
   }
 
   // User interactions tracking for AI-enhanced questions
-  const [userInteractions, setUserInteractions] = useState<UserInteractions>({
-    talentPreferences: {},
-    questionFeedback: [],
-    editHistory: [],
-    sessionStart: new Date().toISOString(),
-    mediaSearches: [],
+  const [userInteractions, setUserInteractions] = useState<UserInteractions>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('smartMediaLogger_preferences')
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved)
+          return {
+            ...parsed,
+            sessionStart: new Date().toISOString(), // Always fresh session
+          }
+        } catch (e) {
+          console.error('Failed to parse preferences from localStorage:', e)
+        }
+      }
+    }
+    return {
+      talentPreferences: {},
+      questionFeedback: [],
+      editHistory: [],
+      sessionStart: new Date().toISOString(),
+      mediaSearches: [],
+    }
   })
+
+  // Persist queue to localStorage when it changes
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('smartMediaLogger_queue', JSON.stringify(upNextQueue))
+    }
+  }, [upNextQueue])
+
+  // Persist logged items to localStorage when they change
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('smartMediaLogger_logged', JSON.stringify(loggedItems))
+    }
+  }, [loggedItems])
+
+  // Persist user preferences (talent preferences, etc.) to localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('smartMediaLogger_preferences', JSON.stringify(userInteractions))
+    }
+  }, [userInteractions])
 
   // Greeting based on context (simplified for now)
   const greeting = "What did you watch, read, or listen to?"
 
   // Track if we've saved the current entry (to prevent duplicates)
-  const savedEntryIdRef = useRef<number | null>(null)
+  const savedEntryIdRef = useRef<string | null>(null)
 
   // Log complete interaction data when entry is saved
   useEffect(() => {
-    if (step === 'complete' && logData.title && logData.tmdbId) {
-      // Only save once per entry (use tmdbId to track)
-      if (savedEntryIdRef.current === logData.tmdbId) {
+    if (step === 'complete' && logData.title) {
+      // Generate a unique ID for this entry (works with or without tmdbId)
+      const entryUniqueId = logData.tmdbId
+        ? `tmdb-${logData.tmdbId}`
+        : `${logData.title}-${logData.consumptionDate || Date.now()}`
+
+      // Only save once per entry
+      if (savedEntryIdRef.current === entryUniqueId) {
         return // Already saved this entry
       }
 
@@ -414,13 +1125,15 @@ export default function Home() {
         companionNames: logData.companionNames,
         socialContext: logData.socialContext,
         location: logData.location,
+        videoId: urlMetadata?.videoId,  // Preserve video ID for playback
+        sourceUrl: isUrl(searchQuery) ? searchQuery : undefined, // Preserve source URL
       }
 
-      savedEntryIdRef.current = logData.tmdbId
+      savedEntryIdRef.current = entryUniqueId
       addLoggedItem(newLoggedItem)
       console.log('Saved to My Stuff:', newLoggedItem)
     }
-  }, [step, logData.title, logData.tmdbId, logData.consumptionDate, logData.overallRating, logData.notes, logData.companionNames, logData.socialContext, logData.location, logData.year, logData.mediaType, logData.director, entryNumber, userInteractions, addLoggedItem])
+  }, [step, logData.title, logData.tmdbId, logData.consumptionDate, logData.overallRating, logData.notes, logData.companionNames, logData.socialContext, logData.location, logData.year, logData.mediaType, logData.director, entryNumber, userInteractions, addLoggedItem, urlMetadata?.videoId, searchQuery])
 
   // Reset saved entry ref when starting a new log
   useEffect(() => {
@@ -428,6 +1141,19 @@ export default function Home() {
       savedEntryIdRef.current = null
     }
   }, [step])
+
+  // Auto-fetch metadata when URL is pasted
+  useEffect(() => {
+    if (isUrl(searchQuery)) {
+      // Clear persisted preview when starting a new search
+      setPersistedQueuePreview(null)
+      fetchUrlMetadata(searchQuery)
+      // Auto-set media type based on URL
+      updateLogData({ mediaType: guessMediaTypeFromUrl(searchQuery) })
+    } else {
+      setUrlMetadata(null)
+    }
+  }, [searchQuery])
 
   // Handle search
   const handleSearch = async () => {
@@ -624,16 +1350,25 @@ export default function Home() {
 
   return (
     <div className="min-h-[calc(100vh-73px)] flex flex-col">
+      {/* Success Toast for Queue Additions */}
+      {queueToast.show && (
+        <div className="fixed top-20 left-1/2 transform -translate-x-1/2 z-50 animate-fade-in">
+          <div className="bg-green-600 text-white px-6 py-3 rounded-xl shadow-lg flex items-center gap-3">
+            <span className="text-xl">✓</span>
+            <span className="font-medium">Added "{queueToast.title}" to your queue!</span>
+          </div>
+        </div>
+      )}
       {/* Progress Bar */}
-      <div className="bg-paper-100 border-b border-paper-400 px-8 py-4">
+      <div className="bg-white border-b border-paper-400 px-8 py-4">
         <div className="max-w-4xl mx-auto">
           <div className="flex items-center justify-between mb-2">
-            <span className="label-typewriter">Progress</span>
-            <span className="label-typewriter">{getProgressPercent()}%</span>
+            <span className="text-sm font-medium text-ink-500">Progress</span>
+            <span className="text-sm font-medium text-ink-500">{getProgressPercent()}%</span>
           </div>
-          <div className="h-3 bg-paper-300 rounded-full overflow-hidden">
+          <div className="h-2 bg-paper-300 rounded-full overflow-hidden">
             <div
-              className="h-full bg-accent-sky rounded-full transition-all duration-500"
+              className="h-full bg-accent-blue rounded-full transition-all duration-500"
               style={{ width: `${getProgressPercent()}%` }}
             />
           </div>
@@ -642,49 +1377,205 @@ export default function Home() {
 
       <div className="flex-1 flex">
       {/* LEFT PANE - Questions */}
-      <div className="w-1/2 p-10 flex items-start justify-center overflow-y-auto bg-paper-200">
+      <div className="w-1/2 p-10 flex items-start justify-center overflow-y-auto bg-white">
         <div className="w-full max-w-2xl">
           {/* SEARCH STEP */}
           {step === 'search' && (
             <div className="animate-fade-in">
-              <h2 className="text-2xl font-semibold text-ink-800 mb-6">
-                {greeting}
+              {/* Mode Toggle - Log vs Add to Queue */}
+              <div className="mb-8">
+                <div className="flex rounded-xl overflow-hidden border-2 border-accent-blue">
+                  <button
+                    onClick={() => {
+                      setSearchMode('log')
+                      setRightPaneTab('logging')
+                    }}
+                    className={`flex-1 py-4 px-6 font-bold text-center transition-all ${
+                      searchMode === 'log'
+                        ? 'bg-accent-blue text-white'
+                        : 'bg-white text-accent-blue hover:bg-accent-blue/10'
+                    }`}
+                  >
+                    <div className="text-lg">✍️ Log It</div>
+                    <div className={`text-xs mt-1 ${searchMode === 'log' ? 'text-white/80' : 'text-ink-500'}`}>
+                      Something I watched, read, or listened to
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setSearchMode('queue')
+                      setRightPaneTab('logging')
+                    }}
+                    className={`flex-1 py-4 px-6 font-bold text-center transition-all ${
+                      searchMode === 'queue'
+                        ? 'bg-orange-500 text-white'
+                        : 'bg-white text-orange-500 hover:bg-orange-50'
+                    }`}
+                  >
+                    <div className="text-lg">📋 Add to Queue</div>
+                    <div className={`text-xs mt-1 ${searchMode === 'queue' ? 'text-white/80' : 'text-ink-500'}`}>
+                      Something I want to watch, read, or listen to
+                    </div>
+                  </button>
+                </div>
+              </div>
+
+              <h2 className="text-lg italic font-bold text-blue-900 mb-6">
+                {searchMode === 'log'
+                  ? "What did you watch, read, or listen to?"
+                  : "What do you want to add to your queue?"}
               </h2>
               <form
                 onSubmit={(e) => {
                   e.preventDefault()
-                  handleSearch()
+                  if (!isUrl(searchQuery)) {
+                    handleSearch()
+                  }
                 }}
                 className="mb-4"
               >
                 <VoiceInput
                   value={searchQuery}
                   onChange={setSearchQuery}
-                  placeholder="Get my movie, book, album... we'll do all the work!"
+                  placeholder={searchMode === 'log'
+                    ? "Search for a movie, book, album..."
+                    : "Search or paste a URL (trailer, article, etc.)..."}
                   className="text-lg"
                 />
               </form>
-              <button
-                onClick={handleSearch}
-                disabled={!searchQuery.trim()}
-                className={`
-                  w-full py-3 rounded-lg font-medium transition-all
-                  ${searchQuery.trim()
-                    ? 'bg-accent-blue text-white hover:bg-blue-600'
-                    : 'bg-paper-300 text-ink-400 cursor-not-allowed'
-                  }
-                `}
-              >
-                Search
-              </button>
+
+              {/* URL Detected - Special UI */}
+              {isUrl(searchQuery) ? (
+                <div className="bg-orange-50 border-2 border-orange-300 rounded-xl p-5 mb-4">
+                  {/* Loading State */}
+                  {urlLoading ? (
+                    <div className="text-center py-6">
+                      <div className="text-4xl mb-3 animate-pulse">🔍</div>
+                      <p className="text-orange-700 font-medium">Fetching metadata...</p>
+                    </div>
+                  ) : (
+                    <>
+                      {/* Metadata Preview */}
+                      {urlMetadata?.thumbnail && (
+                        <div className="mb-4 rounded-lg overflow-hidden shadow-md bg-black">
+                          <img
+                            src={urlMetadata.thumbnail}
+                            alt={urlMetadata.title || 'Preview'}
+                            className="w-full aspect-video object-contain"
+                          />
+                        </div>
+                      )}
+
+                      <div className="flex items-start gap-3 mb-4">
+                        <span className="text-2xl">🔗</span>
+                        <div className="flex-1">
+                          <p className="font-bold text-orange-700">
+                            {urlMetadata?.title ? 'Found it!' : 'Link detected!'}
+                          </p>
+                          <p className="text-sm text-ink-600 mt-1">{getDomain(searchQuery)}</p>
+                          {urlMetadata?.author && (
+                            <p className="text-sm text-ink-500 mt-1">
+                              <span className="font-medium">Channel:</span> {urlMetadata.author}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="space-y-3">
+                        <div>
+                          <label className="block text-sm font-medium text-ink-700 mb-1">
+                            {urlMetadata?.title ? 'Title (edit if needed):' : 'What is this?'}
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="e.g., Dune Part 2 trailer, Interview with Coppola..."
+                            defaultValue={urlMetadata?.title || ''}
+                            className="w-full px-4 py-3 rounded-lg border-2 border-orange-300 focus:border-orange-500 focus:outline-none"
+                            id="url-title-input"
+                          />
+                        </div>
+
+                        <div className="flex gap-2 flex-wrap">
+                          <span className="text-sm text-ink-500">Type:</span>
+                          {[
+                            { type: 'video', icon: '▶️', label: 'Video' },
+                            { type: 'movie', icon: '🎬', label: 'Movie' },
+                            { type: 'tv', icon: '📺', label: 'TV' },
+                            { type: 'book', icon: '📖', label: 'Book' },
+                            { type: 'audiobook', icon: '🎧', label: 'Audiobook' },
+                            { type: 'music', icon: '🎵', label: 'Music' },
+                            { type: 'podcast', icon: '🎙️', label: 'Podcast' },
+                          ].map(({ type, icon, label }) => (
+                            <button
+                              key={type}
+                              type="button"
+                              onClick={() => updateLogData({ mediaType: type })}
+                              className={`px-3 py-1 rounded-full text-xs font-bold transition-all ${
+                                logData.mediaType === type
+                                  ? 'bg-orange-500 text-white'
+                                  : 'bg-white text-ink-600 border border-orange-300 hover:bg-orange-100'
+                              }`}
+                            >
+                              {icon} {label}
+                            </button>
+                          ))}
+                        </div>
+
+                        <button
+                          onClick={() => {
+                            const titleInput = document.getElementById('url-title-input') as HTMLInputElement
+                            const title = titleInput?.value || urlMetadata?.title || 'Untitled'
+                            setSearchMode('queue')
+                            addToQueue({
+                              title,
+                              year: urlMetadata?.mediaYear || new Date().getFullYear(),
+                              mediaType: urlMetadata?.detectedMediaType || logData.mediaType,
+                              director: urlMetadata?.director || urlMetadata?.author,
+                              sourceUrl: searchQuery.trim(),
+                              videoId: urlMetadata?.videoId,
+                              author: urlMetadata?.author,
+                              authorUrl: urlMetadata?.authorUrl,
+                              thumbnail: urlMetadata?.thumbnail,
+                              description: urlMetadata?.description,
+                              duration: urlMetadata?.duration,
+                              viewCount: urlMetadata?.viewCount,
+                              publishDate: urlMetadata?.publishDate,
+                            })
+                          }}
+                          className="w-full py-3 bg-orange-500 text-white rounded-lg font-bold hover:bg-orange-600 transition-colors"
+                        >
+                          📋 Add to Queue
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              ) : (
+                <button
+                  onClick={handleSearch}
+                  disabled={!searchQuery.trim()}
+                  className={`
+                    w-full py-3 rounded-lg font-medium transition-all
+                    ${searchQuery.trim()
+                      ? searchMode === 'log'
+                        ? 'bg-accent-blue text-white hover:bg-blue-600'
+                        : 'bg-orange-500 text-white hover:bg-orange-600'
+                      : 'bg-paper-300 text-ink-400 cursor-not-allowed'
+                    }
+                  `}
+                >
+                  Search
+                </button>
+              )}
 
               {/* Media type shortcuts */}
               <div className="mt-6">
-                <p className="text-ink-500 text-sm mb-3">Or choose:</p>
+                <p className="text-ink-500 text-sm mb-3">Filter by type:</p>
                 <div className="flex flex-wrap gap-2">
                   {[
                     { type: 'movie', icon: '🎬', label: 'Movie' },
                     { type: 'tv', icon: '📺', label: 'TV' },
+                    { type: 'video', icon: '▶️', label: 'Video' },
                     { type: 'book', icon: '📖', label: 'Book' },
                     { type: 'audiobook', icon: '🎧', label: 'Audiobook' },
                     { type: 'music', icon: '🎵', label: 'Music' },
@@ -696,8 +1587,10 @@ export default function Home() {
                       className={`
                         px-4 py-2 rounded-lg text-sm font-bold transition-all border-2
                         ${logData.mediaType === type
-                          ? 'bg-accent-blue text-white border-accent-blue'
-                          : 'bg-white text-ink-800 border-accent-blue hover:bg-accent-blue hover:text-white'
+                          ? searchMode === 'log'
+                            ? 'bg-accent-blue text-white border-accent-blue'
+                            : 'bg-orange-500 text-white border-orange-500'
+                          : 'bg-white text-ink-800 border-paper-400 hover:border-accent-blue'
                         }
                       `}
                     >
@@ -737,13 +1630,10 @@ export default function Home() {
               ) : searchResults.length === 1 ? (
                 <>
                   <h2 className="text-xl font-semibold text-ink-800 mb-4">
-                    Is this what you're looking for?
+                    {searchMode === 'queue' ? 'Add this to your queue?' : 'Is this what you watched?'}
                   </h2>
-                  <button
-                    onClick={() => handleSelectMedia(searchResults[0])}
-                    className="w-full p-5 bg-paper-100 rounded-lg text-left hover:bg-paper-50 transition-colors border-2 border-accent-blue"
-                  >
-                    <div className="font-bold text-accent-blue text-lg">
+                  <div className="w-full p-5 bg-paper-100 rounded-lg text-left border-2 border-accent-blue">
+                    <div className={`font-bold text-lg ${searchMode === 'queue' ? 'text-orange-500' : 'text-accent-blue'}`}>
                       {searchResults[0].title} ({searchResults[0].year})
                     </div>
                     {searchResults[0].director && (
@@ -754,7 +1644,56 @@ export default function Home() {
                     <div className="text-sm text-ink-500 mt-2 uppercase tracking-wide">
                       {searchResults[0].mediaType === 'tv' ? 'TV Series' : 'Film'}
                     </div>
-                  </button>
+                    <div className="flex gap-2 mt-4 pt-4 border-t border-paper-200">
+                      {searchMode === 'queue' ? (
+                        <>
+                          <button
+                            onClick={() => {
+                              addToQueue({
+                                title: searchResults[0].title,
+                                year: searchResults[0].year,
+                                mediaType: searchResults[0].mediaType,
+                                director: searchResults[0].director,
+                                thumbnail: searchResults[0].poster,
+                              })
+                            }}
+                            className="flex-1 px-4 py-3 bg-orange-500 text-white rounded-lg font-bold hover:bg-orange-600 transition-colors"
+                          >
+                            📋 Add to Queue
+                          </button>
+                          <button
+                            onClick={() => handleSelectMedia(searchResults[0])}
+                            className="px-4 py-3 bg-paper-300 text-ink-700 rounded-lg font-bold hover:bg-paper-400 transition-colors"
+                          >
+                            Log It Instead
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            onClick={() => handleSelectMedia(searchResults[0])}
+                            className="flex-1 px-4 py-3 bg-accent-blue text-white rounded-lg font-bold hover:bg-blue-600 transition-colors"
+                          >
+                            ✍️ Log It Now
+                          </button>
+                          <button
+                            onClick={() => {
+                              addToQueue({
+                                title: searchResults[0].title,
+                                year: searchResults[0].year,
+                                mediaType: searchResults[0].mediaType,
+                                director: searchResults[0].director,
+                                thumbnail: searchResults[0].poster,
+                              })
+                            }}
+                            className="px-4 py-3 bg-paper-300 text-ink-700 rounded-lg font-bold hover:bg-paper-400 transition-colors"
+                          >
+                            + Queue
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
                   <p className="text-ink-500 mt-4 text-sm">
                     Not what you meant? <button onClick={() => setStep('search')} className="text-accent-blue hover:underline">Search again</button>
                   </p>
@@ -762,15 +1701,17 @@ export default function Home() {
               ) : (
                 <>
                   {/* Smart question based on what we found */}
-                  <div className="bg-accent-blue/10 border-2 border-accent-blue rounded-xl p-4 mb-6">
+                  <div className={`${searchMode === 'queue' ? 'bg-orange-100 border-orange-400' : 'bg-accent-blue/10 border-accent-blue'} border-2 rounded-xl p-4 mb-6`}>
                     <div className="flex items-start gap-3">
-                      <span className="text-2xl">🤖</span>
+                      <span className="text-2xl">{searchMode === 'queue' ? '📋' : '🤖'}</span>
                       <div>
                         <p className="text-ink-800 font-medium">
                           I found {searchResults.length} options for "{searchQuery}"
                         </p>
                         <p className="text-ink-600 text-sm mt-1">
-                          Which one did you {logData.mediaType === 'movie' ? 'watch' : logData.mediaType === 'book' ? 'read' : 'experience'}?
+                          {searchMode === 'queue'
+                            ? 'Which one do you want to add to your queue?'
+                            : `Which one did you ${logData.mediaType === 'movie' ? 'watch' : logData.mediaType === 'book' ? 'read' : 'experience'}?`}
                         </p>
                       </div>
                     </div>
@@ -796,13 +1737,10 @@ export default function Home() {
                       return (
                         <div
                           key={result.id}
-                          className="w-full p-4 bg-paper-100 rounded-lg text-left transition-colors border border-paper-300 hover:border-accent-blue"
+                          className={`w-full p-4 bg-paper-100 rounded-lg text-left transition-colors border ${searchMode === 'queue' ? 'border-orange-200 hover:border-orange-400' : 'border-paper-300 hover:border-accent-blue'}`}
                         >
                           <div className="flex justify-between items-start">
-                            <button
-                              onClick={() => handleSelectMedia(result)}
-                              className="flex-1 text-left hover:bg-paper-50 -m-2 p-2 rounded-lg transition-colors"
-                            >
+                            <div className="flex-1">
                               <div className="font-medium text-ink-800">
                                 {result.title} ({result.year})
                               </div>
@@ -811,7 +1749,7 @@ export default function Home() {
                                   {creatorLabel} {result.director}
                                 </div>
                               )}
-                            </button>
+                            </div>
                             <div className="flex items-center gap-2 ml-3">
                               <span className={`text-xs px-2 py-1 rounded uppercase font-medium ${
                                 result.mediaType === 'book' ? 'bg-amber-100 text-amber-700' :
@@ -822,22 +1760,55 @@ export default function Home() {
                               </span>
                             </div>
                           </div>
-                          {/* Add to Queue button */}
+                          {/* Action buttons - order changes based on mode */}
                           <div className="flex gap-2 mt-3 pt-3 border-t border-paper-200">
-                            <button
-                              onClick={() => handleSelectMedia(result)}
-                              className="flex-1 px-4 py-2 bg-accent-blue text-white rounded-lg font-bold text-sm hover:bg-blue-700 transition-colors"
-                            >
-                              Log It Now
-                            </button>
-                            <button
-                              onClick={() => {
-                                addToQueue(result.title, result.year, result.mediaType, result.director)
-                              }}
-                              className="px-4 py-2 bg-paper-300 text-ink-700 rounded-lg font-bold text-sm hover:bg-paper-400 transition-colors"
-                            >
-                              + Add to Queue
-                            </button>
+                            {searchMode === 'queue' ? (
+                              <>
+                                <button
+                                  onClick={() => {
+                                    addToQueue({
+                                      title: result.title,
+                                      year: result.year,
+                                      mediaType: result.mediaType,
+                                      director: result.director,
+                                      thumbnail: result.poster,
+                                    })
+                                  }}
+                                  className="flex-1 px-4 py-2 bg-orange-500 text-white rounded-lg font-bold text-sm hover:bg-orange-600 transition-colors"
+                                >
+                                  📋 Add to Queue
+                                </button>
+                                <button
+                                  onClick={() => handleSelectMedia(result)}
+                                  className="px-4 py-2 bg-paper-300 text-ink-700 rounded-lg font-bold text-sm hover:bg-paper-400 transition-colors"
+                                >
+                                  Log It
+                                </button>
+                              </>
+                            ) : (
+                              <>
+                                <button
+                                  onClick={() => handleSelectMedia(result)}
+                                  className="flex-1 px-4 py-2 bg-accent-blue text-white rounded-lg font-bold text-sm hover:bg-blue-700 transition-colors"
+                                >
+                                  ✍️ Log It Now
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    addToQueue({
+                                      title: result.title,
+                                      year: result.year,
+                                      mediaType: result.mediaType,
+                                      director: result.director,
+                                      thumbnail: result.poster,
+                                    })
+                                  }}
+                                  className="px-4 py-2 bg-paper-300 text-ink-700 rounded-lg font-bold text-sm hover:bg-paper-400 transition-colors"
+                                >
+                                  + Queue
+                                </button>
+                              </>
+                            )}
                           </div>
                         </div>
                       )
@@ -1218,10 +2189,10 @@ export default function Home() {
       </div>
 
       {/* Divider */}
-      <div className="w-1 bg-accent-sky/30" />
+      <div className="w-px bg-paper-400" />
 
       {/* RIGHT PANE - Tabbed Dashboard */}
-      <div className="w-1/2 bg-paper-300 overflow-hidden border-l-4 border-accent-blue/30">
+      <div className="w-1/2 bg-[#F0F4FF] overflow-hidden">
         <RightPaneTabs
           currentEntry={{
             entryNumber,
@@ -1250,6 +2221,8 @@ export default function Home() {
             metacriticData: logData.metacriticData,
             rottenTomatoesData: logData.rottenTomatoesData,
             streamingOptions: logData.streamingOptions,
+            videoId: urlMetadata?.videoId,
+            sourceUrl: isUrl(searchQuery) ? searchQuery : undefined,
           }}
           isLogging={step !== 'complete'}
           onEdit={(changes) => {
@@ -1301,9 +2274,84 @@ export default function Home() {
           upNextQueue={upNextQueue}
           onAddToQueue={addToQueue}
           onRemoveFromQueue={(id) => setUpNextQueue(prev => prev.filter(item => item.id !== id))}
+          onLogFromQueue={handleLogFromQueue}
           loggedItems={loggedItems}
           onAddLoggedItem={addLoggedItem}
           onUpdateLoggedItem={updateLoggedItem}
+          onRemoveLoggedItem={removeLoggedItem}
+          activeTabOverride={rightPaneTab}
+          tabSwitchTrigger={tabSwitchTrigger}
+          onTabChange={setRightPaneTab}
+          searchMode={searchMode}
+          queuePreview={
+            // Use persisted preview if available (after adding to queue)
+            // Otherwise use live preview from URL metadata
+            persistedQueuePreview ? {
+              ...persistedQueuePreview,
+              isLoading: false,
+            } : isUrl(searchQuery) ? {
+              title: urlMetadata?.title,
+              author: urlMetadata?.author,
+              authorUrl: urlMetadata?.authorUrl,
+              thumbnail: urlMetadata?.thumbnail,
+              videoId: urlMetadata?.videoId || urlMetadata?.trailerVideoId,
+              description: urlMetadata?.description,
+              duration: urlMetadata?.duration,
+              viewCount: urlMetadata?.viewCount,
+              publishDate: urlMetadata?.publishDate,
+              sourceUrl: searchQuery,
+              mediaType: logData.mediaType,
+              isLoading: urlLoading,
+              // Enhanced trailer metadata from TMDB
+              isTrailer: urlMetadata?.isTrailer,
+              detectedMediaType: urlMetadata?.detectedMediaType,
+              tmdbId: urlMetadata?.tmdbId,
+              director: urlMetadata?.director,
+              directors: urlMetadata?.directors,
+              cinematographer: urlMetadata?.cinematographer,
+              composer: urlMetadata?.composer,
+              writers: urlMetadata?.writers,
+              producers: urlMetadata?.producers,
+              editor: urlMetadata?.editor,
+              cast: urlMetadata?.cast,
+              genres: urlMetadata?.genres,
+              poster: urlMetadata?.poster,
+              trailerVideoId: urlMetadata?.trailerVideoId,
+              // Additional TMDB data
+              tmdbRating: urlMetadata?.tmdbRating,
+              tmdbVoteCount: urlMetadata?.tmdbVoteCount,
+              runtime: urlMetadata?.runtime,
+              overview: urlMetadata?.overview,
+              mediaTitle: urlMetadata?.mediaTitle,
+              mediaYear: urlMetadata?.mediaYear,
+              // External review site links
+              metacriticUrl: urlMetadata?.metacriticUrl,
+              rottenTomatoesUrl: urlMetadata?.rottenTomatoesUrl,
+              imdbUrl: urlMetadata?.imdbUrl,
+              // Real critic scores
+              metacriticScore: urlMetadata?.metacriticScore,
+              metacriticData: urlMetadata?.metacriticData,
+              rottenTomatoesScore: urlMetadata?.rottenTomatoesScore,
+              rottenTomatoesData: urlMetadata?.rottenTomatoesData,
+              // OMDB rich metadata
+              imdbRating: urlMetadata?.imdbRating,
+              imdbVotes: urlMetadata?.imdbVotes,
+              rated: urlMetadata?.rated,
+              plot: urlMetadata?.plot,
+              awards: urlMetadata?.awards,
+              boxOffice: urlMetadata?.boxOffice,
+              production: urlMetadata?.production,
+              country: urlMetadata?.country,
+              language: urlMetadata?.language,
+            } : undefined
+          }
+          onQueueTalentPreferenceChange={(name, pref) => {
+            handleTalentPreferenceChange({
+              ...userInteractions.talentPreferences,
+              [name]: pref
+            })
+          }}
+          queueTalentPreferences={userInteractions.talentPreferences}
         />
       </div>
       </div>

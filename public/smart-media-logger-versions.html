@@ -337,8 +337,8 @@
             <h2>Quick Start</h2>
 
             <div class="alert warning">
-                <strong>v0.1.0-alpha - Unstable Development Build</strong><br>
-                December 28-29, 2024. Many features are incomplete or buggy. Entity recognition is weak. Data flow has issues.
+                <strong>v1.5.0-alpha - Unstable Development Build</strong><br>
+                December 29, 2024. Adds soundtrack player with YouTube playlist integration. Music can be saved to My Stuff. Known issues with music metadata and MediaCard display for songs.
             </div>
 
             <div style="margin-bottom: 20px;">
@@ -442,10 +442,10 @@
 
         <!-- VERSION CARDS -->
         <div class="version-grid">
-            <!-- Current Development -->
+            <!-- v1.5.0-alpha - Soundtrack Feature -->
             <div class="version-card" style="border: 3px solid #f59e0b;">
                 <div class="version-header">
-                    <div class="version-title">v0.1.0-alpha</div>
+                    <div class="version-title">v1.5.0-alpha</div>
                     <div class="status development">UNSTABLE</div>
                 </div>
 
@@ -459,7 +459,68 @@
                         <span>3006</span>
                     </div>
                     <div class="info-row">
-                        <span class="info-label">Started:</span>
+                        <span class="info-label">Date:</span>
+                        <span>December 29, 2024</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Focus:</span>
+                        <span>Soundtrack Player + Music in My Stuff</span>
+                    </div>
+                </div>
+
+                <p style="margin-bottom: 15px; font-weight: 600;">New in this version:</p>
+                <div class="features">
+                    <div class="feature-tag done">Soundtrack modal (70/30 split layout)</div>
+                    <div class="feature-tag done">YouTube playlist API integration</div>
+                    <div class="feature-tag done">Heart/save songs to My Stuff</div>
+                    <div class="feature-tag done">Unheart/remove songs (toggleable)</div>
+                    <div class="feature-tag done">Music items in My Stuff with embedded player</div>
+                    <div class="feature-tag done">Collapsible info section for songs</div>
+                    <div class="feature-tag done">Remove logged items functionality</div>
+                </div>
+
+                <p style="margin-bottom: 15px; font-weight: 600;">Known Issues / Incomplete:</p>
+                <div class="features">
+                    <div class="feature-tag broken">Music saved as wrong year (uses current year)</div>
+                    <div class="feature-tag broken">MediaCard shows "Album #0" for songs (wrong)</div>
+                    <div class="feature-tag broken">No actual song metadata (release year, album, etc.)</div>
+                    <div class="feature-tag wip">Artist parsing from YouTube titles (hit or miss)</div>
+                    <div class="feature-tag wip">Playlist search sometimes returns wrong playlist</div>
+                    <div class="feature-tag wip">Soundtrack button placement (small, easy to miss)</div>
+                </div>
+
+                <p style="margin-bottom: 15px; font-weight: 600;">Technical Debt:</p>
+                <div class="features">
+                    <div class="feature-tag broken">Music uses "director" field for artist (hack)</div>
+                    <div class="feature-tag broken">No proper music data model</div>
+                    <div class="feature-tag broken">savedMusicTracks separate from loggedItems</div>
+                    <div class="feature-tag wip">Needs unified database approach</div>
+                </div>
+
+                <div class="action-buttons">
+                    <a href="http://localhost:3006" target="_blank" class="btn btn-primary">
+                        Open App
+                    </a>
+                    <a href="https://github.com/jdagogo/smart-media-logger" target="_blank" class="btn btn-secondary">
+                        GitHub
+                    </a>
+                </div>
+            </div>
+
+            <!-- Previous: v0.1.0-alpha -->
+            <div class="version-card">
+                <div class="version-header">
+                    <div class="version-title">v0.1.0-alpha</div>
+                    <div class="status stable">BASELINE</div>
+                </div>
+
+                <div class="info-section">
+                    <div class="info-row">
+                        <span class="info-label">Commit:</span>
+                        <span>0846668</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Date:</span>
                         <span>December 28, 2024</span>
                     </div>
                     <div class="info-row">
@@ -478,14 +539,6 @@
                     <div class="feature-tag done">MediaCard display</div>
                 </div>
 
-                <p style="margin-bottom: 15px; font-weight: 600;">Partially working:</p>
-                <div class="features">
-                    <div class="feature-tag wip">Entity recognition</div>
-                    <div class="feature-tag wip">My Stuff library</div>
-                    <div class="feature-tag wip">Voice recording</div>
-                    <div class="feature-tag wip">Up Next queue</div>
-                </div>
-
                 <p style="margin-bottom: 15px; font-weight: 600;">Broken / Not implemented:</p>
                 <div class="features">
                     <div class="feature-tag broken">Claude API integration</div>
@@ -495,12 +548,9 @@
                 </div>
 
                 <div class="action-buttons">
-                    <a href="http://localhost:3006" target="_blank" class="btn btn-primary">
-                        Open App
-                    </a>
-                    <a href="https://github.com/jdagogo/smart-media-logger" target="_blank" class="btn btn-secondary">
-                        GitHub
-                    </a>
+                    <button class="btn btn-secondary" onclick="alert('Run: git checkout 0846668')">
+                        Rollback Command
+                    </button>
                 </div>
             </div>
 
@@ -528,6 +578,8 @@
                     <div class="feature-tag">Real entity extraction</div>
                     <div class="feature-tag">Database persistence</div>
                     <div class="feature-tag">Fix all current bugs</div>
+                    <div class="feature-tag" style="background: #DC2626; color: white;">YouTube Data API integration</div>
+                    <div class="feature-tag" style="background: #7C3AED; color: white;">UnitedTribes video search (port 3002)</div>
                 </div>
             </div>
 
@@ -574,6 +626,7 @@
                     <div class="feature-tag">UnitedTribes export</div>
                     <div class="feature-tag">Social sharing</div>
                     <div class="feature-tag">Multi-user support</div>
+                    <div class="feature-tag" style="background: #f97316; color: white;">Browser extension - add while browsing</div>
                 </div>
             </div>
         </div>
@@ -613,7 +666,22 @@
         <div class="ecosystem-section">
             <h2>Changelog</h2>
             <div style="background: #F5F1E8; padding: 20px; border-radius: 8px;">
-                <h3 style="margin-bottom: 10px;">December 29, 2024</h3>
+                <h3 style="margin-bottom: 10px;">v1.5.0-alpha - December 29, 2024 (Evening)</h3>
+                <ul style="line-height: 1.8; color: #666; margin-left: 20px;">
+                    <li><strong>NEW:</strong> Soundtrack modal with 70/30 split layout (video player + track list)</li>
+                    <li><strong>NEW:</strong> YouTube playlist API integration for soundtrack fetching</li>
+                    <li><strong>NEW:</strong> Heart/save songs to My Stuff collection</li>
+                    <li><strong>NEW:</strong> Toggleable hearts (save and unsave songs)</li>
+                    <li><strong>NEW:</strong> Music items in My Stuff with embedded YouTube player</li>
+                    <li><strong>NEW:</strong> Collapsible info section for music items (two-level expansion)</li>
+                    <li><strong>NEW:</strong> Remove logged items functionality</li>
+                    <li>Improved hover effects on cards (blue highlight, scale, shadow)</li>
+                    <li><strong>KNOWN ISSUE:</strong> Music saves with wrong year (uses current year)</li>
+                    <li><strong>KNOWN ISSUE:</strong> MediaCard shows "Album #0" for songs (incorrect)</li>
+                    <li><strong>KNOWN ISSUE:</strong> No proper music data model (uses director field for artist)</li>
+                </ul>
+
+                <h3 style="margin-top: 20px; margin-bottom: 10px;">December 29, 2024 (Morning)</h3>
                 <ul style="line-height: 1.8; color: #666; margin-left: 20px;">
                     <li>Fixed voice recording to accumulate text properly (was only showing last words)</li>
                     <li>Added pause/resume functionality for voice input</li>

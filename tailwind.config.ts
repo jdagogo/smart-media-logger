@@ -9,34 +9,34 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // Lo-fi cream/paper aesthetic
+        // Clean, modern aesthetic (inspired by Willow)
         paper: {
-          50: '#FDFCF9',
-          100: '#F9F6F0',
-          200: '#F5F1E8',  // Primary cream background
-          300: '#EDE8DB',
-          400: '#D4C9B5',
-          500: '#C4B89E',
+          50: '#FFFFFF',      // Pure white
+          100: '#FAFAFA',     // Near white
+          200: '#F5F5F7',     // Very light gray (main content)
+          300: '#EFEFEF',     // Light gray (sidebar/secondary)
+          400: '#E5E5E5',     // Border gray
+          500: '#D1D1D1',     // Darker border
         },
-        // Warm ink colors - NO GRAY
+        // Clean gray ink colors
         ink: {
-          100: '#D4C4A8',
-          200: '#B8A888',
-          300: '#8B7355',  // Warm medium
-          400: '#7A6548',
-          500: '#5C4B32',  // Secondary text
-          600: '#4A3D2A',
-          700: '#3D3022',
-          800: '#2C2416',  // Primary text
-          900: '#1A150D',
+          100: '#E5E5E5',
+          200: '#C7C7C7',
+          300: '#A3A3A3',     // Light text
+          400: '#737373',     // Secondary text
+          500: '#525252',     // Medium text
+          600: '#404040',
+          700: '#2D2D2D',
+          800: '#1A1A1A',     // Primary text
+          900: '#0A0A0A',
         },
         accent: {
-          blue: '#2B5A8A',
-          navy: '#1E3A5F',
-          sky: '#4A90D9',
-          green: '#4A7C59',
-          forest: '#4A7C59',
-          wine: '#8B3A4C',
+          blue: '#6366F1',    // Indigo/purple (like Willow)
+          navy: '#4F46E5',    // Darker indigo
+          sky: '#818CF8',     // Lighter indigo
+          green: '#10B981',   // Modern green
+          forest: '#059669',
+          wine: '#EC4899',    // Pink accent
         }
       },
       fontFamily: {

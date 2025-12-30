@@ -99,6 +99,10 @@ interface MediaCardProps {
   onEdit?: (changes: EditableFields) => void
   onTalentPreferenceChange?: (preferences: TalentPreferenceData) => void
   initialTalentPreferences?: TalentPreferenceData
+  // Video/URL content
+  videoId?: string
+  poster?: string
+  sourceUrl?: string
 }
 
 // Talent preference types
@@ -211,6 +215,9 @@ export default function MediaCard({
   onEdit,
   onTalentPreferenceChange,
   initialTalentPreferences = {},
+  videoId,
+  poster,
+  sourceUrl,
 }: MediaCardProps) {
   const [showTrailer, setShowTrailer] = useState(false)
   const [expandedPanel, setExpandedPanel] = useState<'metacritic' | 'rt' | null>(null)
@@ -316,6 +323,35 @@ export default function MediaCard({
 
   return (
     <div className="paper-card rounded-2xl w-full overflow-hidden">
+      {/* ═══════════════════════════════════════════════════════════════ */}
+      {/* VIDEO EMBED (for YouTube/video content) */}
+      {/* ═══════════════════════════════════════════════════════════════ */}
+      {videoId && (
+        <div className="bg-black">
+          <iframe
+            src={`https://www.youtube.com/embed/${videoId}`}
+            title={title}
+            className="w-full aspect-video"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowFullScreen
+          />
+        </div>
+      )}
+
+      {/* Source URL link */}
+      {sourceUrl && !videoId && (
+        <div className="bg-orange-50 px-8 py-3 border-b-2 border-orange-200">
+          <a
+            href={sourceUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 text-sm text-orange-600 hover:text-orange-700 font-medium"
+          >
+            🔗 Open on {new URL(sourceUrl).hostname.replace('www.', '')}
+          </a>
+        </div>
+      )}
+
       {/* ═══════════════════════════════════════════════════════════════ */}
       {/* FILM INFO SECTION */}
       {/* ═══════════════════════════════════════════════════════════════ */}

@@ -1,8 +1,91 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import MediaCard from './MediaCard'
+import SoundtrackModal from './SoundtrackModal'
 import { highlightEntities } from '@/components/shared/VoiceInput'
+
+// Talent preference types - same as MediaCard
+type TalentPreference = 'loved' | 'not-for-me' | null
+
+// TalentPill component - matches MediaCard's TalentPill exactly
+interface TalentPillProps {
+  name: string
+  onPreferenceChange?: (name: string, preference: TalentPreference) => void
+  preference?: TalentPreference
+}
+
+function TalentPill({ name, onPreferenceChange, preference }: TalentPillProps) {
+  const [showMenu, setShowMenu] = useState(false)
+
+  const handleSelect = (pref: TalentPreference) => {
+    if (onPreferenceChange) {
+      onPreferenceChange(name, pref)
+    }
+    setShowMenu(false)
+  }
+
+  return (
+    <div className="relative inline-block">
+      <button
+        onClick={(e) => {
+          e.stopPropagation()
+          setShowMenu(!showMenu)
+        }}
+        className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium transition-all cursor-pointer
+          ${preference === 'not-for-me'
+            ? 'bg-paper-200 text-ink-500 border border-paper-400'
+            : 'bg-accent-blue/10 text-accent-blue border border-accent-blue hover:bg-accent-blue hover:text-white'
+          }`}
+      >
+        {preference === 'loved' && <span className="text-red-500">♥</span>}
+        {preference === 'not-for-me' && <span className="text-ink-400">—</span>}
+        {name}
+      </button>
+
+      {showMenu && (
+        <>
+          {/* Backdrop to close menu */}
+          <div
+            className="fixed inset-0 z-10"
+            onClick={(e) => {
+              e.stopPropagation()
+              setShowMenu(false)
+            }}
+          />
+
+          {/* Menu */}
+          <div className="absolute left-0 top-full mt-1 z-20 bg-white rounded-lg shadow-lg border-2 border-accent-blue overflow-hidden min-w-[140px]">
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                handleSelect(preference === 'loved' ? null : 'loved')
+              }}
+              className={`w-full px-4 py-2 text-left text-sm hover:bg-paper-100 flex items-center gap-2 ${preference === 'loved' ? 'bg-pink-50 text-pink-700' : ''}`}
+            >
+              <span>♥</span> Love
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                handleSelect(preference === 'not-for-me' ? null : 'not-for-me')
+              }}
+              className={`w-full px-4 py-2 text-left text-sm hover:bg-paper-100 flex items-center gap-2 ${preference === 'not-for-me' ? 'bg-paper-200' : ''}`}
+            >
+              <span>○</span> Don&apos;t love
+            </button>
+            <button
+              disabled
+              className="w-full px-4 py-2 text-left text-sm flex items-center gap-2 border-t border-paper-200 text-ink-400 cursor-not-allowed"
+            >
+              <span>+</span> Give me more
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
 
 // Types
 type RightPaneTab = 'logging' | 'upnext' | 'library' | 'recs' | 'profile'
@@ -16,6 +99,67 @@ interface QueueItem {
   mediaType: string
   director?: string
   addedAt: string
+  sourceUrl?: string      // URL where this was found (trailer, article, etc.)
+  videoId?: string        // YouTube/Vimeo video ID for embedding
+  author?: string         // Channel/creator name
+  authorUrl?: string      // Link to channel/creator
+  thumbnail?: string      // Thumbnail image URL
+  description?: string    // Full description
+  duration?: string       // Duration string (e.g., "12:34")
+  viewCount?: string      // View count
+  publishDate?: string    // Publish date
+  // Enhanced trailer metadata
+  isTrailer?: boolean
+  detectedMediaType?: 'movie' | 'tv'
+  tmdbId?: number
+  cast?: Array<{ name: string; character: string; profilePath?: string }>
+  genres?: string[]
+  poster?: string
+  overview?: string
+  runtime?: number
+  mediaTitle?: string
+  mediaYear?: number
+  trailerVideoId?: string
+  trailerUrl?: string      // Full YouTube embed URL for trailer
+  tmdbRating?: number
+  tmdbVoteCount?: number
+  // Crew data
+  directors?: string[]
+  cinematographer?: string
+  composer?: string
+  writers?: string[]
+  producers?: Array<{ name: string; job: string }>
+  editor?: string
+  // OMDB rich metadata
+  imdbRating?: string
+  imdbVotes?: string
+  rated?: string
+  plot?: string
+  awards?: string
+  boxOffice?: string
+  production?: string
+  country?: string
+  language?: string
+  // External review site links
+  metacriticUrl?: string
+  rottenTomatoesUrl?: string
+  imdbUrl?: string
+  // Real critic scores
+  metacriticScore?: number
+  metacriticData?: {
+    score: number
+    criticReviews?: number
+    userScore?: number
+    url: string
+  }
+  rottenTomatoesScore?: number
+  rottenTomatoesData?: {
+    tomatometer?: number
+    audienceScore?: number
+    criticReviews?: number
+    consensus?: string
+    url: string
+  }
 }
 
 // Data structure for "Already seen it" modal - matches MediaCard props
@@ -32,6 +176,14 @@ interface AlreadySeenData {
   metacriticUrl?: string
   rottenTomatoesUrl?: string
   trailerUrl?: string
+  // OMDB data
+  rated?: string
+  awards?: string
+  boxOffice?: string
+  plot?: string
+  language?: string
+  country?: string
+  imdbRating?: string
 }
 
 // Export LoggedItem type for use in parent
@@ -73,6 +225,8 @@ interface RightPaneTabsProps {
     metacriticData?: any
     rottenTomatoesData?: any
     streamingOptions?: any[]
+    videoId?: string      // YouTube/video embed ID
+    sourceUrl?: string    // Original URL source
   }
   isLogging: boolean
   onEdit?: (changes: any) => void
@@ -80,12 +234,122 @@ interface RightPaneTabsProps {
   talentPreferences?: Record<string, 'loved' | 'not-for-me' | null>
   // Queue management - shared with parent
   upNextQueue: QueueItem[]
-  onAddToQueue: (title: string, year: number, mediaType: string, director?: string) => void
+  onAddToQueue: (metadata: {
+    title: string
+    year: number
+    mediaType: string
+    director?: string
+    sourceUrl?: string
+    videoId?: string
+    author?: string
+    authorUrl?: string
+    thumbnail?: string
+    description?: string
+    duration?: string
+    viewCount?: string
+    publishDate?: string
+    skipTabSwitch?: boolean
+    // Rich recommendation data
+    cinematographer?: string
+    composer?: string
+    starring?: string[]
+    runtime?: number
+    metacriticScore?: number
+    rottenTomatoesScore?: number
+    metacriticUrl?: string
+    rottenTomatoesUrl?: string
+    trailerUrl?: string
+    // OMDB data
+    rated?: string
+    awards?: string
+    boxOffice?: string
+    plot?: string
+    language?: string
+    country?: string
+    imdbRating?: string
+  }) => void
   onRemoveFromQueue?: (id: number) => void
+  onLogFromQueue?: (item: QueueItem) => void
   // Logged items - shared with parent
   loggedItems: LoggedItem[]
   onAddLoggedItem?: (item: LoggedItem) => void
   onUpdateLoggedItem?: (id: number, changes: Partial<LoggedItem>) => void
+  onRemoveLoggedItem?: (id: number) => void
+  // Tab control from parent
+  activeTabOverride?: 'logging' | 'upnext' | 'library' | 'recs' | 'profile'
+  tabSwitchTrigger?: number
+  onTabChange?: (tab: 'logging' | 'upnext' | 'library' | 'recs' | 'profile') => void
+  // Queue mode preview
+  searchMode?: 'log' | 'queue'
+  queuePreview?: {
+    title?: string
+    author?: string
+    authorUrl?: string
+    thumbnail?: string
+    videoId?: string
+    description?: string
+    duration?: string
+    viewCount?: string
+    publishDate?: string
+    sourceUrl?: string
+    mediaType?: string
+    isLoading?: boolean
+    // Enhanced trailer metadata
+    isTrailer?: boolean
+    detectedMediaType?: 'movie' | 'tv'
+    tmdbId?: number
+    director?: string
+    directors?: string[]
+    cinematographer?: string
+    composer?: string
+    writers?: string[]
+    producers?: Array<{ name: string; job: string }>
+    editor?: string
+    cast?: Array<{ name: string; character: string; profilePath?: string }>
+    genres?: string[]
+    poster?: string
+    trailerVideoId?: string
+    // TMDB rating
+    tmdbRating?: number
+    tmdbVoteCount?: number
+    overview?: string
+    mediaTitle?: string
+    mediaYear?: number
+    runtime?: number
+    // OMDB rich metadata
+    imdbRating?: string
+    imdbVotes?: string
+    rated?: string
+    plot?: string
+    awards?: string
+    boxOffice?: string
+    production?: string
+    country?: string
+    language?: string
+    // External review site links
+    metacriticUrl?: string
+    rottenTomatoesUrl?: string
+    imdbUrl?: string
+    // Real critic scores
+    metacriticScore?: number
+    metacriticData?: {
+      score: number
+      criticReviews?: number
+      userScore?: number
+      url: string
+    }
+    rottenTomatoesScore?: number
+    rottenTomatoesData?: {
+      tomatometer?: number
+      audienceScore?: number
+      criticReviews?: number
+      consensus?: string
+      url: string
+    }
+  }
+  // Talent preference handling for queue preview
+  onQueueTalentPreferenceChange?: (name: string, preference: 'loved' | 'not-for-me' | null) => void
+  queueTalentPreferences?: Record<string, 'loved' | 'not-for-me' | null>
 }
 
 export default function RightPaneTabs({
@@ -97,20 +361,130 @@ export default function RightPaneTabs({
   upNextQueue,
   onAddToQueue,
   onRemoveFromQueue,
+  onLogFromQueue,
   loggedItems,
   onAddLoggedItem,
   onUpdateLoggedItem,
+  onRemoveLoggedItem,
+  activeTabOverride,
+  tabSwitchTrigger,
+  onTabChange,
+  searchMode = 'log',
+  queuePreview,
+  onQueueTalentPreferenceChange,
+  queueTalentPreferences = {},
 }: RightPaneTabsProps) {
-  const [activeTab, setActiveTab] = useState<RightPaneTab>('logging')
+  // Use parent-controlled tab state directly - no local state
+  // This ensures the tab always reflects what the parent wants
+  const activeTab = activeTabOverride || 'logging'
+
   const [mediaFilter, setMediaFilter] = useState<MediaFilter>('all')
   const [sortMode, setSortMode] = useState<SortMode>('date')
+
+  // Fix hydration mismatch - only show queue count after client mount
+  const [hasMounted, setHasMounted] = useState(false)
+  useEffect(() => {
+    setHasMounted(true)
+  }, [])
+
+  // Handle tab change - just notify parent, which controls the state
+  const handleTabChange = (tab: RightPaneTab) => {
+    onTabChange?.(tab)
+  }
   const [recsQuery, setRecsQuery] = useState('')
   const [prefsInput, setPrefsInput] = useState('')
   const [selectedItem, setSelectedItem] = useState<LoggedItem | null>(null)
-  const [dismissedRecs, setDismissedRecs] = useState<Set<string>>(new Set())
+
+  // Dismissed recommendations - load from localStorage
+  const [dismissedRecs, setDismissedRecs] = useState<Set<string>>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('smartMediaLogger_dismissedRecs')
+        if (saved) {
+          return new Set(JSON.parse(saved))
+        }
+      } catch (e) {
+        console.error('Failed to parse dismissed recs from localStorage:', e)
+      }
+    }
+    return new Set()
+  })
+
+  // User interactions (for preference tracking) - load from localStorage
+  const [userInteractions, setUserInteractions] = useState<Array<{
+    type: 'dismissed' | 'added_to_queue' | 'logged' | 'already_seen'
+    title: string
+    reason?: string
+    timestamp: string
+    metadata?: Record<string, unknown>
+  }>>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('smartMediaLogger_interactions')
+        if (saved) {
+          return JSON.parse(saved)
+        }
+      } catch (e) {
+        console.error('Failed to parse interactions from localStorage:', e)
+      }
+    }
+    return []
+  })
+
+  // Persist dismissed recs to localStorage when they change
+  useEffect(() => {
+    if (hasMounted && dismissedRecs.size > 0) {
+      localStorage.setItem('smartMediaLogger_dismissedRecs', JSON.stringify([...dismissedRecs]))
+    }
+  }, [dismissedRecs, hasMounted])
+
+  // Persist interactions to localStorage when they change
+  useEffect(() => {
+    if (hasMounted && userInteractions.length > 0) {
+      localStorage.setItem('smartMediaLogger_interactions', JSON.stringify(userInteractions))
+    }
+  }, [userInteractions, hasMounted])
 
   // Track which items were just added to queue (for visual feedback)
   const [justAddedToQueue, setJustAddedToQueue] = useState<Set<string>>(new Set())
+
+  // Track which queue item's video is currently playing
+  const [playingVideoId, setPlayingVideoId] = useState<number | null>(null)
+
+  // Track which items are expanded (for accordion behavior)
+  const [expandedQueueId, setExpandedQueueId] = useState<number | null>(null)
+  const [expandedLibraryId, setExpandedLibraryId] = useState<number | null>(null)
+  const [expandedMusicInfoId, setExpandedMusicInfoId] = useState<number | null>(null)
+  const [expandedCriticPanel, setExpandedCriticPanel] = useState<'metacritic' | 'rt' | null>(null)
+  const [expandedRecTitle, setExpandedRecTitle] = useState<string | null>(null)
+
+  // Track fetched trailer URLs for recommendations
+  const [fetchedTrailers, setFetchedTrailers] = useState<Record<string, string>>({})
+  const [loadingTrailers, setLoadingTrailers] = useState<Set<string>>(new Set())
+
+  // Fetch trailer when recommendation is expanded
+  const fetchTrailerForRec = async (title: string, year: number) => {
+    // Skip if already fetched or loading
+    if (fetchedTrailers[title] || loadingTrailers.has(title)) return
+
+    setLoadingTrailers(prev => new Set(prev).add(title))
+
+    try {
+      const response = await fetch(`/api/youtube-trailer?title=${encodeURIComponent(title)}&year=${year}`)
+      if (response.ok) {
+        const data = await response.json()
+        setFetchedTrailers(prev => ({ ...prev, [title]: data.embedUrl }))
+      }
+    } catch (error) {
+      console.error('Failed to fetch trailer for', title, error)
+    } finally {
+      setLoadingTrailers(prev => {
+        const newSet = new Set(prev)
+        newSet.delete(title)
+        return newSet
+      })
+    }
+  }
 
   // Track successful saves for confirmation messages
   const [justSavedToMyStuff, setJustSavedToMyStuff] = useState<string | null>(null)
@@ -120,19 +494,123 @@ export default function RightPaneTabs({
   const [alreadySeenRating, setAlreadySeenRating] = useState(70)
   const [alreadySeenTalentPrefs, setAlreadySeenTalentPrefs] = useState<Record<string, 'loved' | 'not-for-me' | null>>({})
 
+  // Soundtrack modal state
+  const [soundtrackMovie, setSoundtrackMovie] = useState<{ title: string; year: number; composer?: string } | null>(null)
+  const [savedMusicTracks, setSavedMusicTracks] = useState<Set<string>>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('smartMediaLogger_savedMusic')
+        if (saved) {
+          const tracks = JSON.parse(saved) as Array<{ videoId: string }>
+          return new Set(tracks.map(t => t.videoId))
+        }
+      } catch (e) {
+        console.error('Failed to parse saved music from localStorage:', e)
+      }
+    }
+    return new Set()
+  })
+
+  // Handle saving a track from soundtrack to My Stuff
+  const handleSaveMusicTrack = (track: {
+    title: string
+    artist: string
+    videoId: string
+    thumbnail: string
+    fromMovie: string
+  }) => {
+    // Add to logged items as music
+    const musicItem: LoggedItem = {
+      id: Date.now(),
+      title: track.title,
+      year: new Date().getFullYear(),
+      mediaType: 'music',
+      director: track.artist, // Using director field for artist
+      addedAt: new Date().toISOString().split('T')[0],
+      videoId: track.videoId,
+      thumbnail: track.thumbnail,
+      description: `From the ${track.fromMovie} soundtrack`,
+      rating: undefined, // User can rate later
+      dateConsumed: new Date().toISOString().split('T')[0],
+    }
+
+    onAddLoggedItem?.(musicItem)
+
+    // Update saved tracks set
+    setSavedMusicTracks(prev => new Set(prev).add(track.videoId))
+
+    // Persist to localStorage
+    const savedMusic = JSON.parse(localStorage.getItem('smartMediaLogger_savedMusic') || '[]')
+    savedMusic.push({
+      videoId: track.videoId,
+      title: track.title,
+      artist: track.artist,
+      thumbnail: track.thumbnail,
+      fromMovie: track.fromMovie,
+      savedAt: new Date().toISOString(),
+    })
+    localStorage.setItem('smartMediaLogger_savedMusic', JSON.stringify(savedMusic))
+
+    console.log('Saved music track:', track)
+  }
+
+  // Handle unsaving a track from soundtrack
+  const handleUnsaveMusicTrack = (videoId: string) => {
+    // Remove from saved tracks set
+    setSavedMusicTracks(prev => {
+      const newSet = new Set(prev)
+      newSet.delete(videoId)
+      return newSet
+    })
+
+    // Remove from localStorage
+    try {
+      const savedMusic = JSON.parse(localStorage.getItem('smartMediaLogger_savedMusic') || '[]')
+      const filtered = savedMusic.filter((t: { videoId: string }) => t.videoId !== videoId)
+      localStorage.setItem('smartMediaLogger_savedMusic', JSON.stringify(filtered))
+      console.log('Unsaved music track:', videoId)
+    } catch (e) {
+      console.error('Failed to unsave music track:', e)
+    }
+  }
+
   // Add to queue with visual feedback
-  const handleAddToQueue = (title: string, year: number, mediaType: string, director?: string) => {
-    onAddToQueue(title, year, mediaType, director)
+  const handleAddToQueue = (metadata: {
+    title: string
+    year: number
+    mediaType: string
+    director?: string
+    thumbnail?: string
+    skipTabSwitch?: boolean
+    cinematographer?: string
+    composer?: string
+    starring?: string[]
+    runtime?: number
+    metacriticScore?: number
+    rottenTomatoesScore?: number
+    metacriticUrl?: string
+    rottenTomatoesUrl?: string
+    trailerUrl?: string
+    // OMDB data
+    rated?: string
+    awards?: string
+    boxOffice?: string
+    plot?: string
+    language?: string
+    country?: string
+    imdbRating?: string
+  }) => {
+    onAddToQueue(metadata)
     setJustAddedToQueue(prev => {
       const newSet = new Set(prev)
-      newSet.add(title)
+      newSet.add(metadata.title)
       return newSet
     })
     // Clear "Added!" after 3 seconds
     setTimeout(() => {
       setJustAddedToQueue(prev => {
         const newSet = new Set(prev)
-        newSet.delete(title)
+        newSet.delete(metadata.title)
         return newSet
       })
     }, 3000)
@@ -175,6 +653,17 @@ export default function RightPaneTabs({
       return newSet
     })
 
+    // Store the interaction for preference tracking
+    setUserInteractions(prev => [...prev, {
+      type: 'already_seen',
+      title: alreadySeenItem.title,
+      timestamp: new Date().toISOString(),
+      metadata: {
+        rating: alreadySeenRating,
+        talentPreferences: alreadySeenTalentPrefs,
+      }
+    }])
+
     // Show save confirmation
     setJustSavedToMyStuff(alreadySeenItem.title)
     setTimeout(() => setJustSavedToMyStuff(null), 4000)
@@ -182,15 +671,24 @@ export default function RightPaneTabs({
     setAlreadySeenItem(null)
   }
 
-  // Dismiss recommendation with reason
+  // Dismiss recommendation with reason - stores interaction for preference learning
   const dismissRec = (title: string, reason: 'not_interested' | 'dont_like') => {
+    // Add to dismissed set
     setDismissedRecs(prev => {
       const newSet = new Set(prev)
       newSet.add(title)
       return newSet
     })
-    console.log('Recommendation dismissed:', { title, reason })
-    // This would be sent to AI to improve future recommendations
+
+    // Store the interaction for preference tracking
+    setUserInteractions(prev => [...prev, {
+      type: 'dismissed',
+      title,
+      reason,
+      timestamp: new Date().toISOString(),
+    }])
+
+    console.log('Recommendation dismissed and stored:', { title, reason })
   }
 
   // loggedItems is now passed as a prop from parent
@@ -307,9 +805,9 @@ export default function RightPaneTabs({
     })
   }
 
-  const tabs: { id: RightPaneTab; label: string }[] = [
+  const tabs: { id: RightPaneTab; label: string; showCount?: boolean }[] = [
     { id: 'logging', label: 'Now' },
-    { id: 'upnext', label: 'Up Next' },
+    { id: 'upnext', label: 'My Queue', showCount: true },
     { id: 'library', label: 'My Stuff' },
     { id: 'recs', label: 'Recommendations' },
     { id: 'profile', label: 'My Preferences & Data' },
@@ -327,31 +825,35 @@ export default function RightPaneTabs({
 
   return (
     <div className="h-full flex flex-col">
-      {/* Main Tabs - Styled like real tabs, 30% bigger */}
-      <div className="flex bg-paper-400/50 px-3 pt-3">
-        {tabs.map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className={`
-              relative px-5 py-4 font-bold text-base transition-all rounded-t-xl
-              ${activeTab === tab.id
-                ? 'bg-paper-50 text-accent-blue shadow-md z-10'
-                : 'bg-paper-300 text-ink-500 hover:text-ink-700 hover:bg-paper-200'
-              }
-              ${activeTab === tab.id ? '' : 'mr-1'}
-            `}
-          >
-            {tab.label}
-            {/* Active tab bottom cover */}
-            {activeTab === tab.id && (
-              <div className="absolute bottom-0 left-0 right-0 h-1 bg-paper-50 -mb-[1px]" />
-            )}
-          </button>
-        ))}
-        <div className="flex-1 bg-paper-300 rounded-tl-xl" />
+      {/* Main Tabs - Clean pill-style navigation */}
+      <div className="bg-gradient-to-r from-accent-blue to-accent-navy px-4 py-4">
+        <div className="flex flex-wrap gap-2">
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => handleTabChange(tab.id)}
+              className={`
+                px-4 py-2 font-semibold text-sm rounded-full transition-all flex items-center gap-2
+                ${activeTab === tab.id
+                  ? 'bg-white text-accent-blue shadow-lg'
+                  : 'bg-white/20 text-white hover:bg-orange-400 hover:text-white'
+                }
+              `}
+            >
+              {tab.label}
+              {tab.showCount && hasMounted && (
+                <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                  activeTab === tab.id
+                    ? 'bg-accent-blue text-white'
+                    : 'bg-white text-accent-blue'
+                }`}>
+                  {upNextQueue.length}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
       </div>
-      <div className="border-t border-paper-300" />
 
       {/* Save Confirmation Toast */}
       {justSavedToMyStuff && (
@@ -365,49 +867,473 @@ export default function RightPaneTabs({
       )}
 
       {/* Tab Content */}
-      <div className="flex-1 overflow-y-auto p-6">
+      <div className="flex-1 overflow-y-auto p-6 bg-white">
         {/* NOW LOGGING TAB */}
         {activeTab === 'logging' && (
           <div>
-            {currentEntry && currentEntry.title ? (
-              <MediaCard
-                entryNumber={currentEntry.entryNumber}
-                mediaType={currentEntry.mediaType}
-                title={currentEntry.title}
-                year={currentEntry.year}
-                dateWatched={currentEntry.dateWatched}
-                director={currentEntry.director}
-                cinematographer={currentEntry.cinematographer}
-                composer={currentEntry.composer}
-                starring={currentEntry.starring}
-                distributor={currentEntry.distributor}
-                runtime={currentEntry.runtime}
-                rating={currentEntry.rating}
-                location={currentEntry.location}
-                locationDetail={currentEntry.locationDetail}
-                firstTime={currentEntry.firstTime}
-                socialContext={currentEntry.socialContext}
-                companionNames={currentEntry.companionNames}
-                notes={currentEntry.notes}
-                metacriticScore={currentEntry.metacriticScore}
-                rottenTomatoesScore={currentEntry.rottenTomatoesScore}
-                trailerUrl={currentEntry.trailerUrl}
-                metacriticUrl={currentEntry.metacriticUrl}
-                rottenTomatoesUrl={currentEntry.rottenTomatoesUrl}
-                metacriticData={currentEntry.metacriticData}
-                rottenTomatoesData={currentEntry.rottenTomatoesData}
-                streamingOptions={currentEntry.streamingOptions}
-                isBuilding={isLogging}
-                onEdit={onEdit}
-                onTalentPreferenceChange={onTalentPreferenceChange}
-                initialTalentPreferences={talentPreferences}
-              />
+            {/* Queue Mode - Show Queue Preview Card */}
+            {searchMode === 'queue' ? (
+              queuePreview && (queuePreview.title || queuePreview.isLoading || queuePreview.sourceUrl) ? (
+                <div className="bg-gradient-to-br from-orange-50 to-amber-50 border-2 border-orange-300 rounded-2xl overflow-hidden shadow-lg">
+                  {/* Header */}
+                  <div className="bg-gradient-to-r from-orange-400 to-amber-500 px-5 py-3">
+                    <div className="flex items-center gap-2 text-white">
+                      <span className="text-xl">📋</span>
+                      <span className="font-bold uppercase tracking-wide text-sm">Adding to Queue</span>
+                    </div>
+                  </div>
+
+                  <div className="p-5">
+                    {queuePreview.isLoading ? (
+                      <div className="text-center py-8">
+                        <div className="text-4xl mb-3 animate-pulse">🔍</div>
+                        <p className="text-orange-700 font-medium">Fetching metadata...</p>
+                      </div>
+                    ) : (
+                      <>
+                        {/* Embedded Video Player or Thumbnail */}
+                        {queuePreview.videoId ? (
+                          <div className="mb-4 rounded-lg overflow-hidden shadow-lg bg-black">
+                            <iframe
+                              src={`https://www.youtube.com/embed/${queuePreview.videoId}`}
+                              title={queuePreview.title || 'Video'}
+                              className="w-full aspect-video"
+                              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                              allowFullScreen
+                            />
+                          </div>
+                        ) : queuePreview.thumbnail ? (
+                          <div className="mb-4 rounded-lg overflow-hidden shadow-md bg-black">
+                            <img
+                              src={queuePreview.thumbnail}
+                              alt={queuePreview.title || 'Preview'}
+                              className="w-full aspect-video object-contain"
+                            />
+                          </div>
+                        ) : null}
+
+                        {/* Title */}
+                        <h2 className="text-xl font-bold text-ink-800 mb-2">
+                          {queuePreview.title || 'Untitled'}
+                        </h2>
+
+                        {/* Author/Channel - clickable link */}
+                        {queuePreview.author && (
+                          <p className="text-ink-600 mb-2">
+                            <span className="text-ink-400">by </span>
+                            {queuePreview.authorUrl ? (
+                              <a
+                                href={queuePreview.authorUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-orange-600 hover:text-orange-700 hover:underline font-medium"
+                              >
+                                {queuePreview.author}
+                              </a>
+                            ) : (
+                              <span className="font-medium">{queuePreview.author}</span>
+                            )}
+                          </p>
+                        )}
+
+                        {/* Video Stats Row */}
+                        {(queuePreview.duration || queuePreview.viewCount || queuePreview.publishDate) && (
+                          <div className="flex flex-wrap items-center gap-3 text-sm text-ink-500 mb-3">
+                            {queuePreview.duration && (
+                              <span className="flex items-center gap-1">
+                                <span>⏱</span> {queuePreview.duration}
+                              </span>
+                            )}
+                            {queuePreview.viewCount && (
+                              <span className="flex items-center gap-1">
+                                <span>👁</span> {parseInt(queuePreview.viewCount).toLocaleString()} views
+                              </span>
+                            )}
+                            {queuePreview.publishDate && (
+                              <span className="flex items-center gap-1">
+                                <span>📅</span> {new Date(queuePreview.publishDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                              </span>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Media Type Badge */}
+                        {queuePreview.mediaType && (
+                          <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold uppercase mb-3 ${
+                            queuePreview.mediaType === 'video' ? 'bg-red-100 text-red-700' :
+                            queuePreview.mediaType === 'music' ? 'bg-pink-100 text-pink-700' :
+                            queuePreview.mediaType === 'book' ? 'bg-amber-100 text-amber-700' :
+                            'bg-paper-300 text-ink-600'
+                          }`}>
+                            {queuePreview.mediaType}
+                          </span>
+                        )}
+
+                        {/* Genres */}
+                        {queuePreview.genres && queuePreview.genres.length > 0 && (
+                          <div className="flex flex-wrap gap-2 mb-3">
+                            {queuePreview.genres.map((genre: string) => (
+                              <span
+                                key={genre}
+                                className="px-2 py-1 bg-paper-200 text-ink-600 rounded-full text-xs"
+                              >
+                                {genre}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* TMDB Rating */}
+                        {queuePreview.tmdbRating && (
+                          <div className="flex items-center gap-3 mb-3 p-3 bg-white rounded-lg border border-orange-200">
+                            <div className="flex items-center gap-2">
+                              <span className="text-orange-600 font-bold text-sm">TMDB</span>
+                              <span className={`font-bold px-2 py-0.5 rounded text-sm ${
+                                queuePreview.tmdbRating >= 70 ? 'bg-green-100 text-green-700' :
+                                queuePreview.tmdbRating >= 50 ? 'bg-yellow-100 text-yellow-700' :
+                                'bg-red-100 text-red-700'
+                              }`}>
+                                {queuePreview.tmdbRating}%
+                              </span>
+                            </div>
+                            {queuePreview.tmdbVoteCount && (
+                              <span className="text-xs text-ink-400">
+                                ({queuePreview.tmdbVoteCount.toLocaleString()} votes)
+                              </span>
+                            )}
+                            {queuePreview.runtime && (
+                              <span className="text-sm text-ink-500 ml-auto">
+                                {Math.floor(queuePreview.runtime / 60)}h {queuePreview.runtime % 60}m
+                              </span>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Critics Scores - Expandable panels matching MediaCard */}
+                        {(queuePreview.metacriticScore || queuePreview.rottenTomatoesScore) && (
+                          <div className="space-y-3 mb-6">
+                            {/* Metacritic - matching MediaCard exactly */}
+                            {queuePreview.metacriticScore && (
+                              <div className="border-2 border-accent-blue rounded-xl overflow-hidden">
+                                <div className="flex items-center justify-between p-4 bg-white">
+                                  <button
+                                    onClick={() => setExpandedCriticPanel(expandedCriticPanel === 'metacritic' ? null : 'metacritic')}
+                                    className="flex items-center gap-3 hover:opacity-80 transition-opacity"
+                                  >
+                                    <span className="text-accent-blue font-bold">Metacritic</span>
+                                    <span className="bg-accent-blue text-white font-bold px-3 py-1 rounded text-lg">
+                                      {queuePreview.metacriticScore}
+                                    </span>
+                                    <span className="text-accent-blue text-xl">
+                                      {expandedCriticPanel === 'metacritic' ? '−' : '+'}
+                                    </span>
+                                  </button>
+                                  {queuePreview.metacriticUrl && (
+                                    <a
+                                      href={queuePreview.metacriticUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="flex items-center gap-1 text-accent-blue hover:underline font-medium text-sm"
+                                    >
+                                      Open in New Tab <span>↗</span>
+                                    </a>
+                                  )}
+                                </div>
+                                {expandedCriticPanel === 'metacritic' && (
+                                  <div className="p-4 bg-paper-100 border-t-2 border-accent-blue">
+                                    <p className="text-ink-600 mb-4">
+                                      Based on {queuePreview.metacriticData?.criticReviews || 'multiple'} critic reviews.
+                                    </p>
+                                    {queuePreview.metacriticUrl && (
+                                      <a
+                                        href={queuePreview.metacriticUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center gap-2 px-4 py-2 bg-accent-blue text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
+                                      >
+                                        Open in New Tab <span className="text-sm">↗</span>
+                                      </a>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {/* Rotten Tomatoes - matching MediaCard exactly */}
+                            {queuePreview.rottenTomatoesScore && (
+                              <div className="border-2 border-accent-blue rounded-xl overflow-hidden">
+                                <div className="flex items-center justify-between p-4 bg-white">
+                                  <button
+                                    onClick={() => setExpandedCriticPanel(expandedCriticPanel === 'rt' ? null : 'rt')}
+                                    className="flex items-center gap-3 hover:opacity-80 transition-opacity"
+                                  >
+                                    <span className="text-accent-blue font-bold">Rotten Tomatoes</span>
+                                    <span className="bg-accent-blue text-white font-bold px-3 py-1 rounded text-lg">
+                                      {queuePreview.rottenTomatoesScore}% Critics
+                                    </span>
+                                    {queuePreview.rottenTomatoesData?.audienceScore && (
+                                      <span className="bg-orange-500 text-white font-bold px-3 py-1 rounded text-lg">
+                                        {queuePreview.rottenTomatoesData.audienceScore}% Audience
+                                      </span>
+                                    )}
+                                    <span className="text-accent-blue text-xl">
+                                      {expandedCriticPanel === 'rt' ? '−' : '+'}
+                                    </span>
+                                  </button>
+                                  {queuePreview.rottenTomatoesUrl && (
+                                    <a
+                                      href={queuePreview.rottenTomatoesUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="flex items-center gap-1 text-accent-blue hover:underline font-medium text-sm"
+                                    >
+                                      Open in New Tab <span>↗</span>
+                                    </a>
+                                  )}
+                                </div>
+                                {expandedCriticPanel === 'rt' && (
+                                  <div className="p-4 bg-paper-100 border-t-2 border-accent-blue">
+                                    {queuePreview.rottenTomatoesData?.consensus && (
+                                      <p className="text-ink-800 italic mb-4">"{queuePreview.rottenTomatoesData.consensus}"</p>
+                                    )}
+                                    <p className="text-ink-600 mb-4">
+                                      Based on {queuePreview.rottenTomatoesData?.criticReviews || 'multiple'} critic reviews.
+                                    </p>
+                                    {queuePreview.rottenTomatoesUrl && (
+                                      <a
+                                        href={queuePreview.rottenTomatoesUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center gap-2 px-4 py-2 bg-accent-blue text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
+                                      >
+                                        Open in New Tab <span className="text-sm">↗</span>
+                                      </a>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* IMDB - matching MediaCard style */}
+                        {queuePreview.imdbUrl && (
+                          <div className="border-2 border-accent-blue rounded-xl overflow-hidden mb-6">
+                            <div className="flex items-center justify-between p-4 bg-white">
+                              <div className="flex items-center gap-3">
+                                <span className="text-accent-blue font-bold">IMDb</span>
+                                {queuePreview.tmdbRating && (
+                                  <span className="bg-yellow-500 text-black font-bold px-3 py-1 rounded text-lg">
+                                    {(queuePreview.tmdbRating / 10).toFixed(1)}/10
+                                  </span>
+                                )}
+                                {queuePreview.tmdbVoteCount && (
+                                  <span className="text-ink-500 text-sm">
+                                    ({queuePreview.tmdbVoteCount.toLocaleString()} votes)
+                                  </span>
+                                )}
+                              </div>
+                              <a
+                                href={queuePreview.imdbUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-1 text-accent-blue hover:underline font-medium text-sm"
+                              >
+                                Open in New Tab <span>↗</span>
+                              </a>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Director */}
+                        {queuePreview.director && (
+                          <div className="mt-3 pt-3 border-t border-orange-200">
+                            <div className="text-xs text-ink-400 uppercase tracking-wide mb-2">Director</div>
+                            <div className="flex items-center gap-2">
+                              <TalentPill
+                                name={queuePreview.director}
+                                preference={queueTalentPreferences[queuePreview.director]}
+                                onPreferenceChange={onQueueTalentPreferenceChange}
+                              />
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Cast */}
+                        {queuePreview.cast && queuePreview.cast.length > 0 && (
+                          <div className="mt-3 pt-3 border-t border-orange-200">
+                            <div className="text-xs text-ink-400 uppercase tracking-wide mb-2">Cast</div>
+                            <div className="flex flex-wrap gap-2">
+                              {queuePreview.cast.slice(0, 8).map((actor: { name: string; character: string }) => (
+                                <TalentPill
+                                  key={actor.name}
+                                  name={actor.name}
+                                  preference={queueTalentPreferences[actor.name]}
+                                  onPreferenceChange={onQueueTalentPreferenceChange}
+                                />
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Cinematographer */}
+                        {queuePreview.cinematographer && (
+                          <div className="mt-3 pt-3 border-t border-orange-200">
+                            <div className="text-xs text-ink-400 uppercase tracking-wide mb-2">Cinematographer</div>
+                            <div className="flex items-center gap-2">
+                              <TalentPill
+                                name={queuePreview.cinematographer}
+                                preference={queueTalentPreferences[queuePreview.cinematographer]}
+                                onPreferenceChange={onQueueTalentPreferenceChange}
+                              />
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Composer / Music */}
+                        {queuePreview.composer && (
+                          <div className="mt-3 pt-3 border-t border-orange-200">
+                            <div className="text-xs text-ink-400 uppercase tracking-wide mb-2">Music</div>
+                            <div className="flex items-center gap-2">
+                              <TalentPill
+                                name={queuePreview.composer}
+                                preference={queueTalentPreferences[queuePreview.composer]}
+                                onPreferenceChange={onQueueTalentPreferenceChange}
+                              />
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Writers */}
+                        {queuePreview.writers && queuePreview.writers.length > 0 && (
+                          <div className="mt-3 pt-3 border-t border-orange-200">
+                            <div className="text-xs text-ink-400 uppercase tracking-wide mb-2">Writers</div>
+                            <div className="flex flex-wrap gap-2">
+                              {queuePreview.writers.slice(0, 4).map((writer: string) => (
+                                <TalentPill
+                                  key={writer}
+                                  name={writer}
+                                  preference={queueTalentPreferences[writer]}
+                                  onPreferenceChange={onQueueTalentPreferenceChange}
+                                />
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Editor */}
+                        {queuePreview.editor && (
+                          <div className="mt-3 pt-3 border-t border-orange-200">
+                            <div className="text-xs text-ink-400 uppercase tracking-wide mb-2">Editor</div>
+                            <div className="flex items-center gap-2">
+                              <TalentPill
+                                name={queuePreview.editor}
+                                preference={queueTalentPreferences[queuePreview.editor]}
+                                onPreferenceChange={onQueueTalentPreferenceChange}
+                              />
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Awards & Box Office from OMDB */}
+                        {(queuePreview.awards || queuePreview.boxOffice) && (
+                          <div className="mt-3 pt-3 border-t border-orange-200">
+                            {queuePreview.awards && (
+                              <div className="mb-2">
+                                <div className="text-xs text-ink-400 uppercase tracking-wide mb-1">Awards</div>
+                                <p className="text-sm text-ink-700">{queuePreview.awards}</p>
+                              </div>
+                            )}
+                            {queuePreview.boxOffice && (
+                              <div>
+                                <div className="text-xs text-ink-400 uppercase tracking-wide mb-1">Box Office</div>
+                                <p className="text-sm text-ink-700 font-medium">{queuePreview.boxOffice}</p>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Additional Info from OMDB */}
+                        {(queuePreview.rated || queuePreview.language || queuePreview.country) && (
+                          <div className="mt-3 pt-3 border-t border-orange-200 flex flex-wrap gap-3 text-sm">
+                            {queuePreview.rated && (
+                              <span className="bg-paper-200 text-ink-700 px-2 py-1 rounded font-medium">
+                                {queuePreview.rated}
+                              </span>
+                            )}
+                            {queuePreview.language && (
+                              <span className="text-ink-500">{queuePreview.language}</span>
+                            )}
+                            {queuePreview.country && (
+                              <span className="text-ink-500">{queuePreview.country}</span>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Description */}
+                        {queuePreview.description && (
+                          <div className="mt-3 pt-3 border-t border-orange-200">
+                            <p className="text-sm text-ink-600 leading-relaxed line-clamp-6">
+                              {queuePreview.description}
+                            </p>
+                          </div>
+                        )}
+
+                      </>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-16 text-ink-500">
+                  <div className="text-4xl mb-4">📋</div>
+                  <p className="text-lg">Add to your queue</p>
+                  <p className="text-sm mt-2">Search or paste a URL to preview</p>
+                </div>
+              )
             ) : (
-              <div className="text-center py-16 text-ink-500">
-                <div className="text-4xl mb-4">🎬</div>
-                <p className="text-lg">Search for something to log</p>
-                <p className="text-sm mt-2">Your entry will appear here</p>
-              </div>
+              /* Log Mode - Show Media Card */
+              currentEntry && currentEntry.title ? (
+                <MediaCard
+                  entryNumber={currentEntry.entryNumber}
+                  mediaType={currentEntry.mediaType}
+                  title={currentEntry.title}
+                  year={currentEntry.year}
+                  dateWatched={currentEntry.dateWatched}
+                  director={currentEntry.director}
+                  cinematographer={currentEntry.cinematographer}
+                  composer={currentEntry.composer}
+                  starring={currentEntry.starring}
+                  distributor={currentEntry.distributor}
+                  runtime={currentEntry.runtime}
+                  rating={currentEntry.rating}
+                  location={currentEntry.location}
+                  locationDetail={currentEntry.locationDetail}
+                  firstTime={currentEntry.firstTime}
+                  socialContext={currentEntry.socialContext}
+                  companionNames={currentEntry.companionNames}
+                  notes={currentEntry.notes}
+                  metacriticScore={currentEntry.metacriticScore}
+                  rottenTomatoesScore={currentEntry.rottenTomatoesScore}
+                  trailerUrl={currentEntry.trailerUrl}
+                  metacriticUrl={currentEntry.metacriticUrl}
+                  rottenTomatoesUrl={currentEntry.rottenTomatoesUrl}
+                  metacriticData={currentEntry.metacriticData}
+                  rottenTomatoesData={currentEntry.rottenTomatoesData}
+                  streamingOptions={currentEntry.streamingOptions}
+                  videoId={currentEntry.videoId}
+                  sourceUrl={currentEntry.sourceUrl}
+                  isBuilding={isLogging}
+                  onEdit={onEdit}
+                  onTalentPreferenceChange={onTalentPreferenceChange}
+                  initialTalentPreferences={talentPreferences}
+                />
+              ) : (
+                <div className="text-center py-16 text-ink-500">
+                  <div className="text-4xl mb-4">🎬</div>
+                  <p className="text-lg">Search for something to log</p>
+                  <p className="text-sm mt-2">Your entry will appear here</p>
+                </div>
+              )
             )}
           </div>
         )}
@@ -459,53 +1385,477 @@ export default function RightPaneTabs({
               </div>
             </div>
 
-            {/* Queue Items */}
-            <div className="space-y-3">
+            {/* Queue Items - Accordion Style */}
+            <div className="space-y-2">
               {sortItems(filterItems(upNextQueue, mediaFilter), sortMode).length > 0 ? (
-                sortItems(filterItems(upNextQueue, mediaFilter), sortMode).map((item) => (
-                  <div
-                    key={item.id}
-                    className="bg-white rounded-xl p-4 border-2 border-paper-300 hover:border-accent-blue transition-colors"
-                  >
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <h3 className="font-bold text-ink-800">{item.title}</h3>
-                        <p className="text-sm text-ink-500">
-                          {item.year} {item.director && `• ${item.director}`}
-                        </p>
-                      </div>
-                      <span className={`text-xs px-2 py-1 rounded uppercase font-medium ${
-                        item.mediaType === 'book' || item.mediaType === 'audiobook' ? 'bg-amber-100 text-amber-700' :
-                        item.mediaType === 'tv' ? 'bg-purple-100 text-purple-700' :
-                        item.mediaType === 'podcast' ? 'bg-green-100 text-green-700' :
-                        item.mediaType === 'music' ? 'bg-pink-100 text-pink-700' :
-                        item.mediaType === 'video' ? 'bg-red-100 text-red-700' :
-                        'bg-paper-300 text-ink-600'
-                      }`}>
-                        {item.mediaType === 'movie' ? 'Movie' :
-                         item.mediaType === 'audiobook' ? 'Audiobook' :
-                         item.mediaType}
-                      </span>
-                    </div>
-                    <div className="flex gap-2 mt-3">
-                      <button className="text-sm text-accent-blue hover:underline font-medium">
-                        Log It
-                      </button>
-                      <span className="text-paper-400">|</span>
+                sortItems(filterItems(upNextQueue, mediaFilter), sortMode).map((item) => {
+                  const isExpanded = expandedQueueId === item.id
+                  const hasExpandedItem = expandedQueueId !== null
+                  // Debug: log queue item data when expanded
+                  if (isExpanded) {
+                    console.log('Queue item data:', item)
+                  }
+                  return (
+                    <div
+                      key={item.id}
+                      className={`bg-white rounded-xl overflow-hidden border-2 transition-all duration-300 ${
+                        isExpanded
+                          ? 'border-orange-400 shadow-lg scale-[1.01]'
+                          : hasExpandedItem
+                            ? 'border-paper-300 opacity-90 hover:opacity-100 hover:border-accent-blue hover:border-2 hover:bg-blue-100 hover:shadow-md hover:scale-[1.01]'
+                            : 'border-paper-300 hover:border-orange-300'
+                      }`}
+                    >
+                      {/* Collapsed Header - Click to expand */}
                       <button
-                        onClick={() => onRemoveFromQueue?.(item.id)}
-                        className="text-sm text-ink-500 hover:text-red-600 transition-colors"
+                        onClick={() => setExpandedQueueId(isExpanded ? null : item.id)}
+                        className="w-full p-4 text-left flex justify-between items-center hover:bg-paper-50 transition-colors"
                       >
-                        Remove
+                        <div className="flex-1">
+                          <h3 className="font-bold text-ink-800">{item.title}</h3>
+                          <p className="text-sm text-ink-500">
+                            {item.author ? item.author : (
+                              <>{item.year} {item.director && `• ${item.director}`}</>
+                            )}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className={`text-xs px-2 py-1 rounded uppercase font-medium ${
+                            item.mediaType === 'book' || item.mediaType === 'audiobook' ? 'bg-amber-100 text-amber-700' :
+                            item.mediaType === 'tv' ? 'bg-purple-100 text-purple-700' :
+                            item.mediaType === 'podcast' ? 'bg-green-100 text-green-700' :
+                            item.mediaType === 'music' ? 'bg-pink-100 text-pink-700' :
+                            item.mediaType === 'video' ? 'bg-red-100 text-red-700' :
+                            'bg-paper-300 text-ink-600'
+                          }`}>
+                            {item.mediaType === 'movie' ? 'Movie' : item.mediaType === 'audiobook' ? 'Audiobook' : item.mediaType}
+                          </span>
+                          <span className={`text-xl transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`}>
+                            ▼
+                          </span>
+                        </div>
                       </button>
+
+                      {/* Expanded Content */}
+                      {isExpanded && (
+                        <div className="border-t border-paper-300 animate-fade-in">
+                          {/* Video/Trailer Player - supports both videoId and trailerUrl */}
+                          {(item.trailerUrl || item.videoId) && (
+                            <div className="bg-black">
+                              <iframe
+                                src={item.trailerUrl || `https://www.youtube.com/embed/${item.videoId}`}
+                                title={`${item.title} Trailer`}
+                                className="w-full aspect-video"
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                allowFullScreen
+                              />
+                            </div>
+                          )}
+
+                          <div className="p-5 bg-gradient-to-b from-orange-50 to-white space-y-4">
+                            {/* Genres */}
+                            {item.genres && item.genres.length > 0 && (
+                              <div className="flex flex-wrap gap-2">
+                                {item.genres.map((genre: string) => (
+                                  <span key={genre} className="px-2 py-1 bg-paper-200 text-ink-600 rounded-full text-xs">
+                                    {genre}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+
+                            {/* TMDB Rating */}
+                            {item.tmdbRating && (
+                              <div className="flex items-center gap-3 p-3 bg-white rounded-lg border border-orange-200">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-orange-600 font-bold text-sm">TMDB</span>
+                                  <span className={`font-bold px-2 py-0.5 rounded text-sm ${
+                                    item.tmdbRating >= 70 ? 'bg-green-100 text-green-700' :
+                                    item.tmdbRating >= 50 ? 'bg-yellow-100 text-yellow-700' :
+                                    'bg-red-100 text-red-700'
+                                  }`}>
+                                    {item.tmdbRating}%
+                                  </span>
+                                </div>
+                                {item.tmdbVoteCount && (
+                                  <span className="text-xs text-ink-400">
+                                    ({item.tmdbVoteCount.toLocaleString()} votes)
+                                  </span>
+                                )}
+                                {item.runtime && (
+                                  <span className="text-sm text-ink-500 ml-auto">
+                                    {Math.floor(item.runtime / 60)}h {item.runtime % 60}m
+                                  </span>
+                                )}
+                              </div>
+                            )}
+
+                            {/* Critics Scores - Expandable Panels (matching MediaCard exactly) */}
+                            {(item.metacriticScore || item.rottenTomatoesScore) && (
+                              <div className="space-y-3 mb-6">
+                                {/* Metacritic */}
+                                {item.metacriticScore && (
+                                  <div className="border-2 border-accent-blue rounded-xl overflow-hidden">
+                                    <div className="flex items-center justify-between p-4 bg-white">
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation()
+                                          setExpandedCriticPanel(expandedCriticPanel === 'metacritic' ? null : 'metacritic')
+                                        }}
+                                        className="flex items-center gap-3 hover:opacity-80 transition-opacity"
+                                      >
+                                        <span className="text-accent-blue font-bold">Metacritic</span>
+                                        <span className="bg-accent-blue text-white font-bold px-3 py-1 rounded text-lg">
+                                          {item.metacriticScore}
+                                        </span>
+                                        <span className="text-accent-blue text-xl">
+                                          {expandedCriticPanel === 'metacritic' ? '−' : '+'}
+                                        </span>
+                                      </button>
+                                      {item.metacriticUrl && (
+                                        <a
+                                          href={item.metacriticUrl}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          onClick={(e) => e.stopPropagation()}
+                                          className="flex items-center gap-1 text-accent-blue hover:underline font-medium text-sm"
+                                        >
+                                          Open in New Tab <span>↗</span>
+                                        </a>
+                                      )}
+                                    </div>
+                                    {expandedCriticPanel === 'metacritic' && (
+                                      <div className="p-4 bg-paper-100 border-t-2 border-accent-blue">
+                                        <p className="text-ink-600 mb-4">
+                                          Based on {item.metacriticData?.criticReviews || 'multiple'} critic reviews.
+                                        </p>
+                                        {item.metacriticUrl && (
+                                          <a
+                                            href={item.metacriticUrl}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            onClick={(e) => e.stopPropagation()}
+                                            className="inline-flex items-center gap-2 px-4 py-2 bg-accent-blue text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
+                                          >
+                                            Open in New Tab <span className="text-sm">↗</span>
+                                          </a>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+
+                                {/* Rotten Tomatoes */}
+                                {item.rottenTomatoesScore && (
+                                  <div className="border-2 border-accent-blue rounded-xl overflow-hidden">
+                                    <div className="flex items-center justify-between p-4 bg-white">
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation()
+                                          setExpandedCriticPanel(expandedCriticPanel === 'rt' ? null : 'rt')
+                                        }}
+                                        className="flex items-center gap-3 hover:opacity-80 transition-opacity"
+                                      >
+                                        <span className="text-accent-blue font-bold">Rotten Tomatoes</span>
+                                        <span className="bg-accent-blue text-white font-bold px-3 py-1 rounded text-lg">
+                                          {item.rottenTomatoesScore}% Critics
+                                        </span>
+                                        {item.rottenTomatoesData?.audienceScore && (
+                                          <span className="bg-orange-500 text-white font-bold px-3 py-1 rounded text-lg">
+                                            {item.rottenTomatoesData.audienceScore}% Audience
+                                          </span>
+                                        )}
+                                        <span className="text-accent-blue text-xl">
+                                          {expandedCriticPanel === 'rt' ? '−' : '+'}
+                                        </span>
+                                      </button>
+                                      {item.rottenTomatoesUrl && (
+                                        <a
+                                          href={item.rottenTomatoesUrl}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          onClick={(e) => e.stopPropagation()}
+                                          className="flex items-center gap-1 text-accent-blue hover:underline font-medium text-sm"
+                                        >
+                                          Open in New Tab <span>↗</span>
+                                        </a>
+                                      )}
+                                    </div>
+                                    {expandedCriticPanel === 'rt' && (
+                                      <div className="p-4 bg-paper-100 border-t-2 border-accent-blue">
+                                        {item.rottenTomatoesData?.consensus && (
+                                          <p className="text-ink-800 italic mb-4">"{item.rottenTomatoesData.consensus}"</p>
+                                        )}
+                                        <p className="text-ink-600 mb-4">
+                                          Based on {item.rottenTomatoesData?.criticReviews || 'multiple'} critic reviews.
+                                        </p>
+                                        {item.rottenTomatoesUrl && (
+                                          <a
+                                            href={item.rottenTomatoesUrl}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            onClick={(e) => e.stopPropagation()}
+                                            className="inline-flex items-center gap-2 px-4 py-2 bg-accent-blue text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
+                                          >
+                                            Open in New Tab <span className="text-sm">↗</span>
+                                          </a>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {/* IMDB - matching MediaCard style */}
+                            {item.imdbUrl && (
+                              <div className="border-2 border-accent-blue rounded-xl overflow-hidden mb-4">
+                                <div className="flex items-center justify-between p-4 bg-white">
+                                  <div className="flex items-center gap-3">
+                                    <span className="text-accent-blue font-bold">IMDb</span>
+                                    {item.tmdbRating && (
+                                      <span className="bg-yellow-500 text-black font-bold px-3 py-1 rounded text-lg">
+                                        {(item.tmdbRating / 10).toFixed(1)}/10
+                                      </span>
+                                    )}
+                                    {item.tmdbVoteCount && (
+                                      <span className="text-ink-500 text-sm">
+                                        ({item.tmdbVoteCount.toLocaleString()} votes)
+                                      </span>
+                                    )}
+                                  </div>
+                                  <a
+                                    href={item.imdbUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="flex items-center gap-1 text-accent-blue hover:underline font-medium text-sm"
+                                  >
+                                    Open in New Tab <span>↗</span>
+                                  </a>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* OMDB Rich Metadata */}
+                            {(item.awards || item.boxOffice || item.rated || item.plot) && (
+                              <div className="space-y-3 p-4 bg-paper-50 rounded-xl border border-paper-200">
+                                {/* Awards */}
+                                {item.awards && item.awards !== 'N/A' && (
+                                  <div>
+                                    <div className="text-xs text-ink-400 uppercase tracking-wide mb-1">Awards</div>
+                                    <p className="text-ink-800 font-medium">{item.awards}</p>
+                                  </div>
+                                )}
+                                {/* Box Office */}
+                                {item.boxOffice && item.boxOffice !== 'N/A' && (
+                                  <div>
+                                    <div className="text-xs text-ink-400 uppercase tracking-wide mb-1">Box Office</div>
+                                    <p className="text-ink-800 font-bold text-lg">{item.boxOffice}</p>
+                                  </div>
+                                )}
+                                {/* Rating & Runtime */}
+                                <div className="flex items-center gap-4 flex-wrap">
+                                  {item.rated && item.rated !== 'N/A' && (
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-xs text-ink-400 uppercase">Rated</span>
+                                      <span className="px-2 py-1 bg-ink-800 text-white rounded font-bold text-sm">{item.rated}</span>
+                                    </div>
+                                  )}
+                                  {item.runtime && (
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-xs text-ink-400 uppercase">Runtime</span>
+                                      <span className="text-ink-700 font-medium">{Math.floor(item.runtime / 60)}h {item.runtime % 60}m</span>
+                                    </div>
+                                  )}
+                                  {item.language && item.language !== 'N/A' && (
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-xs text-ink-400 uppercase">Language</span>
+                                      <span className="text-ink-700">{item.language}</span>
+                                    </div>
+                                  )}
+                                </div>
+                                {/* Plot */}
+                                {item.plot && item.plot !== 'N/A' && (
+                                  <div>
+                                    <div className="text-xs text-ink-400 uppercase tracking-wide mb-1">Plot</div>
+                                    <p className="text-ink-600 text-sm leading-relaxed">{item.plot}</p>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {/* Director */}
+                            {item.director && (
+                              <div>
+                                <div className="text-xs text-ink-400 uppercase tracking-wide mb-2">Director</div>
+                                <TalentPill
+                                  name={item.director}
+                                  preference={queueTalentPreferences[item.director]}
+                                  onPreferenceChange={onQueueTalentPreferenceChange}
+                                />
+                              </div>
+                            )}
+
+                            {/* Cast */}
+                            {item.cast && item.cast.length > 0 && (
+                              <div>
+                                <div className="text-xs text-ink-400 uppercase tracking-wide mb-2">Cast</div>
+                                <div className="flex flex-wrap gap-2">
+                                  {item.cast.slice(0, 6).map((actor: { name: string; character: string }) => (
+                                    <TalentPill
+                                      key={actor.name}
+                                      name={actor.name}
+                                      preference={queueTalentPreferences[actor.name]}
+                                      onPreferenceChange={onQueueTalentPreferenceChange}
+                                    />
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Cinematographer */}
+                            {item.cinematographer && (
+                              <div>
+                                <div className="text-xs text-ink-400 uppercase tracking-wide mb-2">Cinematographer</div>
+                                <TalentPill
+                                  name={item.cinematographer}
+                                  preference={queueTalentPreferences[item.cinematographer]}
+                                  onPreferenceChange={onQueueTalentPreferenceChange}
+                                />
+                              </div>
+                            )}
+
+                            {/* Composer / Music */}
+                            {item.composer && (
+                              <div>
+                                <div className="text-xs text-ink-400 uppercase tracking-wide mb-2">Music</div>
+                                <TalentPill
+                                  name={item.composer}
+                                  preference={queueTalentPreferences[item.composer]}
+                                  onPreferenceChange={onQueueTalentPreferenceChange}
+                                />
+                              </div>
+                            )}
+
+                            {/* Writers */}
+                            {item.writers && item.writers.length > 0 && (
+                              <div>
+                                <div className="text-xs text-ink-400 uppercase tracking-wide mb-2">Writers</div>
+                                <div className="flex flex-wrap gap-2">
+                                  {item.writers.slice(0, 4).map((writer: string) => (
+                                    <TalentPill
+                                      key={writer}
+                                      name={writer}
+                                      preference={queueTalentPreferences[writer]}
+                                      onPreferenceChange={onQueueTalentPreferenceChange}
+                                    />
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Editor */}
+                            {item.editor && (
+                              <div>
+                                <div className="text-xs text-ink-400 uppercase tracking-wide mb-2">Editor</div>
+                                <TalentPill
+                                  name={item.editor}
+                                  preference={queueTalentPreferences[item.editor]}
+                                  onPreferenceChange={onQueueTalentPreferenceChange}
+                                />
+                              </div>
+                            )}
+
+                            {/* Awards & Box Office from OMDB */}
+                            {(item.awards || item.boxOffice) && (
+                              <div className="p-3 bg-orange-50 rounded-lg border border-orange-200">
+                                {item.awards && (
+                                  <div className="mb-2">
+                                    <div className="text-xs text-ink-400 uppercase tracking-wide mb-1">Awards</div>
+                                    <p className="text-sm text-ink-700">{item.awards}</p>
+                                  </div>
+                                )}
+                                {item.boxOffice && (
+                                  <div>
+                                    <div className="text-xs text-ink-400 uppercase tracking-wide mb-1">Box Office</div>
+                                    <p className="text-sm text-ink-700 font-medium">{item.boxOffice}</p>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {/* Additional Info from OMDB */}
+                            {(item.rated || item.language || item.country) && (
+                              <div className="flex flex-wrap gap-3 text-sm">
+                                {item.rated && (
+                                  <span className="bg-paper-200 text-ink-700 px-2 py-1 rounded font-medium">
+                                    {item.rated}
+                                  </span>
+                                )}
+                                {item.language && (
+                                  <span className="text-ink-500">{item.language}</span>
+                                )}
+                                {item.country && (
+                                  <span className="text-ink-500">{item.country}</span>
+                                )}
+                              </div>
+                            )}
+
+                            {/* Description */}
+                            {(item.description || item.overview) && (
+                              <p className="text-sm text-ink-600 leading-relaxed line-clamp-4">
+                                {item.overview || item.description}
+                              </p>
+                            )}
+
+
+                            {/* Action Buttons */}
+                            <div className="flex gap-3 pt-3 border-t border-orange-200">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setExpandedQueueId(null)
+                                  onLogFromQueue?.(item)
+                                }}
+                                className="flex-1 px-4 py-3 bg-accent-blue text-white rounded-xl font-bold hover:bg-blue-700 transition-colors"
+                              >
+                                ✍️ Log It Now
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setSoundtrackMovie({ title: item.title, year: item.year, composer: item.composer })
+                                }}
+                                className="px-4 py-3 bg-purple-100 text-purple-700 rounded-xl font-bold hover:bg-purple-200 transition-colors flex items-center gap-2"
+                              >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+                                </svg>
+                                Soundtrack
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setExpandedQueueId(null)
+                                  onRemoveFromQueue?.(item.id)
+                                }}
+                                className="px-4 py-3 bg-paper-200 text-ink-600 rounded-xl font-bold hover:bg-red-100 hover:text-red-600 transition-colors"
+                              >
+                                Remove
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  </div>
-                ))
+                  )
+                })
               ) : (
                 <div className="text-center py-12 text-ink-500">
                   <div className="text-4xl mb-4">📋</div>
                   <p>No items in your queue</p>
-                  <p className="text-sm mt-2">Search to add something to Up Next</p>
+                  <p className="text-sm mt-2">Search to add something</p>
                 </div>
               )}
             </div>
@@ -559,191 +1909,269 @@ export default function RightPaneTabs({
               </div>
             </div>
 
-            {/* Logged Items - Clickable to view/edit */}
-            <div className="space-y-3">
-              {sortItems(filterItems(loggedItems, mediaFilter), sortMode).map((item) => (
-                <button
-                  key={item.id}
-                  onClick={() => setSelectedItem(item)}
-                  className="w-full text-left bg-white rounded-xl p-4 border-2 border-paper-300 hover:border-accent-blue hover:shadow-md transition-all"
-                >
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <h3 className="font-bold text-ink-800">{item.title}</h3>
-                      <p className="text-sm text-ink-500">
-                        {item.year} {item.director && `• ${item.director}`}
-                      </p>
-                      {item.dateConsumed && (
-                        <p className="text-xs text-ink-400 mt-1">
-                          Watched {item.dateConsumed}
-                        </p>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-3">
-                      {item.rating && (
-                        <span className={`text-lg font-bold ${
-                          item.rating >= 90 ? 'text-red-600' :
-                          item.rating >= 80 ? 'text-green-600' :
-                          item.rating >= 60 ? 'text-orange-600' :
-                          'text-accent-blue'
-                        }`}>
-                          {item.rating}%
-                        </span>
-                      )}
-                      <span className="text-accent-blue text-xl">→</span>
-                    </div>
-                  </div>
-                </button>
-              ))}
-            </div>
-
-            {/* Selected Item - Shows full MediaCard in the pane */}
-            {selectedItem && (
-              <div className="mt-6 pt-6 border-t-2 border-paper-400">
-                <div className="flex justify-between items-center mb-4">
-                  <h3 className="font-bold text-ink-800">Viewing Entry</h3>
-                  <button
-                    onClick={() => setSelectedItem(null)}
-                    className="text-accent-blue hover:underline text-sm font-medium"
+            {/* Logged Items - Accordion Style */}
+            <div className="space-y-2">
+              {sortItems(filterItems(loggedItems, mediaFilter), sortMode).map((item) => {
+                const isExpanded = expandedLibraryId === item.id
+                const hasExpandedItem = expandedLibraryId !== null
+                return (
+                  <div
+                    key={item.id}
+                    className={`bg-white rounded-xl overflow-hidden border-2 transition-all duration-300 ${
+                      isExpanded
+                        ? 'border-accent-blue shadow-lg scale-[1.01]'
+                        : hasExpandedItem
+                          ? 'border-paper-300 opacity-90 hover:opacity-100 hover:border-accent-blue hover:border-2 hover:bg-blue-100 hover:shadow-md hover:scale-[1.01]'
+                          : 'border-paper-300 hover:border-accent-blue'
+                    }`}
                   >
-                    ← Back to My Stuff
-                  </button>
-                </div>
-
-                {/* Full MediaCard for this item - EDITABLE */}
-                <MediaCard
-                  entryNumber={0}
-                  mediaType={selectedItem.mediaType}
-                  title={selectedItem.title}
-                  year={selectedItem.year}
-                  director={selectedItem.director}
-                  rating={selectedItem.rating}
-                  dateWatched={selectedItem.dateConsumed}
-                  isBuilding={true}
-                  onEdit={(changes) => {
-                    // Update the item in loggedItems via parent callback
-                    if (changes.rating !== undefined) {
-                      onUpdateLoggedItem?.(selectedItem.id, { rating: changes.rating })
-                      // Update selectedItem to reflect change
-                      setSelectedItem({ ...selectedItem, rating: changes.rating })
-                    }
-                    console.log('Updated entry:', { id: selectedItem.id, changes })
-                  }}
-                />
-
-                {/* YOUR EXPERIENCE - All captured data */}
-                <div className="mt-6 bg-paper-200 rounded-xl p-5 space-y-4">
-                  <h4 className="font-bold text-ink-800 flex items-center gap-2">
-                    <span className="text-xl">📝</span> Your Experience
-                  </h4>
-
-                  {/* Social Context - Who you watched with */}
-                  {(selectedItem.companionNames || selectedItem.socialContext) && (
-                    <div className="flex items-start gap-3">
-                      <span className="text-lg">👥</span>
-                      <div>
-                        <span className="text-ink-600 text-sm">Watched </span>
-                        <span className="text-ink-800 font-medium">
-                          {selectedItem.socialContext === 'alone' ? 'solo' :
-                           selectedItem.companionNames ? `with ${selectedItem.companionNames}` :
-                           selectedItem.socialContext ? `with ${selectedItem.socialContext}` : ''}
-                        </span>
-                        {selectedItem.location && (
-                          <span className="text-ink-600 text-sm"> at {selectedItem.location === 'theater' ? 'the theater' : 'home'}</span>
+                    {/* Collapsed Header - Click to expand */}
+                    <button
+                      onClick={() => setExpandedLibraryId(isExpanded ? null : item.id)}
+                      className="w-full p-4 text-left flex justify-between items-center hover:bg-paper-50 transition-colors"
+                    >
+                      <div className="flex-1">
+                        {/* Media type badge for songs */}
+                        {item.mediaType === 'music' && (
+                          <span className="inline-block px-2 py-0.5 bg-pink-100 text-pink-700 text-xs font-bold rounded uppercase mb-1">
+                            Song
+                          </span>
+                        )}
+                        <h3 className="font-bold text-ink-800">{item.title}</h3>
+                        <p className="text-sm text-ink-500">
+                          {item.mediaType === 'music'
+                            ? item.director // artist is stored in director field for music
+                            : <>{item.year} {item.director && `• ${item.director}`}</>
+                          }
+                        </p>
+                        {item.mediaType === 'music' && item.description && (
+                          <p className="text-xs text-ink-400 mt-1">
+                            {item.description}
+                          </p>
+                        )}
+                        {item.mediaType !== 'music' && item.dateConsumed && (
+                          <p className="text-xs text-ink-400 mt-1">
+                            Watched {item.dateConsumed}
+                          </p>
                         )}
                       </div>
-                    </div>
-                  )}
-
-                  {/* Notes - The full feedback with entity highlighting */}
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2 text-ink-600 text-sm">
-                        <span>💭</span> Your Notes
+                      <div className="flex items-center gap-3">
+                        {item.rating && (
+                          <span className={`text-lg font-bold ${
+                            item.rating >= 90 ? 'text-red-600' :
+                            item.rating >= 80 ? 'text-green-600' :
+                            item.rating >= 60 ? 'text-orange-600' :
+                            'text-accent-blue'
+                          }`}>
+                            {item.rating}%
+                          </span>
+                        )}
+                        <span className={`text-xl transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`}>
+                          ▼
+                        </span>
                       </div>
-                      <button
-                        onClick={() => {
-                          const newNotes = prompt('Edit your notes:', selectedItem.notes || '')
-                          if (newNotes !== null) {
-                            onUpdateLoggedItem?.(selectedItem.id, { notes: newNotes })
-                            setSelectedItem({ ...selectedItem, notes: newNotes })
-                          }
-                        }}
-                        className="text-xs px-2 py-1 bg-accent-blue/10 text-accent-blue rounded hover:bg-accent-blue/20 transition-colors"
-                      >
-                        {selectedItem.notes ? '✏️ Edit' : '+ Add Notes'}
-                      </button>
-                    </div>
-                    {selectedItem.notes ? (
-                      <>
-                        <div className="bg-white rounded-lg p-4 text-ink-700 leading-relaxed border border-paper-300">
-                          {highlightEntities(selectedItem.notes)}
-                        </div>
+                    </button>
 
-                        {/* Entity legend */}
-                        <div className="flex flex-wrap items-center gap-2 text-xs text-ink-500 pt-2">
-                          <span>Entities:</span>
-                          <span className="px-1.5 py-0.5 bg-blue-100 text-blue-700 border border-blue-300 rounded">Actor</span>
-                          <span className="px-1.5 py-0.5 bg-purple-100 text-purple-700 border border-purple-300 rounded">Director</span>
-                          <span className="px-1.5 py-0.5 bg-green-100 text-green-700 border border-green-300 rounded">Musician</span>
-                          <span className="px-1.5 py-0.5 bg-orange-100 text-orange-700 border border-orange-300 rounded">Band</span>
-                        </div>
-                      </>
-                    ) : (
-                      <div className="text-ink-500 text-sm italic">
-                        No notes recorded yet. Click "Add Notes" above to share your thoughts.
+                    {/* Expanded Content */}
+                    {isExpanded && (
+                      <div className="border-t border-paper-300 animate-fade-in">
+                        {/* MUSIC ITEMS - Video with collapsible info section */}
+                        {item.mediaType === 'music' ? (
+                          <div>
+                            {/* YouTube Embed */}
+                            {item.videoId && (
+                              <div className="bg-black">
+                                <iframe
+                                  src={`https://www.youtube.com/embed/${item.videoId}?autoplay=0`}
+                                  title={item.title}
+                                  className="w-full aspect-video"
+                                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                  allowFullScreen
+                                />
+                              </div>
+                            )}
+                            {/* Collapsible info toggle */}
+                            <button
+                              onClick={() => setExpandedMusicInfoId(expandedMusicInfoId === item.id ? null : item.id)}
+                              className="w-full p-3 bg-paper-100 hover:bg-paper-200 transition-colors flex justify-between items-center border-t border-paper-300"
+                            >
+                              <span className="text-sm text-ink-600">
+                                {item.description || 'Song info'}
+                              </span>
+                              <span className={`text-ink-500 transition-transform ${expandedMusicInfoId === item.id ? 'rotate-180' : ''}`}>
+                                ▼
+                              </span>
+                            </button>
+                            {/* Expanded info section */}
+                            {expandedMusicInfoId === item.id && (
+                              <div className="p-4 bg-paper-50 border-t border-paper-200 space-y-4">
+                                {/* Song details */}
+                                <div className="bg-white rounded-lg p-4 border border-paper-200">
+                                  <h4 className="font-bold text-ink-800 mb-3">Song Details</h4>
+                                  <div className="space-y-2 text-sm">
+                                    <div className="flex justify-between">
+                                      <span className="text-ink-500">Title</span>
+                                      <span className="font-medium text-ink-800">{item.title}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                      <span className="text-ink-500">Artist</span>
+                                      <span className="font-medium text-ink-800">{item.director}</span>
+                                    </div>
+                                    {item.description && (
+                                      <div className="flex justify-between">
+                                        <span className="text-ink-500">Source</span>
+                                        <span className="font-medium text-ink-800">{item.description}</span>
+                                      </div>
+                                    )}
+                                    {item.dateConsumed && (
+                                      <div className="flex justify-between">
+                                        <span className="text-ink-500">Added</span>
+                                        <span className="font-medium text-ink-800">{item.dateConsumed}</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {/* Notes section */}
+                                <div className="bg-white rounded-lg p-4 border border-paper-200">
+                                  <h4 className="font-bold text-ink-800 mb-2">Notes</h4>
+                                  {item.notes ? (
+                                    <p className="text-sm text-ink-600">{item.notes}</p>
+                                  ) : (
+                                    <button
+                                      onClick={() => {
+                                        const newNotes = prompt('Add notes about this song:', '')
+                                        if (newNotes) {
+                                          onUpdateLoggedItem?.(item.id, { notes: newNotes })
+                                        }
+                                      }}
+                                      className="text-sm text-accent-blue hover:underline"
+                                    >
+                                      + Add notes
+                                    </button>
+                                  )}
+                                </div>
+
+                                {/* Remove button */}
+                                <button
+                                  onClick={() => {
+                                    if (confirm(`Remove "${item.title}" from your music collection?`)) {
+                                      onRemoveLoggedItem?.(item.id)
+                                      if (item.videoId) {
+                                        handleUnsaveMusicTrack(item.videoId)
+                                      }
+                                      setExpandedLibraryId(null)
+                                      setExpandedMusicInfoId(null)
+                                    }
+                                  }}
+                                  className="w-full px-4 py-2 bg-red-500 text-white rounded-lg font-medium hover:bg-red-600 transition-colors text-sm"
+                                >
+                                  🗑️ Remove from My Stuff
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="p-5 bg-gradient-to-b from-accent-blue/5 to-white space-y-4">
+                            <MediaCard
+                              entryNumber={0}
+                              mediaType={item.mediaType}
+                              title={item.title}
+                              year={item.year}
+                              director={item.director}
+                              rating={item.rating}
+                              dateWatched={item.dateConsumed}
+                              isBuilding={true}
+                              onEdit={(changes) => {
+                                if (changes.rating !== undefined) {
+                                  onUpdateLoggedItem?.(item.id, { rating: changes.rating })
+                                }
+                                console.log('Updated entry:', { id: item.id, changes })
+                              }}
+                            />
+                            <div className="bg-paper-100 rounded-xl p-4 space-y-3">
+                              <h4 className="font-bold text-ink-800 flex items-center gap-2 text-sm">
+                                <span>📝</span> Your Experience
+                              </h4>
+                              {(item.companionNames || item.socialContext) && (
+                                <div className="flex items-center gap-2 text-sm">
+                                  <span>👥</span>
+                                  <span className="text-ink-600">
+                                    Watched {item.socialContext === 'alone' ? 'solo' :
+                                      item.companionNames ? `with ${item.companionNames}` :
+                                      item.socialContext ? `with ${item.socialContext}` : ''}
+                                    {item.location && ` at ${item.location === 'theater' ? 'the theater' : 'home'}`}
+                                  </span>
+                                </div>
+                              )}
+                              {item.notes ? (
+                                <div className="bg-white rounded-lg p-3 text-sm text-ink-700 leading-relaxed border border-paper-300">
+                                  {highlightEntities(item.notes)}
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => {
+                                    const newNotes = prompt('Add your notes:', '')
+                                    if (newNotes) {
+                                      onUpdateLoggedItem?.(item.id, { notes: newNotes })
+                                    }
+                                  }}
+                                  className="text-sm text-accent-blue hover:underline"
+                                >
+                                  + Add notes
+                                </button>
+                              )}
+                              {item.dateConsumed && (
+                                <div className="flex items-center gap-2 text-ink-500 text-xs pt-2 border-t border-paper-300">
+                                  <span>📅</span>
+                                  <span>Logged {(() => {
+                                    const dateStr = item.dateConsumed
+                                    if (dateStr.includes('-')) {
+                                      const parts = dateStr.split('-')
+                                      if (parts.length === 3) {
+                                        const [year, month, day] = parts.map(Number)
+                                        const safeYear = year > 2030 || year < 1900 ? new Date().getFullYear() : year
+                                        const date = new Date(safeYear, month - 1, day)
+                                        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                                      }
+                                    }
+                                    return dateStr
+                                  })()}</span>
+                                </div>
+                              )}
+                            </div>
+                            <div className="flex gap-3 pt-3 border-t border-paper-200">
+                              <button
+                                onClick={() => handleAddToQueue({ title: item.title, year: item.year, mediaType: item.mediaType, director: item.director })}
+                                disabled={justAddedToQueue.has(item.title)}
+                                className={`flex-1 px-4 py-3 rounded-xl font-bold transition-colors ${
+                                  justAddedToQueue.has(item.title)
+                                    ? 'bg-green-600 text-white'
+                                    : 'bg-paper-200 text-ink-700 hover:bg-paper-300'
+                                }`}
+                              >
+                                {justAddedToQueue.has(item.title) ? '✓ Added!' : '+ Rewatch'}
+                              </button>
+                              <button
+                                onClick={() => {
+                                  const newNotes = prompt('Edit notes:', item.notes || '')
+                                  if (newNotes !== null) {
+                                    onUpdateLoggedItem?.(item.id, { notes: newNotes })
+                                  }
+                                }}
+                                className="px-4 py-3 bg-accent-blue text-white rounded-xl font-bold hover:bg-blue-700 transition-colors"
+                              >
+                                ✏️ Edit
+                              </button>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
-
-                  {/* Date consumed */}
-                  {selectedItem.dateConsumed && (
-                    <div className="flex items-center gap-2 text-ink-600 text-sm pt-2 border-t border-paper-300">
-                      <span>📅</span>
-                      <span>Logged on {(() => {
-                        // Parse date without timezone shift
-                        const dateStr = selectedItem.dateConsumed
-                        // Handle YYYY-MM-DD format
-                        if (dateStr.includes('-')) {
-                          const parts = dateStr.split('-')
-                          if (parts.length === 3) {
-                            const [year, month, day] = parts.map(Number)
-                            // Sanity check the year
-                            const safeYear = year > 2030 || year < 1900 ? new Date().getFullYear() : year
-                            const date = new Date(safeYear, month - 1, day)
-                            return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
-                          }
-                        }
-                        // Fallback: try direct parse
-                        try {
-                          const date = new Date(dateStr + 'T12:00:00') // Add noon to avoid timezone issues
-                          return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
-                        } catch {
-                          return dateStr
-                        }
-                      })()}</span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Add to Queue for rewatch */}
-                <button
-                  onClick={() => {
-                    handleAddToQueue(selectedItem.title, selectedItem.year, selectedItem.mediaType, selectedItem.director)
-                  }}
-                  disabled={justAddedToQueue.has(selectedItem.title)}
-                  className={`w-full mt-4 px-4 py-3 rounded-xl font-bold transition-colors ${
-                    justAddedToQueue.has(selectedItem.title)
-                      ? 'bg-green-600 text-white'
-                      : 'bg-paper-300 text-ink-700 hover:bg-paper-400'
-                  }`}
-                >
-                  {justAddedToQueue.has(selectedItem.title)
-                    ? '✓ Added to Up Next!'
-                    : '+ Add to Up Next (Rewatch)'}
-                </button>
-              </div>
-            )}
+                )
+              })}
+            </div>
           </div>
         )}
 
@@ -796,7 +2224,7 @@ export default function RightPaneTabs({
                 <div className="mt-6 space-y-3">
                   <button
                     onClick={() => {
-                      handleAddToQueue(alreadySeenItem.title, alreadySeenItem.year, 'movie', alreadySeenItem.director)
+                      handleAddToQueue({ title: alreadySeenItem.title, year: alreadySeenItem.year, mediaType: 'movie', director: alreadySeenItem.director })
                     }}
                     disabled={justAddedToQueue.has(alreadySeenItem.title)}
                     className={`w-full px-4 py-3 rounded-xl font-bold transition-colors ${
@@ -896,18 +2324,47 @@ export default function RightPaneTabs({
               // Full recommendation data with all MediaCard fields
               const ptaRecs: AlreadySeenData[] = [
                 {
+                  title: 'One Battle After Another',
+                  year: 2025,
+                  director: 'Paul Thomas Anderson',
+                  cinematographer: 'Michael Bauman',
+                  composer: 'Jonny Greenwood',
+                  starring: ['Leonardo DiCaprio', 'Sean Penn', 'Chase Infiniti', 'Regina Hall', 'Teyana Taylor', 'Wood Harris'],
+                  runtime: 156,
+                  metacriticScore: 95,
+                  rottenTomatoesScore: 94,
+                  metacriticUrl: 'https://www.metacritic.com/movie/one-battle-after-another',
+                  rottenTomatoesUrl: 'https://www.rottentomatoes.com/m/one_battle_after_another',
+                  trailerUrl: 'https://www.youtube.com/embed/_qQLUxZAklQ',
+                  rated: 'R',
+                  awards: '131 wins & 255 nominations total',
+                  boxOffice: '$287,000,000',
+                  plot: 'Washed-up revolutionary Bob exists in a state of stoned paranoia, surviving off-grid with his spirited, self-reliant daughter, Willa. When his evil nemesis resurfaces after 16 years and she goes missing, the former radical scrambles to find her.',
+                  language: 'English',
+                  country: 'USA',
+                  imdbRating: '7.9',
+                },
+                {
                   title: 'The Master',
                   year: 2012,
                   director: 'Paul Thomas Anderson',
                   cinematographer: 'Mihai Mălaimare Jr.',
                   composer: 'Jonny Greenwood',
-                  starring: ['Joaquin Phoenix', 'Philip Seymour Hoffman', 'Amy Adams'],
+                  starring: ['Joaquin Phoenix', 'Philip Seymour Hoffman', 'Amy Adams', 'Laura Dern', 'Jesse Plemons', 'Rami Malek'],
                   runtime: 138,
                   metacriticScore: 86,
                   rottenTomatoesScore: 85,
                   metacriticUrl: 'https://www.metacritic.com/movie/the-master',
                   rottenTomatoesUrl: 'https://www.rottentomatoes.com/m/the_master_2012',
                   trailerUrl: 'https://www.youtube.com/embed/fJ1O1vb9AUU',
+                  // OMDB data
+                  rated: 'R',
+                  awards: 'Nominated for 3 Oscars. 30 wins & 107 nominations total',
+                  boxOffice: '$16,377,320',
+                  plot: 'A Naval veteran arrives home from war unsettled and uncertain of his future - until he is tantalized by the Cause and its charismatic leader.',
+                  language: 'English',
+                  country: 'USA',
+                  imdbRating: '7.1',
                 },
                 {
                   title: 'Punch-Drunk Love',
@@ -915,13 +2372,21 @@ export default function RightPaneTabs({
                   director: 'Paul Thomas Anderson',
                   cinematographer: 'Robert Elswit',
                   composer: 'Jon Brion',
-                  starring: ['Adam Sandler', 'Emily Watson', 'Philip Seymour Hoffman'],
+                  starring: ['Adam Sandler', 'Emily Watson', 'Philip Seymour Hoffman', 'Luis Guzmán', 'Mary Lynn Rajskub'],
                   runtime: 95,
                   metacriticScore: 78,
                   rottenTomatoesScore: 79,
                   metacriticUrl: 'https://www.metacritic.com/movie/punch-drunk-love',
                   rottenTomatoesUrl: 'https://www.rottentomatoes.com/m/punchdrunk_love',
                   trailerUrl: 'https://www.youtube.com/embed/bSN9v1SeDEY',
+                  // OMDB data
+                  rated: 'R',
+                  awards: 'Won 1 BAFTA Award. 14 wins & 49 nominations total',
+                  boxOffice: '$17,844,216',
+                  plot: 'A psychologically troubled novelty supplier is nudged towards a romance with an English woman, all while being extorted by a phone-sex line run by a crooked mattress salesman.',
+                  language: 'English',
+                  country: 'USA',
+                  imdbRating: '7.3',
                 },
                 {
                   title: 'The Power of the Dog',
@@ -929,13 +2394,21 @@ export default function RightPaneTabs({
                   director: 'Jane Campion',
                   cinematographer: 'Ari Wegner',
                   composer: 'Jonny Greenwood',
-                  starring: ['Benedict Cumberbatch', 'Kirsten Dunst', 'Jesse Plemons', 'Kodi Smit-McPhee'],
+                  starring: ['Benedict Cumberbatch', 'Kirsten Dunst', 'Jesse Plemons', 'Kodi Smit-McPhee', 'Thomasin McKenzie', 'Frances Conroy'],
                   runtime: 126,
                   metacriticScore: 89,
                   rottenTomatoesScore: 94,
                   metacriticUrl: 'https://www.metacritic.com/movie/the-power-of-the-dog',
                   rottenTomatoesUrl: 'https://www.rottentomatoes.com/m/the_power_of_the_dog',
                   trailerUrl: 'https://www.youtube.com/embed/ELvKuuXdfCU',
+                  // OMDB data
+                  rated: 'R',
+                  awards: 'Won 1 Oscar. 134 wins & 274 nominations total',
+                  boxOffice: '$302,088',
+                  plot: 'Charismatic rancher Phil Burbank inspires fear and awe in those around him. When his brother brings home a new wife and her son, Phil torments them until he finds himself exposed to the possibility of love.',
+                  language: 'English',
+                  country: 'UK, New Zealand, Australia, USA, Canada',
+                  imdbRating: '6.8',
                 },
               ]
 
@@ -946,7 +2419,7 @@ export default function RightPaneTabs({
                   director: 'Brady Corbet',
                   cinematographer: 'Lol Crawley',
                   composer: 'Daniel Blumberg',
-                  starring: ['Adrien Brody', 'Felicity Jones', 'Guy Pearce'],
+                  starring: ['Adrien Brody', 'Felicity Jones', 'Guy Pearce', 'Joe Alwyn', 'Raffey Cassidy', 'Stacy Martin'],
                   runtime: 215,
                   metacriticScore: 91,
                   rottenTomatoesScore: 93,
@@ -954,12 +2427,19 @@ export default function RightPaneTabs({
                   rottenTomatoesUrl: 'https://www.rottentomatoes.com/m/the_brutalist',
                   trailerUrl: 'https://www.youtube.com/embed/example1',
                   match: '94% match',
+                  // OMDB data
+                  rated: 'R',
+                  awards: 'Won 3 Golden Globes. 85 wins & 185 nominations total',
+                  plot: 'A visionary architect and Holocaust survivor emigrates to America to rebuild his life, only to find himself trapped in a complex web of obsession with a wealthy industrialist.',
+                  language: 'English, Hungarian, Italian',
+                  country: 'UK, Hungary, USA',
+                  imdbRating: '7.4',
                 },
                 {
                   title: 'A Real Pain',
                   year: 2024,
                   director: 'Jesse Eisenberg',
-                  starring: ['Jesse Eisenberg', 'Kieran Culkin'],
+                  starring: ['Jesse Eisenberg', 'Kieran Culkin', 'Will Sharpe', 'Jennifer Grey', 'Kurt Egyiawan'],
                   runtime: 90,
                   metacriticScore: 80,
                   rottenTomatoesScore: 91,
@@ -967,12 +2447,20 @@ export default function RightPaneTabs({
                   rottenTomatoesUrl: 'https://www.rottentomatoes.com/m/a_real_pain',
                   trailerUrl: 'https://www.youtube.com/embed/example2',
                   match: '91% match',
+                  // OMDB data
+                  rated: 'R',
+                  awards: 'Nominated for 2 Oscars. 47 wins & 112 nominations total',
+                  plot: 'Mismatched cousins reunite for a tour through Poland to honor their beloved grandmother.',
+                  language: 'English, Polish, Yiddish',
+                  country: 'USA, Poland',
+                  imdbRating: '7.5',
                 },
                 {
                   title: 'Nickel Boys',
                   year: 2024,
                   director: 'RaMell Ross',
-                  starring: ['Ethan Herisse', 'Brandon Wilson'],
+                  cinematographer: 'Jomo Fray',
+                  starring: ['Ethan Herisse', 'Brandon Wilson', 'Aunjanue Ellis-Taylor', 'Hamish Linklater', 'Fred Hechinger', 'Daveed Diggs'],
                   runtime: 140,
                   metacriticScore: 86,
                   rottenTomatoesScore: 97,
@@ -980,6 +2468,13 @@ export default function RightPaneTabs({
                   rottenTomatoesUrl: 'https://www.rottentomatoes.com/m/nickel_boys',
                   trailerUrl: 'https://www.youtube.com/embed/example3',
                   match: '89% match',
+                  // OMDB data
+                  rated: 'PG-13',
+                  awards: 'Nominated for 2 Oscars. 29 wins & 78 nominations total',
+                  plot: 'Based on the Pulitzer Prize-winning novel, two boys forge an unlikely bond at a brutal reform school in Jim Crow-era Florida.',
+                  language: 'English',
+                  country: 'USA',
+                  imdbRating: '7.2',
                 },
               ]
 
@@ -990,13 +2485,21 @@ export default function RightPaneTabs({
                   director: 'Paul Thomas Anderson',
                   cinematographer: 'Robert Elswit',
                   composer: 'Michael Penn',
-                  starring: ['Mark Wahlberg', 'Julianne Moore', 'Burt Reynolds', 'John C. Reilly'],
+                  starring: ['Mark Wahlberg', 'Julianne Moore', 'Burt Reynolds', 'John C. Reilly', 'Don Cheadle', 'Heather Graham', 'William H. Macy', 'Philip Seymour Hoffman'],
                   runtime: 155,
                   metacriticScore: 85,
                   rottenTomatoesScore: 93,
                   metacriticUrl: 'https://www.metacritic.com/movie/boogie-nights',
                   rottenTomatoesUrl: 'https://www.rottentomatoes.com/m/boogie_nights',
                   trailerUrl: 'https://www.youtube.com/embed/example4',
+                  // OMDB data
+                  rated: 'R',
+                  awards: 'Nominated for 3 Oscars. 32 wins & 60 nominations total',
+                  boxOffice: '$26,427,166',
+                  plot: 'Back when sex was safe, pleasure was a business and business was booming, an ambitious young man with a special gift rises to the top of his profession, only to fall hard.',
+                  language: 'English, Spanish',
+                  country: 'USA',
+                  imdbRating: '7.9',
                 },
                 {
                   title: 'Magnolia',
@@ -1004,97 +2507,422 @@ export default function RightPaneTabs({
                   director: 'Paul Thomas Anderson',
                   cinematographer: 'Robert Elswit',
                   composer: 'Jon Brion',
-                  starring: ['Tom Cruise', 'Julianne Moore', 'Philip Seymour Hoffman', 'John C. Reilly'],
+                  starring: ['Tom Cruise', 'Julianne Moore', 'Philip Seymour Hoffman', 'John C. Reilly', 'William H. Macy', 'Jason Robards', 'Melora Walters', 'Jeremy Blackman'],
                   runtime: 188,
                   metacriticScore: 77,
                   rottenTomatoesScore: 83,
                   metacriticUrl: 'https://www.metacritic.com/movie/magnolia',
                   rottenTomatoesUrl: 'https://www.rottentomatoes.com/m/magnolia',
                   trailerUrl: 'https://www.youtube.com/embed/example5',
+                  // OMDB data
+                  rated: 'R',
+                  awards: 'Nominated for 3 Oscars. 30 wins & 73 nominations total',
+                  boxOffice: '$22,455,976',
+                  plot: 'An epic mosaic of interrelated characters in search of love, forgiveness, and meaning in the San Fernando Valley.',
+                  language: 'English',
+                  country: 'USA',
+                  imdbRating: '8.0',
                 },
                 {
                   title: 'Hard Eight',
                   year: 1996,
                   director: 'Paul Thomas Anderson',
                   cinematographer: 'Robert Elswit',
-                  starring: ['Philip Baker Hall', 'John C. Reilly', 'Gwyneth Paltrow', 'Samuel L. Jackson'],
+                  composer: 'Michael Penn',
+                  starring: ['Philip Baker Hall', 'John C. Reilly', 'Gwyneth Paltrow', 'Samuel L. Jackson', 'Philip Seymour Hoffman'],
                   runtime: 102,
                   metacriticScore: 70,
                   rottenTomatoesScore: 82,
                   metacriticUrl: 'https://www.metacritic.com/movie/hard-eight',
                   rottenTomatoesUrl: 'https://www.rottentomatoes.com/m/hard_eight',
                   trailerUrl: 'https://www.youtube.com/embed/example6',
+                  // OMDB data
+                  rated: 'R',
+                  awards: '4 wins & 12 nominations total',
+                  boxOffice: '$199,276',
+                  plot: 'A stranger mentors a young Reno lowlife on the art of gambling. When the drifter gets into trouble, his new mentor must come to his aid.',
+                  language: 'English',
+                  country: 'USA',
+                  imdbRating: '7.1',
                 },
               ]
 
-              // Render helper for recommendation cards
-              const renderRecCard = (rec: AlreadySeenData, match?: string) => (
-                <div key={rec.title} className="p-4 bg-paper-50 rounded-lg border border-paper-200">
-                  <div className="flex justify-between items-start mb-3">
-                    <div>
-                      <div className="font-bold text-ink-800">{rec.title} ({rec.year})</div>
-                      <div className="text-sm text-ink-500">{rec.director}</div>
-                      {match && <div className="text-sm text-green-600 font-medium mt-1">{match}</div>}
-                    </div>
+              // Render helper for recommendation cards - expandable with trailer
+              const renderRecCard = (rec: AlreadySeenData, match?: string) => {
+                const isExpanded = expandedRecTitle === rec.title
+                const hasExpandedRec = expandedRecTitle !== null
+                const isInQueue = upNextQueue.some(item => item.title === rec.title)
+
+                return (
+                  <div
+                    key={rec.title}
+                    className={`bg-white rounded-xl overflow-hidden border-2 transition-all duration-300 ${
+                      isInQueue
+                        ? 'border-green-500 bg-green-50/30'
+                        : isExpanded
+                          ? 'border-accent-blue shadow-lg'
+                          : hasExpandedRec
+                            ? 'border-paper-300 opacity-60 hover:opacity-80'
+                            : 'border-paper-300 hover:border-accent-blue'
+                    }`}
+                  >
+                    {/* Collapsed Header - Click to expand */}
                     <button
-                      onClick={() => handleAddToQueue(rec.title, rec.year, 'movie', rec.director)}
-                      disabled={justAddedToQueue.has(rec.title)}
-                      className={`px-4 py-2 rounded-lg font-bold text-sm transition-all ${
-                        justAddedToQueue.has(rec.title)
-                          ? 'bg-green-600 text-white'
-                          : 'bg-accent-blue text-white hover:bg-blue-700'
-                      }`}
+                      onClick={() => {
+                        if (!isExpanded) {
+                          // Fetch trailer when expanding
+                          fetchTrailerForRec(rec.title, rec.year)
+                        }
+                        setExpandedRecTitle(isExpanded ? null : rec.title)
+                      }}
+                      className="w-full p-4 text-left flex justify-between items-center hover:bg-paper-50 transition-colors"
                     >
-                      {justAddedToQueue.has(rec.title) ? '✓ Added!' : '+ Add to Queue'}
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-bold text-ink-800">{rec.title}</h3>
+                          <span className="text-ink-500">({rec.year})</span>
+                          {isInQueue && (
+                            <span className="text-xs px-2 py-0.5 bg-green-600 text-white rounded-full font-medium">
+                              ✓ In Queue
+                            </span>
+                          )}
+                          {match && !isInQueue && (
+                            <span className="text-xs px-2 py-0.5 bg-green-100 text-green-700 rounded-full font-medium">
+                              {match}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-sm text-ink-500">{rec.director}</p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        {/* Scores preview */}
+                        {rec.rottenTomatoesScore && (
+                          <span className="text-xs px-2 py-1 bg-red-100 text-red-700 rounded font-bold">
+                            🍅 {rec.rottenTomatoesScore}%
+                          </span>
+                        )}
+                        <span className={`text-xl transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`}>
+                          ▼
+                        </span>
+                      </div>
                     </button>
+
+                    {/* Expanded Content */}
+                    {isExpanded && (
+                      <div className="border-t border-paper-300 animate-fade-in">
+                        {/* Trailer - fetched from YouTube API */}
+                        <div className="bg-black">
+                          {loadingTrailers.has(rec.title) ? (
+                            <div className="w-full aspect-video flex items-center justify-center">
+                              <div className="text-white flex flex-col items-center gap-2">
+                                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
+                                <span className="text-sm">Loading official trailer...</span>
+                              </div>
+                            </div>
+                          ) : fetchedTrailers[rec.title] ? (
+                            <iframe
+                              src={fetchedTrailers[rec.title]}
+                              title={`${rec.title} Official Trailer`}
+                              className="w-full aspect-video"
+                              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                              allowFullScreen
+                            />
+                          ) : (
+                            <div className="w-full aspect-video flex items-center justify-center">
+                              <span className="text-white/60 text-sm">Trailer not available</span>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="p-5 bg-gradient-to-b from-paper-100 to-white space-y-4">
+                          {/* Critics Scores - Expandable Panels (matching Queue/MediaCard exactly) */}
+                          {(rec.metacriticScore || rec.rottenTomatoesScore) && (
+                            <div className="space-y-3">
+                              {/* Metacritic */}
+                              {rec.metacriticScore && (
+                                <div className="border-2 border-accent-blue rounded-xl overflow-hidden">
+                                  <div className="flex items-center justify-between p-4 bg-white">
+                                    <div className="flex items-center gap-3">
+                                      <span className="text-accent-blue font-bold">Metacritic</span>
+                                      <span className="bg-accent-blue text-white font-bold px-3 py-1 rounded text-lg">
+                                        {rec.metacriticScore}
+                                      </span>
+                                    </div>
+                                    {rec.metacriticUrl && (
+                                      <a
+                                        href={rec.metacriticUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        onClick={(e) => e.stopPropagation()}
+                                        className="flex items-center gap-1 text-accent-blue hover:underline font-medium text-sm"
+                                      >
+                                        Open in New Tab <span>↗</span>
+                                      </a>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Rotten Tomatoes */}
+                              {rec.rottenTomatoesScore && (
+                                <div className="border-2 border-accent-blue rounded-xl overflow-hidden">
+                                  <div className="flex items-center justify-between p-4 bg-white">
+                                    <div className="flex items-center gap-3">
+                                      <span className="text-accent-blue font-bold">Rotten Tomatoes</span>
+                                      <span className="bg-accent-blue text-white font-bold px-3 py-1 rounded text-lg">
+                                        🍅 {rec.rottenTomatoesScore}%
+                                      </span>
+                                    </div>
+                                    {rec.rottenTomatoesUrl && (
+                                      <a
+                                        href={rec.rottenTomatoesUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        onClick={(e) => e.stopPropagation()}
+                                        className="flex items-center gap-1 text-accent-blue hover:underline font-medium text-sm"
+                                      >
+                                        Open in New Tab <span>↗</span>
+                                      </a>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Runtime & Basic Info */}
+                          {rec.runtime && (
+                            <div className="flex items-center gap-4 p-3 bg-paper-50 rounded-lg">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs text-ink-400 uppercase">Runtime</span>
+                                <span className="text-ink-700 font-medium">{Math.floor(rec.runtime / 60)}h {rec.runtime % 60}m</span>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Director */}
+                          {rec.director && (
+                            <div>
+                              <div className="text-xs text-ink-400 uppercase tracking-wide mb-2">Director</div>
+                              <TalentPill
+                                name={rec.director}
+                                preference={queueTalentPreferences[rec.director]}
+                                onPreferenceChange={onQueueTalentPreferenceChange}
+                              />
+                            </div>
+                          )}
+
+                          {/* Cinematographer */}
+                          {rec.cinematographer && (
+                            <div>
+                              <div className="text-xs text-ink-400 uppercase tracking-wide mb-2">Cinematographer</div>
+                              <TalentPill
+                                name={rec.cinematographer}
+                                preference={queueTalentPreferences[rec.cinematographer]}
+                                onPreferenceChange={onQueueTalentPreferenceChange}
+                              />
+                            </div>
+                          )}
+
+                          {/* Composer / Music */}
+                          {rec.composer && (
+                            <div>
+                              <div className="text-xs text-ink-400 uppercase tracking-wide mb-2">Music</div>
+                              <TalentPill
+                                name={rec.composer}
+                                preference={queueTalentPreferences[rec.composer]}
+                                onPreferenceChange={onQueueTalentPreferenceChange}
+                              />
+                            </div>
+                          )}
+
+                          {/* Cast */}
+                          {rec.starring && rec.starring.length > 0 && (
+                            <div>
+                              <div className="text-xs text-ink-400 uppercase tracking-wide mb-2">Cast</div>
+                              <div className="flex flex-wrap gap-2">
+                                {rec.starring.map((actor) => (
+                                  <TalentPill
+                                    key={actor}
+                                    name={actor}
+                                    preference={queueTalentPreferences[actor]}
+                                    onPreferenceChange={onQueueTalentPreferenceChange}
+                                  />
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* OMDB Rich Metadata - matching queue display exactly */}
+                          {(rec.awards || rec.boxOffice || rec.rated || rec.plot) && (
+                            <div className="space-y-3 p-4 bg-paper-50 rounded-xl border border-paper-200">
+                              {/* Awards */}
+                              {rec.awards && rec.awards !== 'N/A' && (
+                                <div>
+                                  <div className="text-xs text-ink-400 uppercase tracking-wide mb-1">Awards</div>
+                                  <p className="text-ink-800 font-medium">{rec.awards}</p>
+                                </div>
+                              )}
+                              {/* Box Office */}
+                              {rec.boxOffice && rec.boxOffice !== 'N/A' && (
+                                <div>
+                                  <div className="text-xs text-ink-400 uppercase tracking-wide mb-1">Box Office</div>
+                                  <p className="text-ink-800 font-bold text-lg">{rec.boxOffice}</p>
+                                </div>
+                              )}
+                              {/* Rating, Runtime & Language */}
+                              <div className="flex items-center gap-4 flex-wrap">
+                                {rec.rated && rec.rated !== 'N/A' && (
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-xs text-ink-400 uppercase">Rated</span>
+                                    <span className="px-2 py-1 bg-ink-800 text-white rounded font-bold text-sm">{rec.rated}</span>
+                                  </div>
+                                )}
+                                {rec.imdbRating && (
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-xs text-ink-400 uppercase">IMDb</span>
+                                    <span className="px-2 py-1 bg-yellow-500 text-black rounded font-bold text-sm">{rec.imdbRating}/10</span>
+                                  </div>
+                                )}
+                                {rec.language && rec.language !== 'N/A' && (
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-xs text-ink-400 uppercase">Language</span>
+                                    <span className="text-ink-700">{rec.language}</span>
+                                  </div>
+                                )}
+                              </div>
+                              {/* Plot */}
+                              {rec.plot && rec.plot !== 'N/A' && (
+                                <div>
+                                  <div className="text-xs text-ink-400 uppercase tracking-wide mb-1">Plot</div>
+                                  <p className="text-ink-600 text-sm leading-relaxed">{rec.plot}</p>
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Action Buttons */}
+                          <div className="flex gap-3 pt-3 border-t border-paper-200">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                if (!isInQueue) {
+                                  handleAddToQueue({
+                                    title: rec.title,
+                                    year: rec.year,
+                                    mediaType: 'movie',
+                                    director: rec.director,
+                                    thumbnail: undefined,
+                                    skipTabSwitch: true, // Stay on Recommendations
+                                    // Pass ALL the rich metadata!
+                                    cinematographer: rec.cinematographer,
+                                    composer: rec.composer,
+                                    starring: rec.starring,
+                                    runtime: rec.runtime,
+                                    metacriticScore: rec.metacriticScore,
+                                    rottenTomatoesScore: rec.rottenTomatoesScore,
+                                    metacriticUrl: rec.metacriticUrl,
+                                    rottenTomatoesUrl: rec.rottenTomatoesUrl,
+                                    trailerUrl: fetchedTrailers[rec.title] || rec.trailerUrl,
+                                    // OMDB data
+                                    rated: rec.rated,
+                                    awards: rec.awards,
+                                    boxOffice: rec.boxOffice,
+                                    plot: rec.plot,
+                                    language: rec.language,
+                                    country: rec.country,
+                                    imdbRating: rec.imdbRating,
+                                  })
+                                }
+                              }}
+                              disabled={isInQueue || justAddedToQueue.has(rec.title)}
+                              className={`flex-1 px-4 py-3 rounded-xl font-bold transition-all ${
+                                isInQueue
+                                  ? 'bg-green-600 text-white cursor-default'
+                                  : justAddedToQueue.has(rec.title)
+                                    ? 'bg-green-600 text-white'
+                                    : 'bg-accent-blue text-white hover:bg-blue-700'
+                              }`}
+                            >
+                              {isInQueue ? '✓ In Your Queue' : justAddedToQueue.has(rec.title) ? '✓ Added!' : '+ Add to Queue'}
+                            </button>
+                          </div>
+
+                          {/* Secondary Actions */}
+                          <div className="flex gap-2 flex-wrap">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleAlreadySeen(rec)
+                              }}
+                              className="text-sm px-4 py-2 bg-accent-blue/10 text-accent-blue rounded-lg hover:bg-accent-blue/20 transition-colors font-medium"
+                            >
+                              Already seen it
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                dismissRec(rec.title, 'not_interested')
+                                setExpandedRecTitle(null)
+                              }}
+                              className="text-sm px-4 py-2 bg-paper-200 text-ink-600 rounded-lg hover:bg-paper-300 transition-colors"
+                            >
+                              Not interested
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                dismissRec(rec.title, 'dont_like')
+                                setExpandedRecTitle(null)
+                              }}
+                              className="text-sm px-4 py-2 bg-paper-200 text-ink-600 rounded-lg hover:bg-paper-300 transition-colors"
+                            >
+                              Not my type
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setSoundtrackMovie({ title: rec.title, year: rec.year, composer: rec.composer })
+                              }}
+                              className="text-sm px-4 py-2 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition-colors flex items-center gap-1.5"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+                              </svg>
+                              Soundtrack
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                  <div className="flex gap-2 pt-2 border-t border-paper-200">
-                    <button
-                      onClick={() => handleAlreadySeen(rec)}
-                      className="text-xs px-3 py-1.5 bg-accent-blue/10 text-accent-blue rounded-full hover:bg-accent-blue/20 transition-colors font-medium"
-                    >
-                      Already seen it
-                    </button>
-                    <button
-                      onClick={() => dismissRec(rec.title, 'not_interested')}
-                      className="text-xs px-3 py-1.5 bg-paper-200 text-ink-600 rounded-full hover:bg-paper-300 transition-colors"
-                    >
-                      Not interested
-                    </button>
-                    <button
-                      onClick={() => dismissRec(rec.title, 'dont_like')}
-                      className="text-xs px-3 py-1.5 bg-paper-200 text-ink-600 rounded-full hover:bg-paper-300 transition-colors"
-                    >
-                      Don't like this type
-                    </button>
-                  </div>
-                </div>
-              )
+                )
+              }
 
               return (
                 <div className="space-y-4">
                   {/* Because you loved... */}
-                  <div className="bg-white rounded-xl p-5 border-2 border-paper-300">
-                    <h4 className="font-bold text-ink-800 mb-1">Because you loved Paul Thomas Anderson</h4>
-                    <p className="text-sm text-ink-500 mb-4">Directors with similar style and vision</p>
+                  <div className="bg-white rounded-xl p-5 border-2 border-accent-blue">
+                    <h4 className="font-bold text-accent-blue text-lg mb-1">Because you loved Paul Thomas Anderson</h4>
+                    <p className="text-sm text-accent-blue mb-4">Directors with similar style and vision</p>
                     <div className="space-y-3">
                       {ptaRecs.filter(rec => !dismissedRecs.has(rec.title)).map(rec => renderRecCard(rec))}
                     </div>
                   </div>
 
                   {/* Trending with similar tastes */}
-                  <div className="bg-white rounded-xl p-5 border-2 border-paper-300">
-                    <h4 className="font-bold text-ink-800 mb-1">Trending with Similar Tastes</h4>
-                    <p className="text-sm text-ink-500 mb-4">Popular with people who rated like you</p>
+                  <div className="bg-white rounded-xl p-5 border-2 border-accent-blue">
+                    <h4 className="font-bold text-accent-blue text-lg mb-1">Trending with Similar Tastes</h4>
+                    <p className="text-sm text-accent-blue mb-4">Popular with people who rated like you</p>
                     <div className="space-y-3">
                       {trendingRecs.filter(rec => !dismissedRecs.has(rec.title)).map(rec => renderRecCard(rec, rec.match))}
                     </div>
                   </div>
 
                   {/* Complete the collection */}
-                  <div className="bg-white rounded-xl p-5 border-2 border-paper-300">
-                    <h4 className="font-bold text-ink-800 mb-1">Complete the Collection</h4>
-                    <p className="text-sm text-ink-500 mb-4">You've seen 3 of 9 PTA films</p>
+                  <div className="bg-white rounded-xl p-5 border-2 border-accent-blue">
+                    <h4 className="font-bold text-accent-blue text-lg mb-1">Complete the Collection</h4>
+                    <p className="text-sm text-accent-blue mb-4">You've seen 3 of 9 PTA films</p>
                     <div className="space-y-3">
                       {ptaFilmography.filter(rec => !dismissedRecs.has(rec.title)).map(rec => renderRecCard(rec))}
                     </div>
@@ -1350,6 +3178,17 @@ export default function RightPaneTabs({
         )}
       </div>
 
+      {/* Soundtrack Modal */}
+      <SoundtrackModal
+        isOpen={!!soundtrackMovie}
+        onClose={() => setSoundtrackMovie(null)}
+        movieTitle={soundtrackMovie?.title || ''}
+        movieYear={soundtrackMovie?.year}
+        composer={soundtrackMovie?.composer}
+        onSaveTrack={handleSaveMusicTrack}
+        onUnsaveTrack={handleUnsaveMusicTrack}
+        savedTracks={savedMusicTracks}
+      />
     </div>
   )
 }

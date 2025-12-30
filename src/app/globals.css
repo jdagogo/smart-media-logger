@@ -3,22 +3,22 @@
 @tailwind utilities;
 
 /*
-  SIMPLE COLOR SCHEME:
-  - Blue (#2B5A8A) for all accents, labels, highlights
-  - Dark brown (#2C2416) for primary text
-  - Medium brown (#5C4B32) for secondary text
-  - Cream (#F5F1E8) for backgrounds
-  - Warm tan (#D4C9B5) for borders/rules
+  CLEAN COLOR SCHEME (inspired by Willow):
+  - Indigo (#6366F1) for accents, highlights
+  - Dark gray (#1A1A1A) for primary text
+  - Medium gray (#525252) for secondary text
+  - White/light gray for backgrounds
+  - Light gray (#E5E5E5) for borders
 */
 
 :root {
-  --paper-bg: #F5F1E8;
-  --paper-light: #FDFCF9;
-  --paper-dark: #E8E2D5;
-  --ink-primary: #2C2416;
-  --ink-secondary: #5C4B32;
-  --rule-color: #D4C9B5;
-  --accent-blue: #2B5A8A;
+  --paper-bg: #F5F5F7;
+  --paper-light: #FFFFFF;
+  --paper-dark: #EFEFEF;
+  --ink-primary: #1A1A1A;
+  --ink-secondary: #525252;
+  --rule-color: #E5E5E5;
+  --accent-blue: #6366F1;
 }
 
 body {
@@ -149,4 +149,20 @@ textarea:focus {
 
 ::-webkit-scrollbar-thumb:hover {
   background: var(--ink-secondary);
+}
+
+/* Accordion animation */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.2s ease-out forwards;
 }
