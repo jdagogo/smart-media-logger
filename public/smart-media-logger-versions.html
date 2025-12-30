@@ -526,27 +526,41 @@
                     <div class="feature-tag done">Remove logged items functionality</div>
                 </div>
 
-                <p style="margin-bottom: 15px; font-weight: 600;">Known Issues / Incomplete:</p>
+                <p style="margin-bottom: 15px; font-weight: 600; color: #991B1B;">Critical Issues (Persistent):</p>
+                <div class="features">
+                    <div class="feature-tag broken">Metadata disappears between states</div>
+                    <div class="feature-tag broken">Props don't flow correctly through components</div>
+                    <div class="feature-tag broken">Entity recognition fails on most names</div>
+                    <div class="feature-tag broken">Date handling bugs (wrong year/day)</div>
+                    <div class="feature-tag broken">All data lost on refresh (no persistence)</div>
+                    <div class="feature-tag broken">No Claude API integration (not "smart")</div>
+                    <div class="feature-tag broken">Voice input drops words silently</div>
+                    <div class="feature-tag broken">Duplicate entries created sometimes</div>
+                </div>
+
+                <p style="margin-bottom: 15px; font-weight: 600;">New Issues (v1.5.0):</p>
                 <div class="features">
                     <div class="feature-tag broken">Music saved as wrong year (uses current year)</div>
-                    <div class="feature-tag broken">MediaCard shows "Album #0" for songs (wrong)</div>
-                    <div class="feature-tag broken">No actual song metadata (release year, album, etc.)</div>
+                    <div class="feature-tag broken">MediaCard shows "Album #0" for songs</div>
+                    <div class="feature-tag broken">No proper music data model (uses director for artist)</div>
                     <div class="feature-tag wip">Artist parsing from YouTube titles (hit or miss)</div>
                     <div class="feature-tag wip">Playlist search sometimes returns wrong playlist</div>
-                    <div class="feature-tag wip">Soundtrack button placement (small, easy to miss)</div>
                 </div>
 
                 <p style="margin-bottom: 15px; font-weight: 600;">Technical Debt:</p>
                 <div class="features">
-                    <div class="feature-tag broken">Music uses "director" field for artist (hack)</div>
-                    <div class="feature-tag broken">No proper music data model</div>
                     <div class="feature-tag broken">savedMusicTracks separate from loggedItems</div>
+                    <div class="feature-tag broken">Complex prop drilling causes data loss</div>
                     <div class="feature-tag wip">Needs unified database approach</div>
+                    <div class="feature-tag wip">Music bolted on as afterthought</div>
                 </div>
 
                 <div class="action-buttons">
                     <a href="http://localhost:3006" target="_blank" class="btn btn-primary">
                         Open App
+                    </a>
+                    <a href="/README-v1.5.0-alpha.md" target="_blank" class="btn btn-secondary">
+                        v1.5.0 README
                     </a>
                     <a href="https://github.com/jdagogo/smart-media-logger" target="_blank" class="btn btn-secondary">
                         GitHub
