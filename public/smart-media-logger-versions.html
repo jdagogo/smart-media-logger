@@ -337,8 +337,8 @@
             <h2>Quick Start</h2>
 
             <div class="alert warning">
-                <strong>v1.5.0-alpha - Unstable Development Build</strong><br>
-                December 29, 2024. Adds soundtrack player with YouTube playlist integration. Music can be saved to My Stuff. Known issues with music metadata and MediaCard display for songs.
+                <strong>v1.6.0-alpha - Development Build</strong><br>
+                December 30, 2024. Fixes metadata preservation issues. Adds Save &amp; Exit for drafts, CharacterGallery for cast notes, and draft management in My Stuff. Session handoff documentation in README.
             </div>
 
             <div style="margin-bottom: 20px;">
@@ -490,10 +490,10 @@
             </div>
 
             <!-- v1.5.0-alpha - Soundtrack Feature -->
-            <div class="version-card" style="border: 3px solid #f59e0b;">
+            <div class="version-card">
                 <div class="version-header">
                     <div class="version-title">v1.5.0-alpha</div>
-                    <div class="status development">DEVELOPMENT</div>
+                    <div class="status stable">PREVIOUS</div>
                 </div>
 
                 <div class="info-section">
@@ -559,11 +559,87 @@
                     <a href="http://localhost:3006" target="_blank" class="btn btn-primary">
                         Open App
                     </a>
-                    <a href="/README-v1.5.0-alpha.md" target="_blank" class="btn btn-secondary">
-                        v1.5.0 README
-                    </a>
                     <a href="https://github.com/jdagogo/smart-media-logger" target="_blank" class="btn btn-secondary">
                         GitHub
+                    </a>
+                </div>
+            </div>
+
+            <!-- v1.6.0-alpha - Metadata Preservation + Drafts -->
+            <div class="version-card" style="border: 3px solid #22c55e;">
+                <div class="version-header">
+                    <div class="version-title">v1.6.0-alpha</div>
+                    <div class="status development">CURRENT</div>
+                </div>
+
+                <div class="info-section">
+                    <div class="info-row">
+                        <span class="info-label">Branch:</span>
+                        <span>v1.6</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Port:</span>
+                        <span>3006</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Date:</span>
+                        <span>December 30, 2024</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Focus:</span>
+                        <span>Metadata Preservation + Draft System</span>
+                    </div>
+                </div>
+
+                <p style="margin-bottom: 15px; font-weight: 600; color: #166534;">Fixed in this version:</p>
+                <div class="features">
+                    <div class="feature-tag done">Metadata preserved on "Confirm & Log This"</div>
+                    <div class="feature-tag done">Metadata preserved on Save & Exit</div>
+                    <div class="feature-tag done">Draft items show amber banner in My Stuff</div>
+                    <div class="feature-tag done">Resume Logging from drafts works</div>
+                    <div class="feature-tag done">Delete drafts and logged items</div>
+                    <div class="feature-tag done">Trailer pauses when opening Soundtrack</div>
+                </div>
+
+                <p style="margin-bottom: 15px; font-weight: 600;">New features:</p>
+                <div class="features">
+                    <div class="feature-tag done">Save & Exit button (saves incomplete logs)</div>
+                    <div class="feature-tag done">CharacterGallery (cast/scene notes)</div>
+                    <div class="feature-tag done">Soundtrack button on MediaCard</div>
+                    <div class="feature-tag done">Full metadata in Log mode right pane</div>
+                    <div class="feature-tag done">Alert feedback on save location</div>
+                    <div class="feature-tag done">Comprehensive README for session handoff</div>
+                </div>
+
+                <p style="margin-bottom: 15px; font-weight: 600; color: #991B1B;">Still broken (from v1.5):</p>
+                <div class="features">
+                    <div class="feature-tag broken">Entity recognition weak</div>
+                    <div class="feature-tag broken">No Claude API integration</div>
+                    <div class="feature-tag broken">Date parsing edge cases</div>
+                    <div class="feature-tag broken">Prisma database unused</div>
+                    <div class="feature-tag broken">page.tsx is 2700+ lines</div>
+                </div>
+
+                <p style="margin-bottom: 15px; font-weight: 600;">Session Handoff:</p>
+                <div style="background: #F5F1E8; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                    <strong>For next Claude session:</strong><br>
+                    <span style="color: #666; font-size: 0.9em;">
+                        1. Read README.md first (has architecture + bug patterns)<br>
+                        2. Check page.tsx lines 714 (handleResumeDraft), 785 (saveAndExit), 2490 (Confirm handler)<br>
+                        3. Check RightPaneTabs.tsx line 240 (LoggedItem), 2150 (draft banner)<br>
+                        4. Test draft flow: Save & Exit → My Stuff → Resume
+                    </span>
+                </div>
+
+                <div class="action-buttons">
+                    <a href="http://localhost:3006" target="_blank" class="btn btn-primary">
+                        Open App
+                    </a>
+                    <a href="https://github.com/jdagogo/smart-media-logger/blob/v1.6/README.md" target="_blank" class="btn btn-secondary">
+                        v1.6 README
+                    </a>
+                    <a href="https://github.com/jdagogo/smart-media-logger/tree/v1.6" target="_blank" class="btn btn-secondary">
+                        GitHub (v1.6)
                     </a>
                 </div>
             </div>
@@ -680,7 +756,25 @@
         <div class="ecosystem-section">
             <h2>Changelog</h2>
             <div style="background: #F5F1E8; padding: 20px; border-radius: 8px;">
-                <h3 style="margin-bottom: 10px;">v1.5.0-alpha - December 29, 2024 (Evening)</h3>
+                <h3 style="margin-bottom: 10px;">v1.6.0-alpha - December 30, 2024</h3>
+                <ul style="line-height: 1.8; color: #666; margin-left: 20px;">
+                    <li><strong>FIXED:</strong> Metadata loss on "Confirm &amp; Log This" - now passes all 30+ fields</li>
+                    <li><strong>FIXED:</strong> Metadata loss on Save &amp; Exit - complete rewrite of saveAndExit()</li>
+                    <li><strong>FIXED:</strong> Trailer audio continues when opening Soundtrack - uses YouTube postMessage API</li>
+                    <li><strong>NEW:</strong> Save &amp; Exit button - saves incomplete logs as drafts</li>
+                    <li><strong>NEW:</strong> Draft management - amber banner, Resume Logging, Delete buttons</li>
+                    <li><strong>NEW:</strong> CharacterGallery component - cast/scene images with note-taking</li>
+                    <li><strong>NEW:</strong> Soundtrack button on MediaCard (next to title, with tooltip)</li>
+                    <li><strong>NEW:</strong> Full metadata preview in Log mode right pane</li>
+                    <li><strong>NEW:</strong> Alert feedback when saving drafts</li>
+                    <li><strong>NEW:</strong> Comprehensive README with session handoff documentation</li>
+                    <li><strong>NEW:</strong> movie-images API endpoint for TMDB cast/scene images</li>
+                    <li>Expanded LogData interface with 30+ metadata fields</li>
+                    <li>handleResumeDraft() function loads draft data back into state</li>
+                    <li>isDraft flag on LoggedItem interface</li>
+                </ul>
+
+                <h3 style="margin-top: 20px; margin-bottom: 10px;">v1.5.0-alpha - December 29, 2024 (Evening)</h3>
                 <ul style="line-height: 1.8; color: #666; margin-left: 20px;">
                     <li><strong>NEW:</strong> Soundtrack modal with 70/30 split layout (video player + track list)</li>
                     <li><strong>NEW:</strong> YouTube playlist API integration for soundtrack fetching</li>
