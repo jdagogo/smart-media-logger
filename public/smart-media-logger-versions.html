@@ -565,74 +565,6 @@
                 </div>
             </div>
 
-            <!-- v1.7.0-alpha - Music Player Auto-Advance -->
-            <div class="version-card" style="border: 3px solid #f59e0b;">
-                <div class="version-header">
-                    <div class="version-title">v1.7.0-alpha</div>
-                    <div class="status development">CURRENT</div>
-                </div>
-
-                <div class="info-section">
-                    <div class="info-row">
-                        <span class="info-label">Branch:</span>
-                        <span>music-player-working</span>
-                    </div>
-                    <div class="info-row">
-                        <span class="info-label">Port:</span>
-                        <span>3006</span>
-                    </div>
-                    <div class="info-row">
-                        <span class="info-label">Date:</span>
-                        <span>December 30, 2024</span>
-                    </div>
-                    <div class="info-row">
-                        <span class="info-label">Focus:</span>
-                        <span>Music Player + Auto-Advance</span>
-                    </div>
-                </div>
-
-                <p style="margin-bottom: 15px; font-weight: 600; color: #166534;">Working features:</p>
-                <div class="features">
-                    <div class="feature-tag done">Music auto-advance (YouTube IFrame API)</div>
-                    <div class="feature-tag done">Inline music player with prev/next</div>
-                    <div class="feature-tag done">Duplicate track prevention</div>
-                    <div class="feature-tag done">Blue accent buttons (was pink)</div>
-                    <div class="feature-tag done">All v1.6.0 features still work</div>
-                </div>
-
-                <p style="margin-bottom: 15px; font-weight: 600; color: #991B1B;">Critical Issues:</p>
-                <div class="features">
-                    <div class="feature-tag broken">TypeScript build fails (runtime works)</div>
-                    <div class="feature-tag broken">Many 'as any' casts as workarounds</div>
-                    <div class="feature-tag broken">Type definitions don't align</div>
-                    <div class="feature-tag broken">urlMetadata changed to 'any' type</div>
-                </div>
-
-                <p style="margin-bottom: 15px; font-weight: 600;">Technical Debt:</p>
-                <div class="features">
-                    <div class="feature-tag wip">MetacriticData vs inline types mismatch</div>
-                    <div class="feature-tag wip">QueueItem/LoggedItem type confusion</div>
-                    <div class="feature-tag wip">page.tsx now ~3000 lines</div>
-                </div>
-
-                <div style="background: #FEF3C7; padding: 15px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #F59E0B;">
-                    <strong style="color: #92400E;">Dev Server vs Build:</strong><br>
-                    <span style="color: #78350F; font-size: 0.9em;">
-                        <code>npm run dev</code> works fine. <code>npm run build</code> fails with type errors.
-                        This is a TypeScript issue, not a runtime issue. The app functions correctly.
-                    </span>
-                </div>
-
-                <div class="action-buttons">
-                    <a href="http://localhost:3006" target="_blank" class="btn btn-primary">
-                        Open App
-                    </a>
-                    <a href="https://github.com/jdagogo/smart-media-logger/tree/music-player-working" target="_blank" class="btn btn-secondary">
-                        GitHub
-                    </a>
-                </div>
-            </div>
-
             <!-- v1.6.0-alpha - Metadata Preservation + Drafts -->
             <div class="version-card">
                 <div class="version-header">
@@ -708,6 +640,74 @@
                     </a>
                     <a href="https://github.com/jdagogo/smart-media-logger/tree/v1.6" target="_blank" class="btn btn-secondary">
                         GitHub (v1.6)
+                    </a>
+                </div>
+            </div>
+
+            <!-- v1.7.0-alpha - Music Player Auto-Advance -->
+            <div class="version-card" style="border: 3px solid #f59e0b;">
+                <div class="version-header">
+                    <div class="version-title">v1.7.0-alpha</div>
+                    <div class="status development">CURRENT</div>
+                </div>
+
+                <div class="info-section">
+                    <div class="info-row">
+                        <span class="info-label">Branch:</span>
+                        <span>music-player-working</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Port:</span>
+                        <span>3006</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Date:</span>
+                        <span>December 30, 2024</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Focus:</span>
+                        <span>Music Player + Auto-Advance</span>
+                    </div>
+                </div>
+
+                <p style="margin-bottom: 15px; font-weight: 600; color: #166534;">Working features:</p>
+                <div class="features">
+                    <div class="feature-tag done">Music auto-advance (YouTube IFrame API)</div>
+                    <div class="feature-tag done">Inline music player with prev/next</div>
+                    <div class="feature-tag done">Duplicate track prevention</div>
+                    <div class="feature-tag done">Blue accent buttons (was pink)</div>
+                    <div class="feature-tag done">All v1.6.0 features still work</div>
+                </div>
+
+                <p style="margin-bottom: 15px; font-weight: 600; color: #991B1B;">Critical Issues:</p>
+                <div class="features">
+                    <div class="feature-tag broken">TypeScript build fails (runtime works)</div>
+                    <div class="feature-tag broken">Many 'as any' casts as workarounds</div>
+                    <div class="feature-tag broken">Type definitions don't align</div>
+                    <div class="feature-tag broken">urlMetadata changed to 'any' type</div>
+                </div>
+
+                <p style="margin-bottom: 15px; font-weight: 600;">Technical Debt:</p>
+                <div class="features">
+                    <div class="feature-tag wip">MetacriticData vs inline types mismatch</div>
+                    <div class="feature-tag wip">QueueItem/LoggedItem type confusion</div>
+                    <div class="feature-tag wip">page.tsx now ~3000 lines</div>
+                </div>
+
+                <div style="background: #FEF3C7; padding: 15px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #F59E0B;">
+                    <strong style="color: #92400E;">Dev Server vs Build:</strong><br>
+                    <span style="color: #78350F; font-size: 0.9em;">
+                        <code>npm run dev</code> works fine. <code>npm run build</code> fails with type errors.
+                        This is a TypeScript issue, not a runtime issue. The app functions correctly.
+                    </span>
+                </div>
+
+                <div class="action-buttons">
+                    <a href="http://localhost:3006" target="_blank" class="btn btn-primary">
+                        Open App
+                    </a>
+                    <a href="https://github.com/jdagogo/smart-media-logger/tree/music-player-working" target="_blank" class="btn btn-secondary">
+                        GitHub
                     </a>
                 </div>
             </div>
