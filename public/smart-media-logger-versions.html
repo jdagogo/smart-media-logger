@@ -337,8 +337,8 @@
             <h2>Quick Start</h2>
 
             <div class="alert warning">
-                <strong>v1.6.0-alpha - Development Build</strong><br>
-                December 30, 2024. Fixes metadata preservation issues. Adds Save &amp; Exit for drafts, CharacterGallery for cast notes, and draft management in My Stuff. Session handoff documentation in README.
+                <strong>v1.7.0-alpha - Development Build</strong><br>
+                December 30, 2024. Music player auto-advance works. TypeScript build errors exist but don't affect runtime. Dev server works fine.
             </div>
 
             <div style="margin-bottom: 20px;">
@@ -565,11 +565,79 @@
                 </div>
             </div>
 
+            <!-- v1.7.0-alpha - Music Player Auto-Advance -->
+            <div class="version-card" style="border: 3px solid #f59e0b;">
+                <div class="version-header">
+                    <div class="version-title">v1.7.0-alpha</div>
+                    <div class="status development">CURRENT</div>
+                </div>
+
+                <div class="info-section">
+                    <div class="info-row">
+                        <span class="info-label">Branch:</span>
+                        <span>music-player-working</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Port:</span>
+                        <span>3006</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Date:</span>
+                        <span>December 30, 2024</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Focus:</span>
+                        <span>Music Player + Auto-Advance</span>
+                    </div>
+                </div>
+
+                <p style="margin-bottom: 15px; font-weight: 600; color: #166534;">Working features:</p>
+                <div class="features">
+                    <div class="feature-tag done">Music auto-advance (YouTube IFrame API)</div>
+                    <div class="feature-tag done">Inline music player with prev/next</div>
+                    <div class="feature-tag done">Duplicate track prevention</div>
+                    <div class="feature-tag done">Blue accent buttons (was pink)</div>
+                    <div class="feature-tag done">All v1.6.0 features still work</div>
+                </div>
+
+                <p style="margin-bottom: 15px; font-weight: 600; color: #991B1B;">Critical Issues:</p>
+                <div class="features">
+                    <div class="feature-tag broken">TypeScript build fails (runtime works)</div>
+                    <div class="feature-tag broken">Many 'as any' casts as workarounds</div>
+                    <div class="feature-tag broken">Type definitions don't align</div>
+                    <div class="feature-tag broken">urlMetadata changed to 'any' type</div>
+                </div>
+
+                <p style="margin-bottom: 15px; font-weight: 600;">Technical Debt:</p>
+                <div class="features">
+                    <div class="feature-tag wip">MetacriticData vs inline types mismatch</div>
+                    <div class="feature-tag wip">QueueItem/LoggedItem type confusion</div>
+                    <div class="feature-tag wip">page.tsx now ~3000 lines</div>
+                </div>
+
+                <div style="background: #FEF3C7; padding: 15px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #F59E0B;">
+                    <strong style="color: #92400E;">Dev Server vs Build:</strong><br>
+                    <span style="color: #78350F; font-size: 0.9em;">
+                        <code>npm run dev</code> works fine. <code>npm run build</code> fails with type errors.
+                        This is a TypeScript issue, not a runtime issue. The app functions correctly.
+                    </span>
+                </div>
+
+                <div class="action-buttons">
+                    <a href="http://localhost:3006" target="_blank" class="btn btn-primary">
+                        Open App
+                    </a>
+                    <a href="https://github.com/jdagogo/smart-media-logger/tree/music-player-working" target="_blank" class="btn btn-secondary">
+                        GitHub
+                    </a>
+                </div>
+            </div>
+
             <!-- v1.6.0-alpha - Metadata Preservation + Drafts -->
-            <div class="version-card" style="border: 3px solid #22c55e;">
+            <div class="version-card">
                 <div class="version-header">
                     <div class="version-title">v1.6.0-alpha</div>
-                    <div class="status development">CURRENT</div>
+                    <div class="status stable">PREVIOUS</div>
                 </div>
 
                 <div class="info-section">
@@ -764,7 +832,22 @@
         <div class="ecosystem-section">
             <h2>Changelog</h2>
             <div style="background: #F5F1E8; padding: 20px; border-radius: 8px;">
-                <h3 style="margin-bottom: 10px;">v1.6.0-alpha - December 30, 2024</h3>
+                <h3 style="margin-bottom: 10px;">v1.7.0-alpha - December 30, 2024</h3>
+                <ul style="line-height: 1.8; color: #666; margin-left: 20px;">
+                    <li><strong>NEW:</strong> Music player auto-advance - songs automatically play next track when finished</li>
+                    <li><strong>NEW:</strong> YouTube IFrame API integration for detecting video end events</li>
+                    <li><strong>NEW:</strong> Inline music player with Previous/Next navigation</li>
+                    <li><strong>NEW:</strong> Track counter showing current position in playlist</li>
+                    <li><strong>FIXED:</strong> Duplicate music tracks no longer saved</li>
+                    <li><strong>CHANGED:</strong> Navigation buttons now blue (was pink)</li>
+                    <li><strong>ISSUE:</strong> TypeScript build fails due to type mismatches</li>
+                    <li><strong>ISSUE:</strong> Multiple 'as any' casts added as workarounds</li>
+                    <li><strong>ISSUE:</strong> urlMetadata state changed to 'any' type</li>
+                    <li>Dev server works fine despite build errors</li>
+                    <li>All v1.6.0 features still functional</li>
+                </ul>
+
+                <h3 style="margin-top: 20px; margin-bottom: 10px;">v1.6.0-alpha - December 30, 2024</h3>
                 <ul style="line-height: 1.8; color: #666; margin-left: 20px;">
                     <li><strong>FIXED:</strong> Metadata loss on "Confirm &amp; Log This" - now passes all 30+ fields</li>
                     <li><strong>FIXED:</strong> Metadata loss on Save &amp; Exit - complete rewrite of saveAndExit()</li>
