@@ -55,6 +55,7 @@ interface MediaResult {
   year: number
   mediaType: string
   posterPath?: string
+  posterUrl?: string
   director?: string
   cinematographer?: string
   composer?: string
@@ -70,6 +71,16 @@ interface MediaResult {
   metacriticData?: MetacriticData
   rottenTomatoesData?: RottenTomatoesData
   streamingOptions?: StreamingOption[]
+  // OMDB data
+  imdbId?: string
+  imdbRating?: string
+  imdbVotes?: string
+  rated?: string
+  awards?: string
+  boxOffice?: string
+  plot?: string
+  country?: string
+  language?: string
 }
 
 interface LogData {
@@ -228,16 +239,6 @@ interface QueueItem {
     consensus?: string
     url: string
   }
-  // OMDB rich metadata
-  imdbRating?: string
-  imdbVotes?: string
-  rated?: string
-  plot?: string
-  awards?: string
-  boxOffice?: string
-  production?: string
-  country?: string
-  language?: string
 }
 
 // URL detection helper
@@ -294,6 +295,7 @@ function CompleteStep({
   setSearchQuery,
   setSelectedMedia,
   setQuestionIndex,
+  setCharacterSceneNotes,
 }: {
   logData: LogData
   updateLogData: (updates: Partial<LogData>) => void
@@ -301,6 +303,7 @@ function CompleteStep({
   setSearchQuery: (query: string) => void
   setSelectedMedia: (media: MediaResult | null) => void
   setQuestionIndex: (index: number) => void
+  setCharacterSceneNotes: (notes: CharacterSceneNote[]) => void
 }) {
   const [followUpQuestions, setFollowUpQuestions] = useState<string[]>([])
   const [isLoadingQuestions, setIsLoadingQuestions] = useState(true)
@@ -457,11 +460,11 @@ export default function Home() {
 
   // Mode: 'log' for logging consumed media, 'queue' for adding to wishlist
   const [searchMode, setSearchMode] = useState<'log' | 'queue'>('log')
-  const [rightPaneTab, setRightPaneTab] = useState<'logging' | 'upnext' | 'library' | 'recs' | 'profile'>('logging')
+  const [rightPaneTab, setRightPaneTab] = useState<'logging' | 'upnext' | 'drafts' | 'library' | 'recs' | 'profile'>('logging')
   const [tabSwitchTrigger, setTabSwitchTrigger] = useState(0)
 
   // Force switch to a tab (works even if already that tab value)
-  const forceTabSwitch = (tab: 'logging' | 'upnext' | 'library' | 'recs' | 'profile') => {
+  const forceTabSwitch = (tab: 'logging' | 'upnext' | 'drafts' | 'library' | 'recs' | 'profile') => {
     setRightPaneTab(tab)
     setTabSwitchTrigger(prev => prev + 1)
   }
@@ -471,6 +474,27 @@ export default function Home() {
 
   // URL metadata fetching state
   const [urlLoading, setUrlLoading] = useState(false)
+
+  // Media type confirmation dialog (when YouTube video might be a movie/documentary)
+  const [mediaTypeConfirmation, setMediaTypeConfirmation] = useState<{
+    show: boolean
+    pendingData: any
+    clues: string[]
+    suggestedTitle?: string
+    suggestedType?: 'movie' | 'tv' | 'video'
+    // Pre-filled movie data when we find a match
+    foundMatch?: {
+      title: string
+      year?: number
+      director?: string
+      poster?: string
+      overview?: string
+      tmdbRating?: number
+      genres?: string[]
+      runtime?: number
+      tmdbId?: number
+    }
+  } | null>(null)
 
   // Persisted queue preview - stays visible after adding to queue
   const [persistedQueuePreview, setPersistedQueuePreview] = useState<{
@@ -521,80 +545,8 @@ export default function Home() {
     }
   } | null>(null)
 
-  const [urlMetadata, setUrlMetadata] = useState<{
-    title?: string
-    author?: string
-    authorUrl?: string
-    thumbnail?: string
-    embedHtml?: string
-    videoId?: string
-    description?: string
-    duration?: string
-    viewCount?: string
-    publishDate?: string
-    category?: string
-    // Enhanced trailer metadata (when movie/TV trailer detected)
-    isTrailer?: boolean
-    detectedMediaType?: 'movie' | 'tv'
-    tmdbId?: number
-    director?: string
-    directors?: string[]
-    cinematographer?: string
-    composer?: string
-    writers?: string[]
-    producers?: Array<{ name: string; job: string }>
-    editor?: string
-    cast?: Array<{ name: string; character: string; profilePath?: string }>
-    genres?: string[]
-    poster?: string
-    trailerVideoId?: string
-    mediaTitle?: string
-    mediaYear?: number
-    overview?: string
-    runtime?: number
-    tmdbRating?: number
-    tmdbVoteCount?: number
-    // OMDB rich metadata
-    imdbRating?: string
-    imdbVotes?: string
-    rated?: string
-    plot?: string
-    awards?: string
-    boxOffice?: string
-    production?: string
-    country?: string
-    language?: string
-    // External review site links
-    metacriticUrl?: string
-    rottenTomatoesUrl?: string
-    imdbUrl?: string
-    // Real critic scores from scraping
-    metacriticScore?: number
-    metacriticData?: {
-      score: number
-      criticReviews?: number
-      userScore?: number
-      url: string
-    }
-    rottenTomatoesScore?: number
-    rottenTomatoesData?: {
-      tomatometer?: number
-      audienceScore?: number
-      criticReviews?: number
-      consensus?: string
-      url: string
-    }
-    // OMDB rich metadata
-    imdbRating?: string
-    imdbVotes?: string
-    rated?: string
-    plot?: string
-    awards?: string
-    boxOffice?: string
-    production?: string
-    country?: string
-    language?: string
-  } | null>(null)
+  // URL metadata state - using 'any' type due to complex and evolving data structure
+  const [urlMetadata, setUrlMetadata] = useState<any | null>(null)
 
   // Log data state
   const [logData, setLogData] = useState<LogData>({
@@ -739,8 +691,8 @@ export default function Home() {
       rottenTomatoesScore: item.rottenTomatoesScore,
       metacriticUrl: item.metacriticUrl,
       rottenTomatoesUrl: item.rottenTomatoesUrl,
-      metacriticData: item.metacriticData,
-      rottenTomatoesData: item.rottenTomatoesData,
+      metacriticData: item.metacriticData as MetacriticData | undefined,
+      rottenTomatoesData: item.rottenTomatoesData as RottenTomatoesData | undefined,
       imdbUrl: item.imdbUrl,
       imdbRating: item.imdbRating,
       imdbVotes: item.imdbVotes,
@@ -776,8 +728,32 @@ export default function Home() {
     // Remove from loggedItems since we're resuming
     removeLoggedItem(item.id)
 
-    // Start from the beginning of the logging flow
-    setStep('date')
+    // Determine the correct step to resume from based on what's already filled
+    // Work backwards from the end to find the first incomplete step
+    let resumeStep: FlowStep = 'date'
+
+    if (item.notes) {
+      // If notes are filled, go to complete
+      resumeStep = 'complete'
+    } else if (item.rating !== undefined) {
+      // Rating is filled, go to notes
+      resumeStep = 'notes'
+    } else if (item.socialContext) {
+      // Social context is filled, go to rating
+      resumeStep = 'rating'
+    } else if (item.firstTime !== undefined) {
+      // First time is filled, go to social context
+      resumeStep = 'social'
+    } else if (item.location) {
+      // Location is filled, go to first time
+      resumeStep = 'first_time'
+    } else if (item.dateConsumed) {
+      // Date is filled, go to location
+      resumeStep = 'location'
+    }
+    // Otherwise start at 'date'
+
+    setStep(resumeStep)
 
     // Switch to logging tab
     setRightPaneTab('logging')
@@ -812,8 +788,8 @@ export default function Home() {
       rottenTomatoesScore: logData.rottenTomatoesScore,
       metacriticUrl: logData.metacriticUrl,
       rottenTomatoesUrl: logData.rottenTomatoesUrl,
-      metacriticData: logData.metacriticData,
-      rottenTomatoesData: logData.rottenTomatoesData,
+      metacriticData: logData.metacriticData as any,
+      rottenTomatoesData: logData.rottenTomatoesData as any,
       imdbUrl: logData.imdbUrl,
       imdbRating: logData.imdbRating,
       imdbVotes: logData.imdbVotes,
@@ -855,8 +831,8 @@ export default function Home() {
     // Clear draft since we've saved
     localStorage.removeItem('smartMediaLogger_draft')
 
-    // Show feedback to user
-    alert(`"${logData.title}" saved to My Stuff! You can find it in the My Stuff tab to continue later.`)
+    // Switch to Drafts tab to show the saved draft
+    forceTabSwitch('drafts')
 
     // Reset and return to search
     setStep('search')
@@ -866,6 +842,106 @@ export default function Home() {
     setQuestionIndex(0)
     setCharacterSceneNotes([])
     savedEntryIdRef.current = newLoggedItem.id.toString() // Prevent double-save
+  }
+
+  // Smart add to queue - fetches FULL metadata from movie-details API first
+  const addToQueueSmart = async (media: MediaResult) => {
+    // Check for duplicates first
+    const isDuplicate = upNextQueue.some(item =>
+      item.title === media.title && item.mediaType === media.mediaType
+    )
+
+    if (isDuplicate) {
+      setQueueToast({ title: `"${media.title}" is already in your queue`, show: true })
+      setTimeout(() => setQueueToast({ title: '', show: false }), 3000)
+      return
+    }
+
+    // Show loading toast
+    setQueueToast({ title: `Fetching full details for "${media.title}"...`, show: true })
+
+    try {
+      // Fetch FULL metadata including cast with photos, all crew, OMDB scores, awards
+      const response = await fetch(
+        `/api/movie-details?tmdbId=${media.id}&title=${encodeURIComponent(media.title)}&year=${media.year}&type=${media.mediaType}`
+      )
+
+      let fullData: any = media
+      if (response.ok) {
+        fullData = await response.json()
+        console.log('Full metadata for queue:', fullData)
+      }
+
+      const newItem: QueueItem = {
+        id: Date.now(),
+        title: fullData.title || media.title,
+        year: fullData.year || media.year,
+        mediaType: fullData.mediaType || media.mediaType,
+        director: fullData.director,
+        addedAt: new Date().toISOString().split('T')[0],
+        // Full crew
+        directors: fullData.directors,
+        cinematographer: fullData.cinematographer,
+        composer: fullData.composer,
+        writers: fullData.writers,
+        producers: fullData.producers,
+        editor: fullData.editor,
+        // Full cast with photos
+        cast: fullData.cast,
+        genres: fullData.genres,
+        runtime: fullData.runtime,
+        // Media
+        poster: fullData.poster || media.posterPath,
+        thumbnail: fullData.poster || media.posterPath,
+        trailerUrl: fullData.trailerUrl,
+        trailerVideoId: fullData.trailerVideoId,
+        overview: fullData.overview || media.overview,
+        tmdbId: fullData.tmdbId || media.id,
+        tmdbRating: fullData.tmdbRating,
+        // Critic scores from OMDB
+        metacriticScore: fullData.metacriticScore,
+        rottenTomatoesScore: fullData.rottenTomatoesScore,
+        imdbRating: fullData.imdbRating,
+        imdbVotes: fullData.imdbVotes,
+        // URLs
+        metacriticUrl: fullData.metacriticUrl,
+        rottenTomatoesUrl: fullData.rottenTomatoesUrl,
+        imdbUrl: fullData.imdbUrl,
+        // Rich metadata from OMDB
+        rated: fullData.rated,
+        awards: fullData.awards,
+        boxOffice: fullData.boxOffice,
+        plot: fullData.plot,
+        country: fullData.country,
+        language: fullData.language,
+      }
+
+      console.log('Adding to queue with FULL data:', newItem)
+      setUpNextQueue(prev => [newItem, ...prev])
+
+      // Show success toast
+      setQueueToast({ title: media.title, show: true })
+      setTimeout(() => setQueueToast({ title: '', show: false }), 3000)
+
+      // Clear search and left pane, switch to queue tab
+      setSearchQuery('')
+      setSearchResults([])
+      setSelectedMedia(null)
+      setUrlMetadata(null)
+      setStep('search')
+      forceTabSwitch('upnext')
+
+    } catch (error) {
+      console.error('Error fetching full metadata for queue:', error)
+      // Fallback to basic data
+      addToQueue({
+        title: media.title,
+        year: media.year,
+        mediaType: media.mediaType,
+        director: media.director,
+        thumbnail: media.posterPath,
+      })
+    }
   }
 
   // Add to queue function with toast feedback, duplicate prevention, and form reset
@@ -978,9 +1054,9 @@ export default function Home() {
       imdbUrl: source?.imdbUrl,
       // Real critic scores
       metacriticScore: source?.metacriticScore || metadata.metacriticScore,
-      metacriticData: source?.metacriticData,
+      metacriticData: source?.metacriticData as any,
       rottenTomatoesScore: source?.rottenTomatoesScore || metadata.rottenTomatoesScore,
-      rottenTomatoesData: source?.rottenTomatoesData,
+      rottenTomatoesData: source?.rottenTomatoesData as any,
     }
     console.log('Adding to queue with data:', newItem)
     setUpNextQueue(prev => [newItem, ...prev])
@@ -1025,9 +1101,9 @@ export default function Home() {
       imdbUrl: urlMetadata?.imdbUrl,
       // Real critic scores
       metacriticScore: urlMetadata?.metacriticScore,
-      metacriticData: urlMetadata?.metacriticData,
+      metacriticData: urlMetadata?.metacriticData as any,
       rottenTomatoesScore: urlMetadata?.rottenTomatoesScore,
-      rottenTomatoesData: urlMetadata?.rottenTomatoesData,
+      rottenTomatoesData: urlMetadata?.rottenTomatoesData as any,
     }
     setPersistedQueuePreview(previewData)
 
@@ -1062,8 +1138,8 @@ export default function Home() {
       rottenTomatoesScore: item.rottenTomatoesScore,
       metacriticUrl: item.metacriticUrl,
       rottenTomatoesUrl: item.rottenTomatoesUrl,
-      metacriticData: item.metacriticData,
-      rottenTomatoesData: item.rottenTomatoesData,
+      metacriticData: item.metacriticData as MetacriticData | undefined,
+      rottenTomatoesData: item.rottenTomatoesData as RottenTomatoesData | undefined,
     }))
 
     // Create a selected media result to show the card
@@ -1073,7 +1149,7 @@ export default function Home() {
       year: item.year,
       mediaType: item.mediaType,
       director: item.director,
-      poster: item.videoId ? `https://img.youtube.com/vi/${item.videoId}/maxresdefault.jpg` : undefined,
+      posterPath: item.videoId ? `https://img.youtube.com/vi/${item.videoId}/maxresdefault.jpg` : undefined,
     }
     setSelectedMedia(mediaResult)
 
@@ -1143,7 +1219,7 @@ export default function Home() {
       metacriticData: item.metacriticData,
       rottenTomatoesScore: item.rottenTomatoesScore,
       rottenTomatoesData: item.rottenTomatoesData,
-    })
+    } as any)
     // Don't re-fetch - we already have all the data from the queue item
 
     console.log('Logging from queue:', item)
@@ -1225,19 +1301,99 @@ export default function Home() {
               updateLogData({ mediaType: data.detectedMediaType })
             }
           } else {
-            // Regular YouTube video (not a trailer)
-            setUrlMetadata({
-              title: data.title,
-              author: data.author,
-              authorUrl: data.authorUrl,
-              thumbnail: data.thumbnail,
-              videoId: data.videoId,
-              description: data.description,
-              duration: data.duration,
-              viewCount: data.viewCount,
-              publishDate: data.publishDate,
-              category: data.category,
-            })
+            // Check if there are clues this might be a movie/documentary
+            const detectionInfo = data.detectionInfo
+            if (detectionInfo && (detectionInfo.isDocumentary || detectionInfo.isFilm || detectionInfo.clues?.length > 0)) {
+              // BE SMART: Proactively search for the movie/documentary
+              console.log('Detected clues for possible movie/documentary:', detectionInfo)
+              const searchTitle = detectionInfo.suggestedTitle || data.title
+              const searchType = detectionInfo.suggestedType || 'movie'
+
+              try {
+                // Search TMDB to pre-fill the card
+                const searchResponse = await fetch(`/api/search?q=${encodeURIComponent(searchTitle)}&type=${searchType}`)
+                if (searchResponse.ok) {
+                  const searchResults = await searchResponse.json()
+                  if (searchResults.results && searchResults.results.length > 0) {
+                    const match = searchResults.results[0]
+                    console.log('Smart search found:', match)
+
+                    // Show confirmation with PRE-FILLED data
+                    setMediaTypeConfirmation({
+                      show: true,
+                      pendingData: data,
+                      clues: detectionInfo.clues || [],
+                      suggestedTitle: match.title,
+                      suggestedType: searchType,
+                      // Pre-filled movie data from search
+                      foundMatch: {
+                        title: match.title,
+                        year: match.year,
+                        director: match.director,
+                        poster: match.posterPath,
+                        overview: match.overview,
+                        tmdbRating: match.tmdbRating,
+                        genres: match.genres,
+                        runtime: match.runtime,
+                        tmdbId: match.id,
+                      }
+                    })
+
+                    // Also show the basic video metadata while dialog is open
+                    setUrlMetadata({
+                      title: data.title,
+                      author: data.author,
+                      authorUrl: data.authorUrl,
+                      thumbnail: data.thumbnail,
+                      videoId: data.videoId,
+                      description: data.description,
+                      duration: data.duration,
+                      viewCount: data.viewCount,
+                      publishDate: data.publishDate,
+                      category: data.category,
+                    })
+                    return // Don't continue to the else block
+                  }
+                }
+              } catch (error) {
+                console.log('Smart search failed:', error)
+              }
+
+              // Fallback: No match found, just show basic confirmation
+              setUrlMetadata({
+                title: data.title,
+                author: data.author,
+                authorUrl: data.authorUrl,
+                thumbnail: data.thumbnail,
+                videoId: data.videoId,
+                description: data.description,
+                duration: data.duration,
+                viewCount: data.viewCount,
+                publishDate: data.publishDate,
+                category: data.category,
+              })
+              setMediaTypeConfirmation({
+                show: true,
+                pendingData: data,
+                clues: detectionInfo.clues || [],
+                suggestedTitle: detectionInfo.suggestedTitle,
+                suggestedType: detectionInfo.suggestedType || 'movie',
+              })
+            } else {
+              // Regular YouTube video (no movie clues detected)
+              setUrlMetadata({
+                title: data.title,
+                author: data.author,
+                authorUrl: data.authorUrl,
+                thumbnail: data.thumbnail,
+                videoId: data.videoId,
+                description: data.description,
+                duration: data.duration,
+                viewCount: data.viewCount,
+                publishDate: data.publishDate,
+                category: data.category,
+              })
+            }
             // Auto-fill the title input
             const titleInput = document.getElementById('url-title-input') as HTMLInputElement
             if (titleInput && data.title) {
@@ -1270,6 +1426,181 @@ export default function Home() {
       console.log('Could not fetch URL metadata:', error)
     } finally {
       setUrlLoading(false)
+    }
+  }
+
+  // Handle media type confirmation (when user confirms it's a movie/documentary)
+  const handleMediaTypeConfirm = async (confirmedType: 'movie' | 'tv' | 'video') => {
+    if (!mediaTypeConfirmation?.pendingData) return
+
+    const data = mediaTypeConfirmation.pendingData
+    const title = mediaTypeConfirmation.suggestedTitle || data.title
+
+    if (confirmedType === 'video') {
+      // User says it's just a video, keep current metadata
+      setMediaTypeConfirmation(null)
+      return
+    }
+
+    // User confirmed it's a movie/tv - try to fetch TMDB metadata
+    setUrlLoading(true)
+    try {
+      // Search TMDB for the movie/tv show
+      const searchResponse = await fetch(`/api/search?q=${encodeURIComponent(title)}&type=${confirmedType}`)
+      if (searchResponse.ok) {
+        const searchResults = await searchResponse.json()
+        if (searchResults.results && searchResults.results.length > 0) {
+          const match = searchResults.results[0]
+          console.log('Found TMDB match after confirmation:', match)
+
+          // Update metadata with the TMDB data
+          setUrlMetadata({
+            title: match.title,
+            author: data.author,
+            authorUrl: data.authorUrl,
+            thumbnail: match.posterPath || data.thumbnail,
+            videoId: data.videoId,
+            description: match.overview || data.description,
+            duration: match.runtime ? `${match.runtime} min` : data.duration,
+            viewCount: data.viewCount,
+            publishDate: match.year?.toString(),
+            category: data.category,
+            isTrailer: true,
+            detectedMediaType: confirmedType,
+            tmdbId: match.id,
+            director: match.director,
+            cast: match.cast,
+            genres: match.genres,
+            poster: match.posterPath,
+            trailerVideoId: data.videoId,
+            tmdbRating: match.tmdbRating,
+            overview: match.overview,
+            runtime: match.runtime,
+            metacriticScore: match.metacriticScore,
+            rottenTomatoesScore: match.rottenTomatoesScore,
+          })
+
+          // Update logData with the correct media type
+          updateLogData({ mediaType: confirmedType })
+
+          // Auto-fill title input
+          const titleInput = document.getElementById('url-title-input') as HTMLInputElement
+          if (titleInput) {
+            titleInput.value = match.title
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching TMDB data after confirmation:', error)
+    } finally {
+      setUrlLoading(false)
+      setMediaTypeConfirmation(null)
+    }
+  }
+
+  // Handle confirmation when we already have a pre-filled match - fetch FULL metadata
+  const handleMediaTypeConfirmWithMatch = async () => {
+    if (!mediaTypeConfirmation?.pendingData || !mediaTypeConfirmation?.foundMatch) return
+
+    const data = mediaTypeConfirmation.pendingData
+    const match = mediaTypeConfirmation.foundMatch
+    const confirmedType = mediaTypeConfirmation.suggestedType || 'movie'
+
+    console.log('Fetching full metadata for:', match.title)
+    setUrlLoading(true)
+
+    try {
+      // Fetch FULL metadata including OMDB (Metacritic, RT, IMDB, awards, full cast)
+      const detailsResponse = await fetch(
+        `/api/movie-details?tmdbId=${match.tmdbId}&title=${encodeURIComponent(match.title)}&year=${match.year}&type=${confirmedType}`
+      )
+
+      if (detailsResponse.ok) {
+        const fullData = await detailsResponse.json()
+        console.log('Full metadata received:', fullData)
+
+        // Update metadata with the COMPLETE data
+        setUrlMetadata({
+          title: fullData.title,
+          author: data.author,
+          authorUrl: data.authorUrl,
+          thumbnail: fullData.poster || data.thumbnail,
+          videoId: data.videoId,
+          description: fullData.overview || data.description,
+          duration: fullData.runtime ? `${fullData.runtime} min` : data.duration,
+          viewCount: data.viewCount,
+          publishDate: fullData.year?.toString(),
+          category: data.category,
+          isTrailer: true,
+          detectedMediaType: confirmedType as 'movie' | 'tv',
+          tmdbId: fullData.tmdbId,
+          director: fullData.director,
+          directors: fullData.directors,
+          cinematographer: fullData.cinematographer,
+          composer: fullData.composer,
+          writers: fullData.writers,
+          producers: fullData.producers,
+          editor: fullData.editor,
+          cast: fullData.cast,
+          genres: fullData.genres,
+          poster: fullData.poster,
+          trailerVideoId: fullData.trailerVideoId || data.videoId,
+          trailerUrl: fullData.trailerUrl,
+          tmdbRating: fullData.tmdbRating,
+          tmdbVoteCount: fullData.tmdbVoteCount,
+          overview: fullData.overview,
+          runtime: fullData.runtime,
+          // OMDB critic scores
+          metacriticScore: fullData.metacriticScore,
+          rottenTomatoesScore: fullData.rottenTomatoesScore,
+          imdbRating: fullData.imdbRating,
+          imdbVotes: fullData.imdbVotes,
+          // Rich metadata
+          rated: fullData.rated,
+          awards: fullData.awards,
+          boxOffice: fullData.boxOffice,
+          country: fullData.country,
+          language: fullData.language,
+          plot: fullData.plot,
+          // URLs
+          metacriticUrl: fullData.metacriticUrl,
+          rottenTomatoesUrl: fullData.rottenTomatoesUrl,
+          imdbUrl: fullData.imdbUrl,
+        } as any)
+
+        // Update logData with the correct media type
+        updateLogData({ mediaType: confirmedType as 'movie' | 'tv' })
+
+        // Auto-fill title input
+        const titleInput = document.getElementById('url-title-input') as HTMLInputElement
+        if (titleInput) {
+          titleInput.value = fullData.title
+        }
+      } else {
+        // Fallback to basic match data if full fetch fails
+        console.log('Full metadata fetch failed, using basic match')
+        setUrlMetadata({
+          title: match.title,
+          author: data.author,
+          thumbnail: match.poster || data.thumbnail,
+          videoId: data.videoId,
+          description: match.overview,
+          isTrailer: true,
+          detectedMediaType: confirmedType as 'movie' | 'tv',
+          tmdbId: match.tmdbId,
+          director: match.director,
+          genres: match.genres,
+          poster: match.poster,
+          tmdbRating: match.tmdbRating,
+          runtime: match.runtime,
+        } as any)
+        updateLogData({ mediaType: confirmedType as 'movie' | 'tv' })
+      }
+    } catch (error) {
+      console.error('Error fetching full metadata:', error)
+    } finally {
+      setUrlLoading(false)
+      setMediaTypeConfirmation(null)
     }
   }
 
@@ -1360,13 +1691,56 @@ export default function Home() {
       console.log(JSON.stringify(fullEntryData, null, 2))
       console.log('===========================')
 
-      // Save to My Stuff (loggedItems)
+      // Save to My Stuff (loggedItems) - include ALL metadata
       const newLoggedItem: LoggedItem = {
         id: Date.now(),
         title: logData.title,
         year: logData.year || new Date().getFullYear(),
         mediaType: logData.mediaType,
+        tmdbId: logData.tmdbId,
+        // Crew
         director: logData.director,
+        directors: logData.directors,
+        cinematographer: logData.cinematographer,
+        composer: logData.composer,
+        writers: logData.writers,
+        producers: logData.producers,
+        editor: logData.editor,
+        // Cast
+        cast: logData.cast,
+        genres: logData.genres,
+        runtime: logData.runtime,
+        // Ratings & Scores
+        tmdbRating: logData.tmdbRating,
+        tmdbVoteCount: logData.tmdbVoteCount,
+        metacriticScore: logData.metacriticScore,
+        rottenTomatoesScore: logData.rottenTomatoesScore,
+        metacriticUrl: logData.metacriticUrl,
+        rottenTomatoesUrl: logData.rottenTomatoesUrl,
+        metacriticData: logData.metacriticData as any,
+        rottenTomatoesData: logData.rottenTomatoesData as any,
+        imdbUrl: logData.imdbUrl,
+        imdbRating: logData.imdbRating,
+        imdbVotes: logData.imdbVotes,
+        rated: logData.rated,
+        // Content
+        plot: logData.plot,
+        overview: logData.overview,
+        awards: logData.awards,
+        boxOffice: logData.boxOffice,
+        production: logData.production,
+        country: logData.country,
+        language: logData.language,
+        // Media
+        trailerUrl: logData.trailerUrl,
+        trailerVideoId: logData.trailerVideoId,
+        videoId: logData.videoId || urlMetadata?.videoId,
+        poster: logData.poster,
+        thumbnail: logData.thumbnail,
+        description: logData.description,
+        duration: logData.duration,
+        sourceUrl: logData.sourceUrl || (isUrl(searchQuery) ? searchQuery : undefined),
+        // Logging data
         rating: logData.overallRating,
         dateConsumed: logData.consumptionDate || new Date().toISOString().split('T')[0],
         addedAt: new Date().toISOString().split('T')[0],
@@ -1374,8 +1748,8 @@ export default function Home() {
         companionNames: logData.companionNames,
         socialContext: logData.socialContext,
         location: logData.location,
-        videoId: urlMetadata?.videoId,  // Preserve video ID for playback
-        sourceUrl: isUrl(searchQuery) ? searchQuery : undefined, // Preserve source URL
+        locationDetail: logData.locationDetail,
+        firstTime: logData.firstTime,
       }
 
       savedEntryIdRef.current = entryUniqueId
@@ -1465,8 +1839,8 @@ export default function Home() {
         rottenTomatoesScore: item.rottenTomatoesScore,
         metacriticUrl: item.metacriticUrl,
         rottenTomatoesUrl: item.rottenTomatoesUrl,
-        metacriticData: item.metacriticData,
-        rottenTomatoesData: item.rottenTomatoesData,
+        metacriticData: item.metacriticData as MetacriticData | undefined,
+        rottenTomatoesData: item.rottenTomatoesData as RottenTomatoesData | undefined,
       }))
 
       if (results.length === 1) {
@@ -1508,37 +1882,90 @@ export default function Home() {
     console.log('All Talent Preferences:', preferences)
   }
 
-  // Handle media selection
-  const handleSelectMedia = (media: MediaResult) => {
+  // Handle media selection - fetch FULL metadata from movie-details API
+  const handleSelectMedia = async (media: MediaResult) => {
     setSelectedMedia(media)
-    setLogData({
-      ...logData,
-      title: media.title,
-      year: media.year,
-      mediaType: media.mediaType,
-      tmdbId: media.id,
-      director: media.director,
-      cinematographer: media.cinematographer,
-      composer: media.composer,
-      starring: media.starring,
-      distributor: media.distributor,
-      runtime: media.runtime,
-      trailerUrl: media.trailerUrl,
-      metacriticScore: media.metacriticScore,
-      rottenTomatoesScore: media.rottenTomatoesScore,
-      metacriticUrl: media.metacriticUrl,
-      rottenTomatoesUrl: media.rottenTomatoesUrl,
-      metacriticData: media.metacriticData,
-      rottenTomatoesData: media.rottenTomatoesData,
-      streamingOptions: media.streamingOptions,
-    })
     setStep('analyzing')
 
-    // Simulate AI analysis
-    setTimeout(() => {
-      setStep('date')
-      setQuestionIndex(1)
-    }, 1500)
+    try {
+      // Fetch FULL metadata including cast with photos, all crew, OMDB scores, awards
+      const response = await fetch(
+        `/api/movie-details?tmdbId=${media.id}&title=${encodeURIComponent(media.title)}&year=${media.year}&type=${media.mediaType}`
+      )
+
+      if (response.ok) {
+        const fullData = await response.json()
+        console.log('Full metadata received:', fullData)
+
+        setLogData({
+          ...logData,
+          title: fullData.title || media.title,
+          year: fullData.year || media.year,
+          mediaType: fullData.mediaType || media.mediaType,
+          tmdbId: fullData.tmdbId || media.id,
+          // Full crew
+          director: fullData.director,
+          directors: fullData.directors,
+          cinematographer: fullData.cinematographer,
+          composer: fullData.composer,
+          writers: fullData.writers,
+          producers: fullData.producers,
+          editor: fullData.editor,
+          // Full cast with photos
+          cast: fullData.cast,
+          starring: fullData.starring,
+          genres: fullData.genres,
+          runtime: fullData.runtime,
+          // Media
+          poster: fullData.poster,
+          trailerUrl: fullData.trailerUrl,
+          trailerVideoId: fullData.trailerVideoId,
+          overview: fullData.overview,
+          // Critic scores from OMDB
+          metacriticScore: fullData.metacriticScore,
+          rottenTomatoesScore: fullData.rottenTomatoesScore,
+          imdbRating: fullData.imdbRating,
+          imdbVotes: fullData.imdbVotes,
+          // URLs
+          metacriticUrl: fullData.metacriticUrl,
+          rottenTomatoesUrl: fullData.rottenTomatoesUrl,
+          imdbUrl: fullData.imdbUrl,
+          // Rich metadata from OMDB
+          rated: fullData.rated,
+          awards: fullData.awards,
+          boxOffice: fullData.boxOffice,
+          plot: fullData.plot,
+          country: fullData.country,
+          language: fullData.language,
+        })
+      } else {
+        // Fallback to basic data if full fetch fails
+        console.log('Full metadata fetch failed, using basic data')
+        setLogData({
+          ...logData,
+          title: media.title,
+          year: media.year,
+          mediaType: media.mediaType,
+          tmdbId: media.id,
+          director: media.director,
+          poster: media.posterPath || media.posterUrl,
+        })
+      }
+    } catch (error) {
+      console.error('Error fetching full metadata:', error)
+      // Fallback to basic data
+      setLogData({
+        ...logData,
+        title: media.title,
+        year: media.year,
+        mediaType: media.mediaType,
+        tmdbId: media.id,
+        director: media.director,
+      })
+    }
+
+    setStep('date')
+    setQuestionIndex(1)
   }
 
   // Update log data helper
@@ -1611,6 +2038,135 @@ export default function Home() {
           </div>
         </div>
       )}
+
+      {/* Smart Media Type Confirmation Dialog */}
+      {mediaTypeConfirmation?.show && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl animate-fade-in max-w-lg w-full max-h-[90vh] overflow-y-auto">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-accent-blue to-accent-navy p-4 rounded-t-2xl">
+              <h3 className="text-xl font-bold text-white">
+                {mediaTypeConfirmation.foundMatch ? '🎬 Found a match!' : '🔍 Is this a movie?'}
+              </h3>
+              <p className="text-blue-100 text-sm mt-1">
+                {mediaTypeConfirmation.foundMatch
+                  ? 'We found this in our database. Is this correct?'
+                  : 'We detected clues this might be a movie or documentary.'}
+              </p>
+            </div>
+
+            <div className="p-5">
+              {/* Pre-filled Movie Card (when we found a match) */}
+              {mediaTypeConfirmation.foundMatch && (
+                <div className="bg-paper-50 rounded-xl p-4 mb-4 border-2 border-accent-blue">
+                  <div className="flex gap-4">
+                    {mediaTypeConfirmation.foundMatch.poster && (
+                      <img
+                        src={mediaTypeConfirmation.foundMatch.poster}
+                        alt={mediaTypeConfirmation.foundMatch.title}
+                        className="w-24 h-36 object-cover rounded-lg shadow-md"
+                      />
+                    )}
+                    <div className="flex-1">
+                      <h4 className="font-bold text-lg text-ink-800">
+                        {mediaTypeConfirmation.foundMatch.title}
+                        {mediaTypeConfirmation.foundMatch.year && (
+                          <span className="text-ink-500 font-normal ml-2">({mediaTypeConfirmation.foundMatch.year})</span>
+                        )}
+                      </h4>
+                      {mediaTypeConfirmation.foundMatch.director && (
+                        <p className="text-sm text-ink-600 mt-1">
+                          Directed by <span className="font-medium">{mediaTypeConfirmation.foundMatch.director}</span>
+                        </p>
+                      )}
+                      {mediaTypeConfirmation.foundMatch.tmdbRating && (
+                        <div className="flex items-center gap-2 mt-2">
+                          <span className={`text-sm font-bold px-2 py-0.5 rounded ${
+                            mediaTypeConfirmation.foundMatch.tmdbRating >= 70 ? 'bg-green-100 text-green-700' :
+                            mediaTypeConfirmation.foundMatch.tmdbRating >= 50 ? 'bg-yellow-100 text-yellow-700' :
+                            'bg-red-100 text-red-700'
+                          }`}>
+                            {mediaTypeConfirmation.foundMatch.tmdbRating}%
+                          </span>
+                          <span className="text-xs text-ink-400">TMDB</span>
+                        </div>
+                      )}
+                      {mediaTypeConfirmation.foundMatch.genres && mediaTypeConfirmation.foundMatch.genres.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-2">
+                          {mediaTypeConfirmation.foundMatch.genres.slice(0, 3).map((genre: string) => (
+                            <span key={genre} className="text-xs px-2 py-0.5 bg-paper-200 text-ink-600 rounded-full">
+                              {genre}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  {mediaTypeConfirmation.foundMatch.overview && (
+                    <p className="text-sm text-ink-600 mt-3 line-clamp-3">
+                      {mediaTypeConfirmation.foundMatch.overview}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Clues (when no match found) */}
+              {!mediaTypeConfirmation.foundMatch && mediaTypeConfirmation.clues.length > 0 && (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4">
+                  <p className="text-sm font-medium text-amber-800 mb-2">Clues we found:</p>
+                  <ul className="text-sm text-amber-700 list-disc list-inside">
+                    {mediaTypeConfirmation.clues.slice(0, 3).map((clue, i) => (
+                      <li key={i}>{clue}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="flex flex-col gap-2">
+                {mediaTypeConfirmation.foundMatch ? (
+                  <>
+                    <button
+                      onClick={() => handleMediaTypeConfirmWithMatch()}
+                      className="w-full px-4 py-3 bg-green-600 text-white rounded-xl font-bold hover:bg-green-700 transition-colors"
+                    >
+                      ✓ Yes, this is correct!
+                    </button>
+                    <button
+                      onClick={() => handleMediaTypeConfirm('movie')}
+                      className="w-full px-4 py-3 bg-accent-blue text-white rounded-xl font-bold hover:bg-blue-700 transition-colors"
+                    >
+                      🔍 Search for a different movie
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      onClick={() => handleMediaTypeConfirm('movie')}
+                      className="w-full px-4 py-3 bg-accent-blue text-white rounded-xl font-bold hover:bg-blue-700 transition-colors"
+                    >
+                      🎬 Yes, it&apos;s a Movie/Documentary
+                    </button>
+                    <button
+                      onClick={() => handleMediaTypeConfirm('tv')}
+                      className="w-full px-4 py-3 bg-purple-600 text-white rounded-xl font-bold hover:bg-purple-700 transition-colors"
+                    >
+                      📺 It&apos;s a TV Show
+                    </button>
+                  </>
+                )}
+                <button
+                  onClick={() => handleMediaTypeConfirm('video')}
+                  className="w-full px-4 py-3 bg-paper-200 text-ink-600 rounded-xl font-bold hover:bg-paper-300 transition-colors"
+                >
+                  📹 No, just a YouTube video
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Progress Bar */}
       <div className="bg-white border-b border-paper-400 px-8 py-4">
         <div className="max-w-4xl mx-auto">
@@ -1629,7 +2185,7 @@ export default function Home() {
 
       <div className="flex-1 flex">
       {/* LEFT PANE - Questions */}
-      <div className="w-1/2 p-10 flex items-start justify-center overflow-y-auto bg-white">
+      <div className="w-1/2 px-10 pb-10 pt-4 flex items-start justify-center overflow-y-auto bg-white">
         <div className="w-full max-w-2xl">
           {/* SEARCH STEP */}
           {step === 'search' && (
@@ -1794,7 +2350,7 @@ export default function Home() {
                                 editor: urlMetadata?.editor,
                                 // Cast
                                 cast: urlMetadata?.cast,
-                                starring: urlMetadata?.starring,
+                                starring: urlMetadata?.cast?.map((c: any) => c.name),
                                 genres: urlMetadata?.genres,
                                 runtime: urlMetadata?.runtime,
                                 // Ratings & scores
@@ -1962,15 +2518,7 @@ export default function Home() {
                       {searchMode === 'queue' ? (
                         <>
                           <button
-                            onClick={() => {
-                              addToQueue({
-                                title: searchResults[0].title,
-                                year: searchResults[0].year,
-                                mediaType: searchResults[0].mediaType,
-                                director: searchResults[0].director,
-                                thumbnail: searchResults[0].poster,
-                              })
-                            }}
+                            onClick={() => addToQueueSmart(searchResults[0])}
                             className="flex-1 px-4 py-3 bg-orange-500 text-white rounded-lg font-bold hover:bg-orange-600 transition-colors"
                           >
                             📋 Add to Queue
@@ -1991,15 +2539,7 @@ export default function Home() {
                             ✍️ Log It Now
                           </button>
                           <button
-                            onClick={() => {
-                              addToQueue({
-                                title: searchResults[0].title,
-                                year: searchResults[0].year,
-                                mediaType: searchResults[0].mediaType,
-                                director: searchResults[0].director,
-                                thumbnail: searchResults[0].poster,
-                              })
-                            }}
+                            onClick={() => addToQueueSmart(searchResults[0])}
                             className="px-4 py-3 bg-paper-300 text-ink-700 rounded-lg font-bold hover:bg-paper-400 transition-colors"
                           >
                             + Queue
@@ -2079,15 +2619,7 @@ export default function Home() {
                             {searchMode === 'queue' ? (
                               <>
                                 <button
-                                  onClick={() => {
-                                    addToQueue({
-                                      title: result.title,
-                                      year: result.year,
-                                      mediaType: result.mediaType,
-                                      director: result.director,
-                                      thumbnail: result.poster,
-                                    })
-                                  }}
+                                  onClick={() => addToQueueSmart(result)}
                                   className="flex-1 px-4 py-2 bg-orange-500 text-white rounded-lg font-bold text-sm hover:bg-orange-600 transition-colors"
                                 >
                                   📋 Add to Queue
@@ -2108,15 +2640,7 @@ export default function Home() {
                                   ✍️ Log It Now
                                 </button>
                                 <button
-                                  onClick={() => {
-                                    addToQueue({
-                                      title: result.title,
-                                      year: result.year,
-                                      mediaType: result.mediaType,
-                                      director: result.director,
-                                      thumbnail: result.poster,
-                                    })
-                                  }}
+                                  onClick={() => addToQueueSmart(result)}
                                   className="px-4 py-2 bg-paper-300 text-ink-700 rounded-lg font-bold text-sm hover:bg-paper-400 transition-colors"
                                 >
                                   + Queue
@@ -2565,6 +3089,7 @@ export default function Home() {
               setSearchQuery={setSearchQuery}
               setSelectedMedia={setSelectedMedia}
               setQuestionIndex={setQuestionIndex}
+              setCharacterSceneNotes={setCharacterSceneNotes}
             />
           )}
         </div>
@@ -2574,7 +3099,7 @@ export default function Home() {
       <div className="w-px bg-paper-400" />
 
       {/* RIGHT PANE - Tabbed Dashboard */}
-      <div className="w-1/2 bg-[#F0F4FF] overflow-hidden">
+      <div className="w-1/2 bg-[#F0F4FF] overflow-hidden rounded-2xl mr-4 my-4">
         <RightPaneTabs
           currentEntry={{
             entryNumber,
@@ -2604,8 +3129,22 @@ export default function Home() {
             metacriticData: logData.metacriticData,
             rottenTomatoesData: logData.rottenTomatoesData,
             streamingOptions: logData.streamingOptions,
-            videoId: urlMetadata?.videoId,
-            sourceUrl: isUrl(searchQuery) ? searchQuery : undefined,
+            videoId: logData.videoId || urlMetadata?.videoId,
+            sourceUrl: logData.sourceUrl || (isUrl(searchQuery) ? searchQuery : undefined),
+            // Rich metadata
+            poster: logData.poster,
+            imdbRating: logData.imdbRating,
+            imdbVotes: logData.imdbVotes,
+            imdbUrl: logData.imdbUrl,
+            rated: logData.rated,
+            awards: logData.awards,
+            boxOffice: logData.boxOffice,
+            plot: logData.plot,
+            overview: logData.overview,
+            country: logData.country,
+            language: logData.language,
+            genres: logData.genres,
+            tmdbRating: logData.tmdbRating,
           }}
           isLogging={step !== 'complete'}
           onEdit={(changes) => {

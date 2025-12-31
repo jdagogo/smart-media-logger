@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 
 interface CastMember {
   id: string
@@ -20,10 +21,24 @@ interface SceneImage {
   aspectRatio: number
 }
 
+interface VideoClip {
+  id: string
+  type: 'video'
+  videoType: string // Trailer, Teaser, Clip, Featurette, Behind the Scenes
+  name: string
+  key: string // YouTube video ID
+  site: string
+  official: boolean
+  publishedAt: string
+  thumbnailUrl: string
+  embedUrl: string
+  watchUrl: string
+}
+
 // Structured note with rich metadata for preference learning
 export interface CharacterSceneNote {
   id: string
-  type: 'character' | 'scene'
+  type: 'character' | 'scene' | 'video'
   note: string
   timestamp: string
   // Movie context
@@ -37,6 +52,11 @@ export interface CharacterSceneNote {
   // Scene-specific
   sceneIndex?: number
   sceneThumbnail?: string
+  // Video-specific
+  videoName?: string
+  videoType?: string
+  videoKey?: string
+  videoThumbnail?: string
 }
 
 interface CharacterGalleryProps {
@@ -56,15 +76,17 @@ export default function CharacterGallery({
   const [error, setError] = useState<string | null>(null)
   const [cast, setCast] = useState<CastMember[]>([])
   const [scenes, setScenes] = useState<SceneImage[]>([])
+  const [videos, setVideos] = useState<VideoClip[]>([])
   const [selectedIndex, setSelectedIndex] = useState<number>(-1)
   const [noteText, setNoteText] = useState('')
   const [isRecording, setIsRecording] = useState(false)
   const [recognition, setRecognition] = useState<any>(null)
-  const [showScenes, setShowScenes] = useState(false)
+  const [activeTab, setActiveTab] = useState<'cast' | 'scenes' | 'videos'>('cast')
+  const [savedToast, setSavedToast] = useState<string | null>(null)
 
-  // Get current list and selected image based on mode
-  const currentList = showScenes ? scenes : cast
-  const selectedImage = selectedIndex >= 0 ? currentList[selectedIndex] : null
+  // Get current list and selected item based on mode
+  const currentList = activeTab === 'cast' ? cast : activeTab === 'scenes' ? scenes : videos
+  const selectedItem = selectedIndex >= 0 ? currentList[selectedIndex] : null
 
   useEffect(() => {
     fetchImages()
@@ -124,6 +146,7 @@ export default function CharacterGallery({
       const data = await response.json()
       setCast(data.images.cast || [])
       setScenes(data.images.scenes || [])
+      setVideos(data.images.videos || [])
     } catch (err) {
       setError('Failed to load images')
       console.error(err)
@@ -166,11 +189,11 @@ export default function CharacterGallery({
   }
 
   const handleSaveNote = () => {
-    if (!selectedImage || !noteText.trim()) return
+    if (!selectedItem || !noteText.trim()) return
 
     if (onNoteAdded) {
       const baseNote = {
-        id: `${Date.now()}-${selectedImage.id}`,
+        id: `${Date.now()}-${selectedItem.id}`,
         note: noteText.trim(),
         timestamp: new Date().toISOString(),
         movieTitle,
@@ -178,8 +201,8 @@ export default function CharacterGallery({
         movieId,
       }
 
-      if (selectedImage.type === 'character') {
-        const castMember = selectedImage as CastMember
+      if (selectedItem.type === 'character') {
+        const castMember = selectedItem as CastMember
         onNoteAdded({
           ...baseNote,
           type: 'character',
@@ -187,16 +210,35 @@ export default function CharacterGallery({
           characterName: castMember.characterName,
           actorThumbnail: castMember.urlLarge || castMember.url || undefined,
         })
-      } else {
-        const scene = selectedImage as SceneImage
+      } else if (selectedItem.type === 'scene') {
+        const scene = selectedItem as SceneImage
         onNoteAdded({
           ...baseNote,
           type: 'scene',
           sceneIndex: selectedIndex + 1,
           sceneThumbnail: scene.urlLarge || scene.url,
         })
+      } else if (selectedItem.type === 'video') {
+        const video = selectedItem as VideoClip
+        onNoteAdded({
+          ...baseNote,
+          type: 'video',
+          videoName: video.name,
+          videoType: video.videoType,
+          videoKey: video.key,
+          videoThumbnail: video.thumbnailUrl,
+        })
       }
     }
+
+    // Show saved toast
+    const itemName = selectedItem.type === 'character'
+      ? (selectedItem as CastMember).actorName
+      : selectedItem.type === 'video'
+        ? (selectedItem as VideoClip).name
+        : `Scene ${selectedIndex + 1}`
+    setSavedToast(`Note saved for ${itemName}`)
+    setTimeout(() => setSavedToast(null), 3000)
 
     setSelectedIndex(-1)
     setNoteText('')
@@ -228,16 +270,26 @@ export default function CharacterGallery({
   }
 
   return (
-    <div className="bg-paper-100 rounded-lg p-4">
+    <div className="bg-paper-100 rounded-lg p-4 relative">
+      {/* Saved Toast */}
+      {savedToast && (
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[10000] animate-fade-in">
+          <div className="bg-green-600 text-white px-6 py-3 rounded-xl shadow-lg flex items-center gap-2">
+            <span className="text-xl">✓</span>
+            <span className="font-medium">{savedToast}</span>
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center justify-between mb-4">
         <h3 className="font-bold text-paper-800 text-lg">
           What did you think about these scenes or characters?
         </h3>
         <div className="flex gap-2">
           <button
-            onClick={() => setShowScenes(false)}
+            onClick={() => { setActiveTab('cast'); setSelectedIndex(-1); }}
             className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
-              !showScenes
+              activeTab === 'cast'
                 ? 'bg-accent-blue text-white'
                 : 'bg-paper-200 text-paper-600 hover:bg-paper-300'
             }`}
@@ -245,20 +297,32 @@ export default function CharacterGallery({
             Cast ({cast.length})
           </button>
           <button
-            onClick={() => setShowScenes(true)}
+            onClick={() => { setActiveTab('scenes'); setSelectedIndex(-1); }}
             className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
-              showScenes
+              activeTab === 'scenes'
                 ? 'bg-accent-blue text-white'
                 : 'bg-paper-200 text-paper-600 hover:bg-paper-300'
             }`}
           >
             Scenes ({scenes.length})
           </button>
+          {videos.length > 0 && (
+            <button
+              onClick={() => { setActiveTab('videos'); setSelectedIndex(-1); }}
+              className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
+                activeTab === 'videos'
+                  ? 'bg-accent-blue text-white'
+                  : 'bg-paper-200 text-paper-600 hover:bg-paper-300'
+              }`}
+            >
+              Videos ({videos.length})
+            </button>
+          )}
         </div>
       </div>
 
       {/* Cast Grid */}
-      {!showScenes && (
+      {activeTab === 'cast' && (
         <div className="grid grid-cols-5 gap-3">
           {cast.map((member, idx) => (
             <button
@@ -287,7 +351,7 @@ export default function CharacterGallery({
       )}
 
       {/* Scenes Grid */}
-      {showScenes && (
+      {activeTab === 'scenes' && (
         <div className="grid grid-cols-3 gap-3">
           {scenes.map((scene, idx) => (
             <button
@@ -310,16 +374,53 @@ export default function CharacterGallery({
         </div>
       )}
 
-      {/* Note Input Modal with Carousel */}
-      {selectedImage && (
-        <div className={`fixed inset-0 z-50 flex items-start justify-center ${selectedImage.type === 'scene' ? 'pt-32' : 'pt-24'}`}>
+      {/* Videos Grid - 2 columns for larger thumbnails */}
+      {activeTab === 'videos' && (
+        <div className="grid grid-cols-2 gap-4">
+          {videos.map((video, idx) => (
+            <button
+              key={video.id}
+              onClick={() => handleImageClick(idx)}
+              className="group relative overflow-hidden rounded-lg aspect-video bg-paper-200 hover:ring-2 hover:ring-accent-blue transition-all hover:scale-[1.02]"
+            >
+              <img
+                src={video.thumbnailUrl}
+                alt={video.name}
+                className="w-full h-full object-cover"
+              />
+              {/* Play button overlay */}
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="w-16 h-16 rounded-full bg-black/60 flex items-center justify-center group-hover:bg-red-600 transition-colors">
+                  <span className="text-white text-2xl ml-1">▶</span>
+                </div>
+              </div>
+              {/* Video type badge */}
+              <div className="absolute top-3 left-3 bg-black/70 text-white text-sm px-2 py-1 rounded font-medium">
+                {video.videoType}
+              </div>
+              {/* Video name */}
+              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent p-3">
+                <p className="text-white text-sm font-medium line-clamp-2">
+                  {video.name}
+                </p>
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Note Input Modal with Carousel - rendered via portal to escape parent constraints */}
+      {selectedItem && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-start justify-center pt-20">
           <div
             className="absolute inset-0 bg-black/85"
             onClick={handleClose}
           />
 
           {/* Modal with arrows positioned next to it */}
-          <div className="relative flex items-center gap-4">
+          <div className={`relative flex items-center gap-4 ${
+            selectedItem.type === 'video' ? 'w-[68vw]' : ''
+          }`}>
             {/* Left Arrow */}
             <button
               onClick={(e) => { e.stopPropagation(); goToPrevImage(); }}
@@ -333,8 +434,10 @@ export default function CharacterGallery({
               ‹
             </button>
 
-            {/* Modal Content */}
-            <div className="relative bg-paper-100 rounded-xl max-w-4xl w-full overflow-hidden shadow-2xl">
+            {/* Modal Content - videos span most of viewport */}
+            <div className={`relative bg-paper-100 rounded-xl overflow-hidden shadow-2xl ${
+              selectedItem.type === 'video' ? 'w-full' : 'w-full max-w-4xl'
+            }`}>
               {/* Counter */}
               <div className="absolute top-4 left-4 z-10 bg-black/60 text-white px-3 py-1 rounded-full text-sm font-medium">
                 {selectedIndex + 1} / {currentList.length}
@@ -348,32 +451,56 @@ export default function CharacterGallery({
                 ✕
               </button>
 
-              {/* Large Image */}
-              <div className="relative bg-black">
-                <img
-                  src={selectedImage.type === 'character'
-                    ? (selectedImage as CastMember).urlLarge || (selectedImage as CastMember).url || ''
-                    : (selectedImage as SceneImage).urlLarge
-                  }
-                  alt=""
-                  className={`w-full ${selectedImage.type === 'character' ? 'h-[450px] object-contain' : 'h-[400px] object-cover'}`}
-                />
-                {selectedImage.type === 'character' && (
-                  <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 to-transparent p-6">
-                    <h4 className="text-white text-2xl font-bold">
-                      {(selectedImage as CastMember).characterName}
-                    </h4>
-                    <p className="text-white/80 text-lg">
-                      played by {(selectedImage as CastMember).actorName}
-                    </p>
+              {/* Video Player (for videos) */}
+              {selectedItem.type === 'video' && (
+                <div className="relative bg-black">
+                  <iframe
+                    src={`${(selectedItem as VideoClip).embedUrl}?autoplay=1`}
+                    className="w-full aspect-video"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                  />
+                  <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 to-transparent p-4 pointer-events-none">
+                    <div className="flex items-center gap-2">
+                      <span className="bg-red-600 text-white text-xs px-2 py-1 rounded">
+                        {(selectedItem as VideoClip).videoType}
+                      </span>
+                      <h4 className="text-white text-lg font-bold truncate">
+                        {(selectedItem as VideoClip).name}
+                      </h4>
+                    </div>
                   </div>
-                )}
-                {selectedImage.type === 'scene' && (
-                  <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4">
-                    <p className="text-white/80 text-sm">Scene {selectedIndex + 1}</p>
-                  </div>
-                )}
-              </div>
+                </div>
+              )}
+
+              {/* Large Image (for cast/scenes) */}
+              {selectedItem.type !== 'video' && (
+                <div className="relative bg-black">
+                  <img
+                    src={selectedItem.type === 'character'
+                      ? (selectedItem as CastMember).urlLarge || (selectedItem as CastMember).url || ''
+                      : (selectedItem as SceneImage).urlLarge
+                    }
+                    alt=""
+                    className={`w-full ${selectedItem.type === 'character' ? 'h-[450px] object-contain' : 'h-[400px] object-cover'}`}
+                  />
+                  {selectedItem.type === 'character' && (
+                    <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 to-transparent p-6">
+                      <h4 className="text-white text-2xl font-bold">
+                        {(selectedItem as CastMember).characterName}
+                      </h4>
+                      <p className="text-white/80 text-lg">
+                        played by {(selectedItem as CastMember).actorName}
+                      </p>
+                    </div>
+                  )}
+                  {selectedItem.type === 'scene' && (
+                    <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4">
+                      <p className="text-white/80 text-sm">Scene {selectedIndex + 1}</p>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Note Input */}
               <div className="p-5">
@@ -441,7 +568,8 @@ export default function CharacterGallery({
               ›
             </button>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )

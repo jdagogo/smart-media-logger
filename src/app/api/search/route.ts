@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 const TMDB_BASE_URL = 'https://api.themoviedb.org/3'
+const TMDB_API_KEY = process.env.TMDB_API_KEY || '2dca580c2a14b55200e784d157207b4d'
+const OMDB_API_KEY = process.env.OMDB_API_KEY || 'a053b065'
 
 interface TMDBMovieResult {
   id: number
@@ -27,9 +29,9 @@ interface TMDBCredits {
 function cleanSearchQuery(query: string): string {
   return query
     .trim()
-    .replace(/[.,!?;:'"()[\]{}]+$/g, '') // Remove trailing punctuation
-    .replace(/^[.,!?;:'"()[\]{}]+/g, '') // Remove leading punctuation
-    .replace(/\s+/g, ' ')                // Normalize multiple spaces
+    .replace(/[.,!?;:''""'"()[\]{}]+$/g, '') // Remove trailing punctuation (including smart quotes)
+    .replace(/^[.,!?;:''""'"()[\]{}]+/g, '') // Remove leading punctuation (including smart quotes)
+    .replace(/\s+/g, ' ')                     // Normalize multiple spaces
     .trim()
 }
 
@@ -45,34 +47,29 @@ export async function GET(request: NextRequest) {
   // Clean the query for better matching
   const query = cleanSearchQuery(rawQuery)
 
-  const apiKey = process.env.TMDB_API_KEY
-
-  if (!apiKey) {
-    // Return mock data if no API key
-    return NextResponse.json({
-      results: getMockResults(query, type),
-      mock: true
-    })
-  }
-
   try {
     const endpoint = type === 'tv' ? 'search/tv' : 'search/movie'
+    const searchUrl = `${TMDB_BASE_URL}/${endpoint}?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}&include_adult=false`
+    console.log('TMDB Search URL:', searchUrl.replace(TMDB_API_KEY, '***'))
+
     const response = await fetch(
-      `${TMDB_BASE_URL}/${endpoint}?api_key=${apiKey}&query=${encodeURIComponent(query)}&include_adult=false`,
+      searchUrl,
       { next: { revalidate: 3600 } }
     )
 
     if (!response.ok) {
+      console.error('TMDB API error:', response.status, response.statusText)
       throw new Error('TMDB API error')
     }
 
     const data = await response.json()
+    console.log('TMDB search results count:', data.results?.length, 'for query:', query)
 
     const results = await Promise.all(
       data.results.slice(0, 10).map(async (item: TMDBMovieResult | TMDBTVResult) => {
         if (type === 'tv') {
           const tvItem = item as TMDBTVResult
-          const credits = await fetchCredits(apiKey, tvItem.id, 'tv')
+          const credits = await fetchCredits(TMDB_API_KEY, tvItem.id, 'tv')
           return {
             id: tvItem.id,
             title: tvItem.name,
@@ -87,17 +84,22 @@ export async function GET(request: NextRequest) {
           }
         } else {
           const movieItem = item as TMDBMovieResult
-          const [credits, details] = await Promise.all([
-            fetchCredits(apiKey, movieItem.id, 'movie'),
-            fetchMovieDetails(apiKey, movieItem.id)
+          const year = movieItem.release_date ? parseInt(movieItem.release_date.substring(0, 4)) : null
+          const [credits, details, omdb] = await Promise.all([
+            fetchCredits(TMDB_API_KEY, movieItem.id, 'movie'),
+            fetchMovieDetails(TMDB_API_KEY, movieItem.id),
+            fetchOMDBData(movieItem.title, year)
           ])
           return {
             id: movieItem.id,
             title: movieItem.title,
-            year: movieItem.release_date ? parseInt(movieItem.release_date.substring(0, 4)) : null,
+            year,
             overview: movieItem.overview,
             posterUrl: movieItem.poster_path
               ? `https://image.tmdb.org/t/p/w200${movieItem.poster_path}`
+              : null,
+            posterPath: movieItem.poster_path
+              ? `https://image.tmdb.org/t/p/w500${movieItem.poster_path}`
               : null,
             director: credits.director,
             cinematographer: credits.cinematographer,
@@ -106,7 +108,19 @@ export async function GET(request: NextRequest) {
             distributor: details.distributor,
             runtime: details.runtime,
             trailerUrl: details.trailerUrl,
-            imdbId: details.imdbId,
+            imdbId: details.imdbId || omdb?.imdbId,
+            // OMDB critic scores
+            metacriticScore: omdb?.metacriticScore,
+            rottenTomatoesScore: omdb?.rottenTomatoesScore,
+            imdbRating: omdb?.imdbRating,
+            imdbVotes: omdb?.imdbVotes,
+            // OMDB rich metadata
+            rated: omdb?.rated,
+            awards: omdb?.awards,
+            boxOffice: omdb?.boxOffice,
+            plot: omdb?.plot,
+            country: omdb?.country,
+            language: omdb?.language,
             type: 'movie'
           }
         }
@@ -177,6 +191,59 @@ async function fetchMovieDetails(apiKey: string, id: number) {
     }
   } catch {
     return { runtime: null, imdbId: null, distributor: null, trailerUrl: null }
+  }
+}
+
+// Fetch OMDB data for Metacritic, Rotten Tomatoes, IMDB scores and rich metadata
+async function fetchOMDBData(title: string, year: number | null) {
+  try {
+    const url = `https://www.omdbapi.com/?apikey=${OMDB_API_KEY}&t=${encodeURIComponent(title)}${year ? `&y=${year}` : ''}&type=movie&plot=full`
+    const response = await fetch(url, { next: { revalidate: 86400 } })
+
+    if (!response.ok) return null
+
+    const data = await response.json()
+
+    if (data.Response === 'False') {
+      console.log('OMDB no result for:', title)
+      return null
+    }
+
+    let metacriticScore: number | undefined
+    let rottenTomatoesScore: number | undefined
+
+    // Get Metascore directly
+    if (data.Metascore && data.Metascore !== 'N/A') {
+      metacriticScore = parseInt(data.Metascore)
+    }
+
+    // Get RT score from Ratings array
+    if (data.Ratings && Array.isArray(data.Ratings)) {
+      for (const rating of data.Ratings) {
+        if (rating.Source === 'Rotten Tomatoes' && rating.Value) {
+          rottenTomatoesScore = parseInt(rating.Value)
+        }
+      }
+    }
+
+    console.log(`OMDB found for "${title}": metacritic=${metacriticScore}, RT=${rottenTomatoesScore}, imdb=${data.imdbRating}`)
+
+    return {
+      metacriticScore,
+      rottenTomatoesScore,
+      imdbRating: data.imdbRating !== 'N/A' ? data.imdbRating : undefined,
+      imdbVotes: data.imdbVotes !== 'N/A' ? data.imdbVotes : undefined,
+      imdbId: data.imdbID !== 'N/A' ? data.imdbID : undefined,
+      rated: data.Rated !== 'N/A' ? data.Rated : undefined,
+      plot: data.Plot !== 'N/A' ? data.Plot : undefined,
+      awards: data.Awards !== 'N/A' ? data.Awards : undefined,
+      boxOffice: data.BoxOffice !== 'N/A' ? data.BoxOffice : undefined,
+      country: data.Country !== 'N/A' ? data.Country : undefined,
+      language: data.Language !== 'N/A' ? data.Language : undefined,
+    }
+  } catch (error) {
+    console.error('OMDB fetch error:', error)
+    return null
   }
 }
 

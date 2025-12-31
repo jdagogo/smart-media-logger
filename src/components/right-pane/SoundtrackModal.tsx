@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 
 interface Track {
   position: number
@@ -37,7 +38,7 @@ interface SoundtrackModalProps {
     fromMovie: string
   }) => void
   onUnsaveTrack?: (videoId: string) => void
-  savedTracks?: Set<string>
+  savedTracks?: Record<string, boolean>
 }
 
 export default function SoundtrackModal({
@@ -49,7 +50,7 @@ export default function SoundtrackModal({
   playlistId,
   onSaveTrack,
   onUnsaveTrack,
-  savedTracks = new Set(),
+  savedTracks = {},
 }: SoundtrackModalProps) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -118,7 +119,7 @@ export default function SoundtrackModal({
   }
 
   const handleToggleSaveTrack = (track: Track) => {
-    const alreadySaved = savedTracks.has(track.videoId)
+    const alreadySaved = !!savedTracks[track.videoId]
 
     if (alreadySaved) {
       // Unsave the track
@@ -147,12 +148,15 @@ export default function SoundtrackModal({
     }
   }
 
-  const isTrackSaved = (videoId: string) => savedTracks.has(videoId) || justSaved.has(videoId)
+  const isTrackSaved = (videoId: string) => !!savedTracks[videoId] || justSaved.has(videoId)
 
   if (!isOpen) return null
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+  // Use portal to render to document.body, escaping any parent container constraints
+  if (typeof document === 'undefined') return null
+
+  return createPortal(
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center">
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black/80"
@@ -482,6 +486,7 @@ export default function SoundtrackModal({
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

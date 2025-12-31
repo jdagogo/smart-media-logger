@@ -105,10 +105,22 @@ interface MediaCardProps {
   videoId?: string
   poster?: string
   sourceUrl?: string
+  // Rich metadata
+  imdbRating?: string
+  imdbUrl?: string
+  rated?: string
+  awards?: string
+  boxOffice?: string
+  plot?: string
+  overview?: string
+  country?: string
+  language?: string
+  genres?: string[]
+  tmdbRating?: number
   // Soundtrack
   onSaveTrack?: (track: { title: string; artist: string; videoId: string; thumbnail: string; fromMovie: string }) => void
   onUnsaveTrack?: (videoId: string) => void
-  savedTracks?: Set<string>
+  savedTracks?: Record<string, boolean>
 }
 
 // Talent preference types
@@ -225,9 +237,20 @@ export default function MediaCard({
   videoId,
   poster,
   sourceUrl,
+  imdbRating,
+  imdbUrl,
+  rated,
+  awards,
+  boxOffice,
+  plot,
+  overview,
+  country,
+  language,
+  genres,
+  tmdbRating,
   onSaveTrack,
   onUnsaveTrack,
-  savedTracks = new Set(),
+  savedTracks = {},
 }: MediaCardProps) {
   const [showTrailer, setShowTrailer] = useState(false)
   const [showSoundtrack, setShowSoundtrack] = useState(false)

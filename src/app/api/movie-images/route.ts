@@ -40,16 +40,37 @@ export async function GET(request: NextRequest) {
     const creditsUrl = new URL(`${TMDB_BASE_URL}/movie/${tmdbId}/credits`)
     creditsUrl.searchParams.set('api_key', TMDB_API_KEY)
 
-    const [imagesResponse, creditsResponse] = await Promise.all([
+    // Fetch videos (trailers, clips, featurettes, behind the scenes)
+    const videosUrl = new URL(`${TMDB_BASE_URL}/movie/${tmdbId}/videos`)
+    videosUrl.searchParams.set('api_key', TMDB_API_KEY)
+
+    const [imagesResponse, creditsResponse, videosResponse] = await Promise.all([
       fetch(imagesUrl.toString()),
-      fetch(creditsUrl.toString())
+      fetch(creditsUrl.toString()),
+      fetch(videosUrl.toString())
     ])
 
     const imagesData = await imagesResponse.json()
     const creditsData = await creditsResponse.json()
+    const videosData = await videosResponse.json()
 
     // Get backdrops (scene images)
-    const backdrops = (imagesData.backdrops || []).slice(0, 20).map((img: any, index: number) => ({
+    // Prioritize actual scene stills over promotional images:
+    // - Images without language code (iso_639_1 is null) are usually scene stills
+    // - Images with language codes often have promotional text overlays
+    // - Sort by vote_count to get more popular/memorable shots
+    const sortedBackdrops = (imagesData.backdrops || [])
+      .sort((a: any, b: any) => {
+        // Prioritize images without language (actual scene stills)
+        const aHasLang = a.iso_639_1 ? 1 : 0
+        const bHasLang = b.iso_639_1 ? 1 : 0
+        if (aHasLang !== bHasLang) return aHasLang - bHasLang
+        // Then sort by vote count (more votes = more memorable/popular scenes)
+        return (b.vote_count || 0) - (a.vote_count || 0)
+      })
+      .slice(0, 20)
+
+    const backdrops = sortedBackdrops.map((img: any, index: number) => ({
       id: `backdrop-${index}`,
       type: 'scene',
       url: `https://image.tmdb.org/t/p/w780${img.file_path}`,
@@ -74,16 +95,50 @@ export async function GET(request: NextRequest) {
       order: person.order,
     })).filter((c: any) => c.url)
 
-    console.log(`Found ${backdrops.length} scene images and ${cast.length} cast members for movie ${tmdbId}`)
+    // Get videos (trailers, clips, featurettes, behind the scenes, etc.)
+    // Prioritize: Clips > Featurettes > Behind the Scenes > Trailers > Teasers
+    const videoTypeOrder: Record<string, number> = {
+      'Clip': 1,
+      'Featurette': 2,
+      'Behind the Scenes': 3,
+      'Trailer': 4,
+      'Teaser': 5,
+    }
+
+    const videos = (videosData.results || [])
+      .filter((v: any) => v.site === 'YouTube') // Only YouTube videos (can embed)
+      .sort((a: any, b: any) => {
+        const orderA = videoTypeOrder[a.type] || 99
+        const orderB = videoTypeOrder[b.type] || 99
+        return orderA - orderB
+      })
+      .slice(0, 15) // Limit to 15 videos
+      .map((video: any, index: number) => ({
+        id: `video-${video.id}`,
+        type: 'video',
+        videoType: video.type, // Trailer, Teaser, Clip, Featurette, Behind the Scenes
+        name: video.name,
+        key: video.key, // YouTube video ID
+        site: video.site,
+        official: video.official,
+        publishedAt: video.published_at,
+        thumbnailUrl: `https://img.youtube.com/vi/${video.key}/mqdefault.jpg`,
+        embedUrl: `https://www.youtube.com/embed/${video.key}`,
+        watchUrl: `https://www.youtube.com/watch?v=${video.key}`,
+      }))
+
+    console.log(`Found ${backdrops.length} scenes, ${cast.length} cast, ${videos.length} videos for movie ${tmdbId}`)
 
     return NextResponse.json({
       movieId: tmdbId,
       images: {
         scenes: backdrops,
         cast: cast,
+        videos: videos,
       },
       totalScenes: imagesData.backdrops?.length || 0,
       totalCast: creditsData.cast?.length || 0,
+      totalVideos: videosData.results?.length || 0,
     })
   } catch (error) {
     console.error('Movie images fetch error:', error)

@@ -1,9 +1,106 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
+
+// Declare YouTube IFrame API types
+declare global {
+  interface Window {
+    YT: {
+      Player: new (elementId: string, options: {
+        events?: {
+          onStateChange?: (event: { data: number }) => void
+          onReady?: () => void
+        }
+      }) => {
+        destroy: () => void
+      }
+      PlayerState: {
+        ENDED: number
+      }
+    }
+    onYouTubeIframeAPIReady?: () => void
+  }
+}
 import MediaCard from './MediaCard'
 import SoundtrackModal from './SoundtrackModal'
+import CharacterGallery from '@/components/CharacterGallery'
 import { highlightEntities } from '@/components/shared/VoiceInput'
+
+// YouTube Player component for music with auto-advance
+function MusicYouTubePlayer({
+  videoId,
+  title,
+  ytApiReady,
+  onVideoEnd
+}: {
+  videoId: string
+  title: string
+  ytApiReady: boolean
+  onVideoEnd: () => void
+}) {
+  const playerRef = useRef<{ destroy: () => void } | null>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const playerId = `music-player-${videoId}`
+
+  useEffect(() => {
+    if (!ytApiReady || !containerRef.current) return
+
+    // Clean up previous player
+    if (playerRef.current) {
+      try {
+        playerRef.current.destroy()
+      } catch (e) {
+        // Ignore destroy errors
+      }
+      playerRef.current = null
+    }
+
+    // Create the iframe element
+    const iframe = document.createElement('iframe')
+    iframe.id = playerId
+    iframe.src = `https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0&enablejsapi=1&origin=${window.location.origin}`
+    iframe.className = 'w-full aspect-video'
+    iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture'
+    iframe.allowFullscreen = true
+
+    containerRef.current.innerHTML = ''
+    containerRef.current.appendChild(iframe)
+
+    // Wait for iframe to load, then create YT.Player
+    const timeout = setTimeout(() => {
+      try {
+        if (window.YT && window.YT.Player) {
+          playerRef.current = new window.YT.Player(playerId, {
+            events: {
+              onStateChange: (event: { data: number }) => {
+                // 0 = ended
+                if (event.data === 0) {
+                  onVideoEnd()
+                }
+              }
+            }
+          })
+        }
+      } catch (e) {
+        console.error('Failed to create YT player:', e)
+      }
+    }, 1000) // Give iframe time to load
+
+    return () => {
+      clearTimeout(timeout)
+      if (playerRef.current) {
+        try {
+          playerRef.current.destroy()
+        } catch (e) {
+          // Ignore destroy errors
+        }
+        playerRef.current = null
+      }
+    }
+  }, [videoId, ytApiReady, onVideoEnd, playerId])
+
+  return <div ref={containerRef} className="w-full aspect-video bg-black" />
+}
 
 // Talent preference types - same as MediaCard
 type TalentPreference = 'loved' | 'not-for-me' | null
@@ -88,7 +185,7 @@ function TalentPill({ name, onPreferenceChange, preference }: TalentPillProps) {
 }
 
 // Types
-type RightPaneTab = 'logging' | 'upnext' | 'library' | 'recs' | 'profile'
+type RightPaneTab = 'logging' | 'upnext' | 'drafts' | 'library' | 'recs' | 'profile'
 type MediaFilter = 'all' | 'movie' | 'tv' | 'books' | 'music' | 'podcasts' | 'video'
 type SortMode = 'date' | 'score'
 
@@ -231,6 +328,20 @@ interface RightPaneTabsProps {
     streamingOptions?: any[]
     videoId?: string      // YouTube/video embed ID
     sourceUrl?: string    // Original URL source
+    // Rich metadata
+    poster?: string
+    imdbRating?: string
+    imdbVotes?: string
+    imdbUrl?: string
+    rated?: string
+    awards?: string
+    boxOffice?: string
+    plot?: string
+    overview?: string
+    country?: string
+    language?: string
+    genres?: string[]
+    tmdbRating?: number
   }
   isLogging: boolean
   onEdit?: (changes: any) => void
@@ -273,6 +384,7 @@ interface RightPaneTabsProps {
     imdbRating?: string
   }) => void
   onRemoveFromQueue?: (id: number) => void
+  onUpdateQueueItem?: (id: number, changes: Partial<QueueItem>) => void
   onLogFromQueue?: (item: QueueItem) => void
   // Logged items - shared with parent
   loggedItems: LoggedItem[]
@@ -281,9 +393,9 @@ interface RightPaneTabsProps {
   onRemoveLoggedItem?: (id: number) => void
   onResumeDraft?: (item: LoggedItem) => void
   // Tab control from parent
-  activeTabOverride?: 'logging' | 'upnext' | 'library' | 'recs' | 'profile'
+  activeTabOverride?: 'logging' | 'upnext' | 'drafts' | 'library' | 'recs' | 'profile'
   tabSwitchTrigger?: number
-  onTabChange?: (tab: 'logging' | 'upnext' | 'library' | 'recs' | 'profile') => void
+  onTabChange?: (tab: 'logging' | 'upnext' | 'drafts' | 'library' | 'recs' | 'profile') => void
   // Queue mode preview
   searchMode?: 'log' | 'queue'
   queuePreview?: {
@@ -393,6 +505,46 @@ export default function RightPaneTabs({
     setHasMounted(true)
   }, [])
 
+  // Clean up duplicate music tracks on mount
+  useEffect(() => {
+    // Deduplicate localStorage saved music
+    try {
+      const savedMusic = JSON.parse(localStorage.getItem('smartMediaLogger_savedMusic') || '[]')
+      const seen = new Set<string>()
+      const dedupedMusic = savedMusic.filter((track: { videoId: string }) => {
+        if (seen.has(track.videoId)) return false
+        seen.add(track.videoId)
+        return true
+      })
+      if (dedupedMusic.length !== savedMusic.length) {
+        console.log(`Cleaned up ${savedMusic.length - dedupedMusic.length} duplicate music tracks from localStorage`)
+        localStorage.setItem('smartMediaLogger_savedMusic', JSON.stringify(dedupedMusic))
+      }
+    } catch (e) {
+      console.error('Failed to dedupe saved music:', e)
+    }
+
+    // Deduplicate music in loggedItems
+    const musicItems = loggedItems.filter(item => item.mediaType === 'music')
+    const seenVideoIds = new Set<string>()
+    const duplicateIds: number[] = []
+
+    for (const item of musicItems) {
+      if (item.videoId) {
+        if (seenVideoIds.has(item.videoId)) {
+          duplicateIds.push(item.id)
+        } else {
+          seenVideoIds.add(item.videoId)
+        }
+      }
+    }
+
+    if (duplicateIds.length > 0) {
+      console.log(`Found ${duplicateIds.length} duplicate music tracks to remove from loggedItems`)
+      duplicateIds.forEach(id => onRemoveLoggedItem?.(id))
+    }
+  }, []) // Run once on mount
+
   // Handle tab change - just notify parent, which controls the state
   const handleTabChange = (tab: RightPaneTab) => {
     onTabChange?.(tab)
@@ -440,7 +592,7 @@ export default function RightPaneTabs({
   // Persist dismissed recs to localStorage when they change
   useEffect(() => {
     if (hasMounted && dismissedRecs.size > 0) {
-      localStorage.setItem('smartMediaLogger_dismissedRecs', JSON.stringify([...dismissedRecs]))
+      localStorage.setItem('smartMediaLogger_dismissedRecs', JSON.stringify(Array.from(dismissedRecs)))
     }
   }, [dismissedRecs, hasMounted])
 
@@ -463,6 +615,38 @@ export default function RightPaneTabs({
   const [expandedMusicInfoId, setExpandedMusicInfoId] = useState<number | null>(null)
   const [expandedCriticPanel, setExpandedCriticPanel] = useState<'metacritic' | 'rt' | null>(null)
   const [expandedRecTitle, setExpandedRecTitle] = useState<string | null>(null)
+
+  // YouTube player for auto-advance
+  const [ytApiReady, setYtApiReady] = useState(false)
+  const ytPlayerRef = useRef<{ destroy: () => void } | null>(null)
+  const pendingNextTrackRef = useRef<number | null>(null)
+
+  // Load YouTube IFrame API
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (window.YT) {
+      setYtApiReady(true)
+      return
+    }
+
+    // Load the API script
+    const tag = document.createElement('script')
+    tag.src = 'https://www.youtube.com/iframe_api'
+    const firstScriptTag = document.getElementsByTagName('script')[0]
+    firstScriptTag.parentNode?.insertBefore(tag, firstScriptTag)
+
+    window.onYouTubeIframeAPIReady = () => {
+      setYtApiReady(true)
+    }
+  }, [])
+
+  // Handle auto-advance when video ends
+  const handleVideoEnd = useCallback(() => {
+    if (pendingNextTrackRef.current !== null) {
+      setExpandedLibraryId(pendingNextTrackRef.current)
+      pendingNextTrackRef.current = null
+    }
+  }, [])
 
   // Track fetched trailer URLs for recommendations
   const [fetchedTrailers, setFetchedTrailers] = useState<Record<string, string>>({})
@@ -502,19 +686,21 @@ export default function RightPaneTabs({
 
   // Soundtrack modal state
   const [soundtrackMovie, setSoundtrackMovie] = useState<{ title: string; year: number; composer?: string } | null>(null)
-  const [savedMusicTracks, setSavedMusicTracks] = useState<Set<string>>(() => {
+  const [savedMusicTracks, setSavedMusicTracks] = useState<Record<string, boolean>>(() => {
     if (typeof window !== 'undefined') {
       try {
         const saved = localStorage.getItem('smartMediaLogger_savedMusic')
         if (saved) {
           const tracks = JSON.parse(saved) as Array<{ videoId: string }>
-          return new Set(tracks.map(t => t.videoId))
+          const trackMap: Record<string, boolean> = {}
+          tracks.forEach(t => { trackMap[t.videoId] = true })
+          return trackMap
         }
       } catch (e) {
         console.error('Failed to parse saved music from localStorage:', e)
       }
     }
-    return new Set()
+    return {}
   })
 
   // Handle saving a track from soundtrack to My Stuff
@@ -525,6 +711,23 @@ export default function RightPaneTabs({
     thumbnail: string
     fromMovie: string
   }) => {
+    // Check if already saved - prevent duplicates
+    if (savedMusicTracks[track.videoId]) {
+      console.log('Track already saved, skipping:', track.videoId)
+      return
+    }
+
+    // Also check loggedItems to prevent duplicates
+    const alreadyLogged = loggedItems.some(
+      item => item.mediaType === 'music' && item.videoId === track.videoId
+    )
+    if (alreadyLogged) {
+      console.log('Track already in logged items, skipping:', track.videoId)
+      // Still update savedMusicTracks state for UI consistency
+      setSavedMusicTracks(prev => ({ ...prev, [track.videoId]: true }))
+      return
+    }
+
     // Add to logged items as music
     const musicItem: LoggedItem = {
       id: Date.now(),
@@ -542,31 +745,34 @@ export default function RightPaneTabs({
 
     onAddLoggedItem?.(musicItem)
 
-    // Update saved tracks set
-    setSavedMusicTracks(prev => new Set(prev).add(track.videoId))
+    // Update saved tracks object
+    setSavedMusicTracks(prev => ({ ...prev, [track.videoId]: true }))
 
-    // Persist to localStorage
+    // Persist to localStorage (with duplicate check)
     const savedMusic = JSON.parse(localStorage.getItem('smartMediaLogger_savedMusic') || '[]')
-    savedMusic.push({
-      videoId: track.videoId,
-      title: track.title,
-      artist: track.artist,
-      thumbnail: track.thumbnail,
-      fromMovie: track.fromMovie,
-      savedAt: new Date().toISOString(),
-    })
-    localStorage.setItem('smartMediaLogger_savedMusic', JSON.stringify(savedMusic))
+    const alreadyInStorage = savedMusic.some((t: { videoId: string }) => t.videoId === track.videoId)
+    if (!alreadyInStorage) {
+      savedMusic.push({
+        videoId: track.videoId,
+        title: track.title,
+        artist: track.artist,
+        thumbnail: track.thumbnail,
+        fromMovie: track.fromMovie,
+        savedAt: new Date().toISOString(),
+      })
+      localStorage.setItem('smartMediaLogger_savedMusic', JSON.stringify(savedMusic))
+    }
 
     console.log('Saved music track:', track)
   }
 
   // Handle unsaving a track from soundtrack
   const handleUnsaveMusicTrack = (videoId: string) => {
-    // Remove from saved tracks set
+    // Remove from saved tracks object
     setSavedMusicTracks(prev => {
-      const newSet = new Set(prev)
-      newSet.delete(videoId)
-      return newSet
+      const newObj = { ...prev }
+      delete newObj[videoId]
+      return newObj
     })
 
     // Remove from localStorage
@@ -811,9 +1017,13 @@ export default function RightPaneTabs({
     })
   }
 
-  const tabs: { id: RightPaneTab; label: string; showCount?: boolean }[] = [
+  // Count drafts for badge
+  const draftsCount = loggedItems.filter(item => item.isDraft).length
+
+  const tabs: { id: RightPaneTab; label: string; showCount?: boolean; count?: number }[] = [
     { id: 'logging', label: 'Now' },
-    { id: 'upnext', label: 'My Queue', showCount: true },
+    { id: 'upnext', label: 'My Queue', showCount: true, count: upNextQueue.length },
+    { id: 'drafts', label: 'Drafts', showCount: true, count: draftsCount },
     { id: 'library', label: 'My Stuff' },
     { id: 'recs', label: 'Recommendations' },
     { id: 'profile', label: 'My Preferences & Data' },
@@ -830,9 +1040,9 @@ export default function RightPaneTabs({
   ]
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-full flex flex-col overflow-hidden rounded-2xl">
       {/* Main Tabs - Clean pill-style navigation */}
-      <div className="bg-gradient-to-r from-accent-blue to-accent-navy px-4 py-4">
+      <div className="bg-gradient-to-r from-accent-blue to-accent-navy px-4 py-4 mx-4 mt-4 rounded-xl">
         <div className="flex flex-wrap gap-2">
           {tabs.map((tab) => (
             <button
@@ -847,13 +1057,15 @@ export default function RightPaneTabs({
               `}
             >
               {tab.label}
-              {tab.showCount && hasMounted && (
+              {tab.showCount && hasMounted && tab.count !== undefined && tab.count > 0 && (
                 <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
                   activeTab === tab.id
                     ? 'bg-accent-blue text-white'
-                    : 'bg-white text-accent-blue'
+                    : tab.id === 'drafts'
+                      ? 'bg-amber-500 text-white'
+                      : 'bg-white text-accent-blue'
                 }`}>
-                  {upNextQueue.length}
+                  {tab.count}
                 </span>
               )}
             </button>
@@ -873,7 +1085,7 @@ export default function RightPaneTabs({
       )}
 
       {/* Tab Content */}
-      <div className="flex-1 overflow-y-auto p-6 bg-white">
+      <div className="flex-1 overflow-y-auto p-6 bg-white rounded-b-2xl">
         {/* NOW LOGGING TAB */}
         {activeTab === 'logging' && (
           <div>
@@ -1320,6 +1532,18 @@ export default function RightPaneTabs({
                   streamingOptions={currentEntry.streamingOptions}
                   videoId={currentEntry.videoId}
                   sourceUrl={currentEntry.sourceUrl}
+                  poster={currentEntry.poster}
+                  imdbRating={currentEntry.imdbRating}
+                  imdbUrl={currentEntry.imdbUrl}
+                  rated={currentEntry.rated}
+                  awards={currentEntry.awards}
+                  boxOffice={currentEntry.boxOffice}
+                  plot={currentEntry.plot}
+                  overview={currentEntry.overview}
+                  country={currentEntry.country}
+                  language={currentEntry.language}
+                  genres={currentEntry.genres}
+                  tmdbRating={currentEntry.tmdbRating}
                   isBuilding={isLogging}
                   onEdit={onEdit}
                   onTalentPreferenceChange={onTalentPreferenceChange}
@@ -1862,6 +2086,93 @@ export default function RightPaneTabs({
           </div>
         )}
 
+        {/* DRAFTS TAB */}
+        {activeTab === 'drafts' && (
+          <div>
+            <div className="mb-6">
+              <h2 className="text-xl font-bold text-ink-800 mb-2">Your Drafts</h2>
+              <p className="text-sm text-ink-500">Items you saved to finish logging later. Click to resume.</p>
+            </div>
+
+            {/* Draft Items */}
+            <div className="space-y-3">
+              {loggedItems.filter(item => item.isDraft).length > 0 ? (
+                loggedItems.filter(item => item.isDraft).map((item) => (
+                  <div
+                    key={item.id}
+                    className="bg-white rounded-xl overflow-hidden border-2 border-amber-400 shadow-md hover:shadow-lg transition-all hover:scale-[1.01]"
+                  >
+                    {/* Draft Banner */}
+                    <div className="bg-gradient-to-r from-amber-500 to-orange-500 px-4 py-2 flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-white">
+                        <span className="text-lg">⚠️</span>
+                        <span className="font-bold uppercase tracking-wide text-sm">Draft - Incomplete</span>
+                      </div>
+                      <span className="text-white/80 text-xs">Saved {item.addedAt}</span>
+                    </div>
+
+                    {/* Content */}
+                    <div className="p-4">
+                      <div className="flex gap-4">
+                        {/* Thumbnail */}
+                        {item.poster && (
+                          <img
+                            src={item.poster}
+                            alt={item.title}
+                            className="w-20 h-28 object-cover rounded-lg shadow"
+                          />
+                        )}
+                        <div className="flex-1">
+                          <h3 className="font-bold text-ink-800 text-lg">{item.title}</h3>
+                          <p className="text-sm text-ink-500">
+                            {item.year} {item.director && `• ${item.director}`}
+                          </p>
+                          {item.rating && (
+                            <p className="text-sm text-ink-600 mt-1">
+                              Rating so far: <span className="font-bold">{item.rating}%</span>
+                            </p>
+                          )}
+                          {item.notes && (
+                            <p className="text-sm text-ink-500 mt-1 italic truncate">
+                              "{item.notes}"
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Action Buttons */}
+                      <div className="flex gap-3 mt-4">
+                        <button
+                          onClick={() => onResumeDraft?.(item)}
+                          className="flex-1 px-4 py-3 bg-accent-blue text-white rounded-xl font-bold hover:bg-blue-700 transition-colors"
+                        >
+                          Resume Logging
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (confirm(`Delete draft "${item.title}"? This cannot be undone.`)) {
+                              onRemoveLoggedItem?.(item.id)
+                            }
+                          }}
+                          className="px-4 py-3 bg-red-100 text-red-600 rounded-xl font-bold hover:bg-red-200 transition-colors"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="text-center py-12 text-ink-500">
+                  <div className="text-4xl mb-4">📝</div>
+                  <p className="font-medium">No drafts</p>
+                  <p className="text-sm mt-2">When you save a log in progress, it'll appear here</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* LIBRARY TAB */}
         {activeTab === 'library' && (
           <div>
@@ -1909,9 +2220,9 @@ export default function RightPaneTabs({
               </div>
             </div>
 
-            {/* Logged Items - Accordion Style */}
+            {/* Logged Items - Accordion Style (excluding drafts - they go in Drafts tab) */}
             <div className="space-y-2">
-              {sortItems(filterItems(loggedItems, mediaFilter), sortMode).map((item) => {
+              {sortItems(filterItems(loggedItems.filter(i => !i.isDraft), mediaFilter), sortMode).map((item) => {
                 const isExpanded = expandedLibraryId === item.id
                 const hasExpandedItem = expandedLibraryId !== null
                 return (
@@ -1925,21 +2236,10 @@ export default function RightPaneTabs({
                           : 'border-paper-300 hover:border-accent-blue'
                     }`}
                   >
-                    {/* Draft Banner - Very prominent */}
-                    {item.isDraft && (
-                      <div className="bg-gradient-to-r from-amber-500 to-orange-500 px-4 py-2 flex items-center justify-between">
-                        <div className="flex items-center gap-2 text-white">
-                          <span className="text-lg">⚠️</span>
-                          <span className="font-bold uppercase tracking-wide text-sm">Draft - Incomplete</span>
-                        </div>
-                        <span className="text-white/80 text-xs">Click to resume</span>
-                      </div>
-                    )}
-
                     {/* Collapsed Header - Click to expand */}
                     <button
                       onClick={() => setExpandedLibraryId(isExpanded ? null : item.id)}
-                      className={`w-full p-4 text-left flex justify-between items-center hover:bg-paper-50 transition-colors ${item.isDraft ? 'border-l-4 border-amber-500' : ''}`}
+                      className="w-full p-4 text-left flex justify-between items-center hover:bg-paper-50 transition-colors"
                     >
                       <div className="flex-1">
                         {/* Media type badge for songs */}
@@ -1987,20 +2287,67 @@ export default function RightPaneTabs({
                     {isExpanded && (
                       <div className="border-t border-paper-300 animate-fade-in">
                         {/* MUSIC ITEMS - Video with collapsible info section */}
-                        {item.mediaType === 'music' ? (
+                        {item.mediaType === 'music' ? (() => {
+                          // Get all music tracks for navigation
+                          const allMusicTracks = sortItems(
+                            filterItems(loggedItems.filter(i => !i.isDraft), 'music'),
+                            sortMode
+                          ).filter(i => i.videoId)
+                          const currentIndex = allMusicTracks.findIndex(t => t.id === item.id)
+                          const hasPrev = currentIndex > 0
+                          const hasNext = currentIndex < allMusicTracks.length - 1
+                          const prevTrack = hasPrev ? allMusicTracks[currentIndex - 1] : null
+                          const nextTrack = hasNext ? allMusicTracks[currentIndex + 1] : null
+
+                          return (
                           <div>
-                            {/* YouTube Embed */}
+                            {/* YouTube Embed with autoplay and auto-advance */}
                             {item.videoId && (
                               <div className="bg-black">
-                                <iframe
-                                  src={`https://www.youtube.com/embed/${item.videoId}?autoplay=0`}
+                                <MusicYouTubePlayer
+                                  videoId={item.videoId}
                                   title={item.title}
-                                  className="w-full aspect-video"
-                                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                                  allowFullScreen
+                                  ytApiReady={ytApiReady}
+                                  onVideoEnd={() => {
+                                    if (nextTrack) {
+                                      setExpandedLibraryId(nextTrack.id)
+                                    }
+                                  }}
                                 />
                               </div>
                             )}
+
+                            {/* Navigation Controls */}
+                            {allMusicTracks.length > 1 && (
+                              <div className="flex items-center justify-between px-4 py-3 bg-gradient-to-r from-accent-blue/10 to-accent-navy/10 border-t border-accent-blue/20">
+                                <button
+                                  onClick={() => prevTrack && setExpandedLibraryId(prevTrack.id)}
+                                  disabled={!hasPrev}
+                                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg font-medium text-sm transition-colors ${
+                                    hasPrev
+                                      ? 'bg-white text-ink-700 hover:bg-accent-blue/10 border border-accent-blue/30'
+                                      : 'bg-paper-100 text-ink-400 cursor-not-allowed'
+                                  }`}
+                                >
+                                  ⏮ Previous
+                                </button>
+                                <span className="text-sm text-ink-500 font-medium">
+                                  {currentIndex + 1} of {allMusicTracks.length}
+                                </span>
+                                <button
+                                  onClick={() => nextTrack && setExpandedLibraryId(nextTrack.id)}
+                                  disabled={!hasNext}
+                                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg font-medium text-sm transition-colors ${
+                                    hasNext
+                                      ? 'bg-accent-blue text-white hover:bg-accent-navy'
+                                      : 'bg-paper-100 text-ink-400 cursor-not-allowed'
+                                  }`}
+                                >
+                                  Next ⏭
+                                </button>
+                              </div>
+                            )}
+
                             {/* Collapsible info toggle */}
                             <button
                               onClick={() => setExpandedMusicInfoId(expandedMusicInfoId === item.id ? null : item.id)}
@@ -2082,7 +2429,8 @@ export default function RightPaneTabs({
                               </div>
                             )}
                           </div>
-                        ) : (
+                          )
+                        })() : (
                           <div className="p-5 bg-gradient-to-b from-accent-blue/5 to-white space-y-4">
                             <MediaCard
                               entryNumber={0}
@@ -2093,6 +2441,49 @@ export default function RightPaneTabs({
                               rating={item.rating}
                               dateWatched={item.dateConsumed}
                               isBuilding={true}
+                              // Crew
+                              cinematographer={item.cinematographer}
+                              composer={item.composer}
+                              starring={item.cast?.map(c => c.name)}
+                              cast={item.cast}
+                              runtime={item.runtime}
+                              // Critic scores
+                              metacriticScore={item.metacriticScore}
+                              rottenTomatoesScore={item.rottenTomatoesScore}
+                              metacriticUrl={item.metacriticUrl}
+                              rottenTomatoesUrl={item.rottenTomatoesUrl}
+                              metacriticData={item.metacriticData}
+                              rottenTomatoesData={item.rottenTomatoesData}
+                              imdbRating={item.imdbRating}
+                              imdbUrl={item.imdbUrl}
+                              // Rich metadata
+                              poster={item.poster}
+                              videoId={item.videoId || item.trailerVideoId}
+                              trailerUrl={item.trailerUrl}
+                              sourceUrl={item.sourceUrl}
+                              rated={item.rated}
+                              awards={item.awards}
+                              boxOffice={item.boxOffice}
+                              plot={item.plot}
+                              overview={item.overview}
+                              country={item.country}
+                              language={item.language}
+                              genres={item.genres}
+                              tmdbRating={item.tmdbRating}
+                              // Experience
+                              location={item.location}
+                              locationDetail={item.locationDetail}
+                              firstTime={item.firstTime}
+                              socialContext={item.socialContext}
+                              companionNames={item.companionNames}
+                              notes={item.notes}
+                              // Talent preferences
+                              initialTalentPreferences={talentPreferences}
+                              onTalentPreferenceChange={onTalentPreferenceChange}
+                              // Soundtrack
+                              onSaveTrack={handleSaveMusicTrack}
+                              onUnsaveTrack={handleUnsaveMusicTrack}
+                              savedTracks={savedMusicTracks}
                               onEdit={(changes) => {
                                 if (changes.rating !== undefined) {
                                   onUpdateLoggedItem?.(item.id, { rating: changes.rating })
@@ -2100,6 +2491,16 @@ export default function RightPaneTabs({
                                 console.log('Updated entry:', { id: item.id, changes })
                               }}
                             />
+
+                            {/* Cast, Scenes & Videos Gallery */}
+                            {(item.mediaType === 'movie' || item.mediaType === 'tv') && (item.tmdbId || item.title) && (
+                              <CharacterGallery
+                                movieTitle={item.title}
+                                movieYear={item.year}
+                                movieId={item.tmdbId?.toString()}
+                              />
+                            )}
+
                             <div className="bg-paper-100 rounded-xl p-4 space-y-3">
                               <h4 className="font-bold text-ink-800 flex items-center gap-2 text-sm">
                                 <span>📝</span> Your Experience

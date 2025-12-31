@@ -34,9 +34,23 @@ export async function GET(request: NextRequest) {
     // Extract metadata from the page
     const metadata = extractMetadata(html, videoId)
 
-    // Check if this looks like a movie/TV trailer and try to fetch TMDB data
-    const trailerInfo = detectTrailer(metadata.title || '')
-    if (trailerInfo.isTrailer && trailerInfo.mediaTitle) {
+    // Check if this looks like a movie/TV/documentary and try to fetch TMDB data
+    const trailerInfo = detectMediaContent(metadata.title || '', metadata.description || '')
+
+    // Always include detection info so frontend can show confirmation if needed
+    metadata.detectionInfo = {
+      isTrailer: trailerInfo.isTrailer,
+      isDocumentary: trailerInfo.isDocumentary,
+      isFilm: trailerInfo.isFilm,
+      needsConfirmation: trailerInfo.needsConfirmation,
+      confidence: trailerInfo.confidence,
+      clues: trailerInfo.clues,
+      suggestedTitle: trailerInfo.mediaTitle,
+      suggestedYear: trailerInfo.year,
+      suggestedType: trailerInfo.isDocumentary ? 'movie' : trailerInfo.mediaType,
+    }
+
+    if ((trailerInfo.isTrailer || trailerInfo.isDocumentary || trailerInfo.isFilm) && trailerInfo.mediaTitle) {
       const tmdbData = await fetchTMDBData(trailerInfo.mediaTitle, trailerInfo.year)
       if (tmdbData) {
         // Enhance metadata with TMDB data
@@ -135,11 +149,25 @@ function extractYouTubeId(url: string): string | null {
   return null
 }
 
-// Detect if this is a movie/TV trailer and extract the title
-function detectTrailer(title: string): { isTrailer: boolean; mediaTitle?: string; year?: number; mediaType?: 'movie' | 'tv' } {
+// Detect if this is a movie/TV/documentary and extract the title
+// Now checks both title AND description for clues
+function detectMediaContent(title: string, description: string): {
+  isTrailer: boolean
+  isDocumentary: boolean
+  isFilm: boolean
+  needsConfirmation: boolean
+  mediaTitle?: string
+  year?: number
+  mediaType?: 'movie' | 'tv'
+  confidence: 'high' | 'medium' | 'low'
+  clues: string[]
+} {
   const titleLower = title.toLowerCase()
+  const descLower = description.toLowerCase()
+  const combined = titleLower + ' ' + descLower
+  const clues: string[] = []
 
-  // Common trailer patterns
+  // Common trailer patterns (high confidence)
   const trailerPatterns = [
     /official\s+trailer/i,
     /official\s+teaser/i,
@@ -153,24 +181,122 @@ function detectTrailer(title: string): { isTrailer: boolean; mediaTitle?: string
     /new\s+trailer/i,
   ]
 
-  const isTrailer = trailerPatterns.some(pattern => pattern.test(titleLower))
+  // Documentary indicators
+  const documentaryPatterns = [
+    /documentary/i,
+    /docuseries/i,
+    /docu-series/i,
+    /true story/i,
+    /real story/i,
+  ]
 
-  if (!isTrailer) {
-    return { isTrailer: false }
+  // Film/movie indicators (medium confidence)
+  const filmPatterns = [
+    /world\s+premiere/i,
+    /film\s+premiere/i,
+    /movie\s+premiere/i,
+    /coming\s+to\s+theaters/i,
+    /in\s+theaters/i,
+    /in\s+cinemas/i,
+    /feature\s+film/i,
+    /motion\s+picture/i,
+    /directed\s+by/i,
+    /starring/i,
+    /a\s+film\s+by/i,
+    /produced\s+by/i,
+    /from\s+the\s+director/i,
+    /academy\s+award/i,
+    /oscar/i,
+    /sundance/i,
+    /cannes/i,
+    /tribeca/i,
+    /film\s+festival/i,
+    /netflix\s+film/i,
+    /amazon\s+original/i,
+    /hbo\s+original/i,
+    /apple\s+original/i,
+    /hulu\s+original/i,
+  ]
+
+  const isTrailer = trailerPatterns.some(pattern => pattern.test(titleLower))
+  const isDocumentary = documentaryPatterns.some(pattern => {
+    if (pattern.test(combined)) {
+      clues.push(`Found "${pattern.source}" in content`)
+      return true
+    }
+    return false
+  })
+  const isFilm = filmPatterns.some(pattern => {
+    if (pattern.test(combined)) {
+      clues.push(`Found "${pattern.source}" in content`)
+      return true
+    }
+    return false
+  })
+
+  // If nothing detected, return early
+  if (!isTrailer && !isDocumentary && !isFilm) {
+    return {
+      isTrailer: false,
+      isDocumentary: false,
+      isFilm: false,
+      needsConfirmation: false,
+      confidence: 'low',
+      clues: []
+    }
   }
 
-  // Extract the movie/show title by removing common trailer suffixes
+  // Determine confidence level
+  let confidence: 'high' | 'medium' | 'low' = 'low'
+  if (isTrailer) {
+    confidence = 'high'
+    clues.push('Contains trailer keywords')
+  } else if (isDocumentary) {
+    confidence = 'high'
+    clues.push('Identified as documentary')
+  } else if (isFilm && clues.length >= 2) {
+    confidence = 'medium'
+  } else if (isFilm) {
+    confidence = 'low'
+  }
+
+  // Extract the movie/show title by removing common suffixes
   let mediaTitle = title
-    .replace(/\s*[\|\-–]\s*(Official\s+)?(Movie\s+)?(Final\s+)?(New\s+)?(Teaser\s+)?Trailer.*$/i, '')
-    .replace(/\s*Official\s+Trailer.*$/i, '')
-    .replace(/\s*Trailer\s*\d*.*$/i, '')
-    .replace(/\s*\(Official\).*$/i, '')
-    .replace(/\s*HD\s*$/i, '')
-    .replace(/\s*4K\s*$/i, '')
+
+  console.log('Title extraction - Original title:', title)
+
+  // First, check if title is in quotes - extract just the quoted part
+  // Handle both straight quotes ('") and smart/curly quotes (''""）
+  const quotedMatch = title.match(/['''""]([^''""\u2018\u2019\u201C\u201D]+)['''""]/)
+  if (quotedMatch) {
+    mediaTitle = quotedMatch[1]
+    console.log('Title extraction - Found quoted title:', mediaTitle)
+  } else {
+    // Remove common suffixes and trailer text
+    mediaTitle = title
+      .replace(/\s*[\|\-–:]\s*(exclusive\s+)?(first\s+)?(look|preview|clip|sneak\s+peek).*$/i, '')
+      .replace(/\s*[\|\-–:]\s*(world\s+)?(film\s+)?(premiere).*$/i, '')
+      .replace(/\s*[\|\-–]\s*(Official\s+)?(Movie\s+)?(Final\s+)?(New\s+)?(Teaser\s+)?Trailer.*$/i, '')
+      .replace(/\s*Official\s+Trailer.*$/i, '')
+      .replace(/\s*Trailer\s*\d*.*$/i, '')
+      .replace(/\s*\(Official\).*$/i, '')
+      .replace(/\s*[\|\-–]\s*Documentary.*$/i, '')
+      .replace(/\s*HD\s*$/i, '')
+      .replace(/\s*4K\s*$/i, '')
+      .replace(/\s*[\|\-–:]\s*$/, '') // Remove trailing separators
+      .trim()
+  }
+
+  // Clean up any remaining quotes and punctuation (voice-to-text often adds periods)
+  mediaTitle = mediaTitle
+    .replace(/^['''""\s]+|['''""\s]+$/g, '')  // Remove quotes from start/end
+    .replace(/^[.,!?;:\s]+|[.,!?;:\s]+$/g, '') // Remove punctuation from start/end
     .trim()
 
-  // Try to extract year from the title
-  const yearMatch = mediaTitle.match(/\((\d{4})\)/)
+  console.log('Title extraction - Final cleaned title:', mediaTitle)
+
+  // Try to extract year from the title or description
+  const yearMatch = mediaTitle.match(/\((\d{4})\)/) || description.match(/\((\d{4})\)/) || description.match(/(\d{4})\s*(film|movie|documentary)/i)
   let year: number | undefined
   if (yearMatch) {
     year = parseInt(yearMatch[1])
@@ -178,10 +304,34 @@ function detectTrailer(title: string): { isTrailer: boolean; mediaTitle?: string
   }
 
   // Check if it might be a TV show
-  const tvIndicators = ['season', 'series', 'episode', 's0', 's1', 's2']
-  const mediaType = tvIndicators.some(ind => titleLower.includes(ind)) ? 'tv' : 'movie'
+  const tvIndicators = ['season', 'series', 'episode', 's0', 's1', 's2', 'miniseries', 'mini-series']
+  const mediaType = tvIndicators.some(ind => combined.includes(ind)) ? 'tv' : 'movie'
 
-  return { isTrailer: true, mediaTitle, year, mediaType }
+  // Need confirmation if confidence is not high
+  const needsConfirmation = confidence !== 'high'
+
+  return {
+    isTrailer,
+    isDocumentary,
+    isFilm,
+    needsConfirmation,
+    mediaTitle,
+    year,
+    mediaType,
+    confidence,
+    clues
+  }
+}
+
+// Legacy function name for compatibility
+function detectTrailer(title: string): { isTrailer: boolean; mediaTitle?: string; year?: number; mediaType?: 'movie' | 'tv' } {
+  const result = detectMediaContent(title, '')
+  return {
+    isTrailer: result.isTrailer,
+    mediaTitle: result.mediaTitle,
+    year: result.year,
+    mediaType: result.mediaType
+  }
 }
 
 // Fetch movie/TV data from TMDB
@@ -209,32 +359,82 @@ async function fetchTMDBData(title: string, year?: number): Promise<{
   imdbUrl?: string
 } | null> {
   try {
-    // Clean up title - remove brackets, extra info
+    // Clean up title - remove brackets, extra info, quotes, punctuation
     const cleanTitle = title
       .replace(/\[.*?\]/g, '')  // Remove [anything]
       .replace(/\(.*?\)/g, '')  // Remove (anything)
+      .replace(/[''""'"]/g, '') // Remove all quotes
+      .replace(/:\s*exclusive.*$/i, '') // Remove ": exclusive..." suffix
+      .replace(/:\s*official.*$/i, '')  // Remove ": official..." suffix
+      .replace(/:\s*first\s+look.*$/i, '') // Remove ": first look..." suffix
+      .replace(/[.,!?;:]+$/g, '') // Remove trailing punctuation
       .trim()
 
-    // Search for the movie/TV show - first try with year
-    let searchUrl = `https://api.themoviedb.org/3/search/multi?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(cleanTitle)}${year ? `&year=${year}` : ''}`
-    let searchResponse = await fetch(searchUrl)
+    console.log('TMDB search - Clean title:', cleanTitle)
 
-    if (!searchResponse.ok) {
-      console.log('TMDB search failed')
-      return null
+    // SMART SEARCH: Try multiple strategies
+    let result = null
+
+    // Strategy 1: Exact search with year
+    if (!result) {
+      const searchUrl = `https://api.themoviedb.org/3/search/multi?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(cleanTitle)}${year ? `&year=${year}` : ''}`
+      const searchResponse = await fetch(searchUrl)
+      if (searchResponse.ok) {
+        const searchData = await searchResponse.json()
+        result = searchData.results?.find((r: any) => r.media_type === 'movie' || r.media_type === 'tv')
+        if (result) console.log('TMDB found with exact search:', result.title || result.name)
+      }
     }
 
-    let searchData = await searchResponse.json()
-    let result = searchData.results?.find((r: any) => r.media_type === 'movie' || r.media_type === 'tv')
-
-    // If no result with year, try without year
+    // Strategy 2: Search without year
     if (!result && year) {
-      console.log('No result with year, trying without year for:', cleanTitle)
-      searchUrl = `https://api.themoviedb.org/3/search/multi?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(cleanTitle)}`
-      searchResponse = await fetch(searchUrl)
+      console.log('Trying without year...')
+      const searchUrl = `https://api.themoviedb.org/3/search/multi?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(cleanTitle)}`
+      const searchResponse = await fetch(searchUrl)
       if (searchResponse.ok) {
-        searchData = await searchResponse.json()
+        const searchData = await searchResponse.json()
         result = searchData.results?.find((r: any) => r.media_type === 'movie' || r.media_type === 'tv')
+        if (result) console.log('TMDB found without year:', result.title || result.name)
+      }
+    }
+
+    // Strategy 3: Try removing common words and searching key terms
+    if (!result) {
+      const keyWords = cleanTitle
+        .replace(/\b(the|a|an|of|and|in|on|at|to|for|with|by)\b/gi, '')
+        .replace(/\s+/g, ' ')
+        .trim()
+      if (keyWords !== cleanTitle && keyWords.length > 3) {
+        console.log('Trying key words:', keyWords)
+        const searchUrl = `https://api.themoviedb.org/3/search/multi?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(keyWords)}`
+        const searchResponse = await fetch(searchUrl)
+        if (searchResponse.ok) {
+          const searchData = await searchResponse.json()
+          result = searchData.results?.find((r: any) => r.media_type === 'movie' || r.media_type === 'tv')
+          if (result) console.log('TMDB found with key words:', result.title || result.name)
+        }
+      }
+    }
+
+    // Strategy 4: Try first few significant words only
+    if (!result) {
+      const words = cleanTitle.split(/\s+/).filter(w => w.length > 2)
+      if (words.length > 2) {
+        const shortTitle = words.slice(0, 3).join(' ')
+        console.log('Trying short title:', shortTitle)
+        const searchUrl = `https://api.themoviedb.org/3/search/multi?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(shortTitle)}`
+        const searchResponse = await fetch(searchUrl)
+        if (searchResponse.ok) {
+          const searchData = await searchResponse.json()
+          // For partial matches, check if original title contains result title or vice versa
+          result = searchData.results?.find((r: any) => {
+            if (r.media_type !== 'movie' && r.media_type !== 'tv') return false
+            const resultTitle = (r.title || r.name || '').toLowerCase()
+            const originalLower = cleanTitle.toLowerCase()
+            return resultTitle.includes(originalLower) || originalLower.includes(resultTitle)
+          })
+          if (result) console.log('TMDB found with short title:', result.title || result.name)
+        }
       }
     }
 
@@ -496,6 +696,18 @@ function extractMetadata(html: string, videoId: string) {
       criticReviews?: number
       consensus?: string
       url: string
+    }
+    // Detection info for confirmation prompts
+    detectionInfo?: {
+      isTrailer: boolean
+      isDocumentary: boolean
+      isFilm: boolean
+      needsConfirmation: boolean
+      confidence: 'high' | 'medium' | 'low'
+      clues: string[]
+      suggestedTitle?: string
+      suggestedYear?: number
+      suggestedType?: 'movie' | 'tv'
     }
   } = { videoId }
 

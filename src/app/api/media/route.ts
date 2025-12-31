@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
     where: {
       OR: [
         { title: { contains: query } },
-        { director: { contains: query } },
+        { creators: { contains: query } },
       ],
       ...(type ? { mediaType: type } : {}),
     },
