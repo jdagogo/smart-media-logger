@@ -3,13 +3,17 @@ import { NextRequest, NextResponse } from 'next/server'
 const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY || 'AIzaSyAcAPLUflo9lDlsexKFzr5FHvvgGvF0xb8'
 
 // Manual playlist overrides for movies where auto-search returns wrong results
+// Use "movie title:music" key for Music From overrides
 const PLAYLIST_OVERRIDES: Record<string, string> = {
   'american hustle': 'PLdDuA6zKmNDNkQOJhYugEL2BfxqL6So-t',
+  'marty supreme:music': 'PLcAZ6vjRR64Qkm4YK5jBuoJaDlpPTHBqF', // Music from Marty Supreme
 }
 
 export async function GET(request: NextRequest) {
   const playlistId = request.nextUrl.searchParams.get('playlistId')
   const movieTitle = request.nextUrl.searchParams.get('movieTitle')
+  const searchType = request.nextUrl.searchParams.get('searchType') || 'score' // 'score' or 'music'
+  const composer = request.nextUrl.searchParams.get('composer')
 
   try {
     let targetPlaylistId = playlistId
@@ -17,15 +21,32 @@ export async function GET(request: NextRequest) {
     // Check for manual override first
     if (!targetPlaylistId && movieTitle) {
       const normalizedTitle = movieTitle.toLowerCase().trim()
-      if (PLAYLIST_OVERRIDES[normalizedTitle]) {
+      const overrideKey = searchType === 'music' ? `${normalizedTitle}:music` : normalizedTitle
+      if (PLAYLIST_OVERRIDES[overrideKey]) {
+        targetPlaylistId = PLAYLIST_OVERRIDES[overrideKey]
+        console.log('Using manual override for:', movieTitle, searchType, '-> Playlist ID:', targetPlaylistId)
+      } else if (PLAYLIST_OVERRIDES[normalizedTitle]) {
         targetPlaylistId = PLAYLIST_OVERRIDES[normalizedTitle]
         console.log('Using manual override for:', movieTitle, '-> Playlist ID:', targetPlaylistId)
       }
     }
 
-    // If no playlist ID and no override, search for "[Movie Title] Soundtrack" playlist
+    // If no playlist ID and no override, search based on type
     if (!targetPlaylistId && movieTitle) {
-      const searchQuery = `${movieTitle} soundtrack playlist`
+      let searchQuery: string
+
+      if (searchType === 'music') {
+        // Search for licensed songs / music from the film
+        searchQuery = `${movieTitle} music from songs playlist`
+      } else {
+        // Search for original score
+        if (composer) {
+          searchQuery = `${composer} ${movieTitle} original score`
+        } else {
+          searchQuery = `${movieTitle} original score soundtrack`
+        }
+      }
+
       const searchUrl = new URL('https://www.googleapis.com/youtube/v3/search')
       searchUrl.searchParams.set('part', 'snippet')
       searchUrl.searchParams.set('q', searchQuery)
@@ -33,7 +54,7 @@ export async function GET(request: NextRequest) {
       searchUrl.searchParams.set('maxResults', '5')
       searchUrl.searchParams.set('key', YOUTUBE_API_KEY)
 
-      console.log('Searching YouTube for playlist:', searchQuery)
+      console.log('Searching YouTube for playlist:', searchQuery, '(type:', searchType, ')')
 
       const searchResponse = await fetch(searchUrl.toString())
       if (!searchResponse.ok) {
@@ -45,7 +66,8 @@ export async function GET(request: NextRequest) {
       const searchData = await searchResponse.json()
 
       if (!searchData.items || searchData.items.length === 0) {
-        return NextResponse.json({ error: 'No soundtrack playlist found' }, { status: 404 })
+        const typeLabel = searchType === 'music' ? 'music' : 'original score'
+        return NextResponse.json({ error: `No ${typeLabel} playlist found` }, { status: 404 })
       }
 
       // Score playlists to find the most relevant one
@@ -57,13 +79,31 @@ export async function GET(request: NextRequest) {
         const titleLower = item.snippet.title.toLowerCase()
         const movieLower = movieTitle.toLowerCase()
 
-        // Score based on title matching
-        if (titleLower.includes('soundtrack')) score += 10
-        if (titleLower.includes('ost')) score += 8
-        if (titleLower.includes('official')) score += 5
+        // Base score for containing movie title
         if (titleLower.includes(movieLower)) score += 15
 
-        // Penalize covers, remixes, etc.
+        if (searchType === 'music') {
+          // For "Music From" tab - prefer playlists with songs/music from
+          if (titleLower.includes('music from')) score += 12
+          if (titleLower.includes('songs from')) score += 12
+          if (titleLower.includes('songs in')) score += 10
+          if (titleLower.includes('featured')) score += 5
+          // Penalize score-focused results
+          if (titleLower.includes('original score')) score -= 10
+          if (titleLower.includes('composed by')) score -= 8
+        } else {
+          // For "Original Score" tab - prefer score/OST playlists
+          if (titleLower.includes('original score')) score += 15
+          if (titleLower.includes('ost')) score += 10
+          if (titleLower.includes('soundtrack')) score += 8
+          if (titleLower.includes('official')) score += 5
+          if (composer && titleLower.includes(composer.toLowerCase())) score += 10
+          // Penalize song compilations
+          if (titleLower.includes('songs from')) score -= 8
+          if (titleLower.includes('music from')) score -= 5
+        }
+
+        // General penalties
         if (titleLower.includes('cover')) score -= 10
         if (titleLower.includes('remix')) score -= 5
         if (titleLower.includes('karaoke')) score -= 20
@@ -75,7 +115,7 @@ export async function GET(request: NextRequest) {
       }
 
       targetPlaylistId = bestMatch.id.playlistId
-      console.log('Found playlist:', bestMatch.snippet.title, 'ID:', targetPlaylistId)
+      console.log('Found playlist:', bestMatch.snippet.title, 'ID:', targetPlaylistId, 'Score:', bestScore)
     }
 
     if (!targetPlaylistId) {

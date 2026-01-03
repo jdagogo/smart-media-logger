@@ -78,7 +78,7 @@ async function searchTMDB(title: string, year?: number, mediaType: string = 'mov
 }
 
 async function fetchTMDBDetails(tmdbId: number, mediaType: string = 'movie') {
-  const detailsUrl = `https://api.themoviedb.org/3/${mediaType}/${tmdbId}?api_key=${TMDB_API_KEY}&append_to_response=credits,videos`
+  const detailsUrl = `https://api.themoviedb.org/3/${mediaType}/${tmdbId}?api_key=${TMDB_API_KEY}&append_to_response=credits,videos,images`
   const response = await fetch(detailsUrl)
 
   if (!response.ok) return null
@@ -130,6 +130,35 @@ async function fetchTMDBDetails(tmdbId: number, mediaType: string = 'movie') {
     (v: any) => v.type === 'Trailer' && v.site === 'YouTube'
   )
 
+  // Get all videos (trailers, clips, featurettes, etc.)
+  const videos = details.videos?.results?.map((v: any) => ({
+    id: v.id,
+    key: v.key,
+    name: v.name,
+    site: v.site,
+    type: v.type,
+    official: v.official,
+  })) || []
+
+  // Get images (backdrops, posters, stills)
+  const images = {
+    backdrops: details.images?.backdrops?.slice(0, 10).map((img: any) => ({
+      path: `https://image.tmdb.org/t/p/w1280${img.file_path}`,
+      width: img.width,
+      height: img.height,
+    })) || [],
+    posters: details.images?.posters?.slice(0, 5).map((img: any) => ({
+      path: `https://image.tmdb.org/t/p/w500${img.file_path}`,
+      width: img.width,
+      height: img.height,
+    })) || [],
+    stills: details.images?.stills?.slice(0, 10).map((img: any) => ({
+      path: `https://image.tmdb.org/t/p/w780${img.file_path}`,
+      width: img.width,
+      height: img.height,
+    })) || [],
+  }
+
   return {
     tmdbId,
     title: mediaType === 'movie' ? details.title : details.name,
@@ -161,6 +190,9 @@ async function fetchTMDBDetails(tmdbId: number, mediaType: string = 'movie') {
     // Trailer
     trailerUrl: trailer ? `https://www.youtube.com/embed/${trailer.key}` : undefined,
     trailerVideoId: trailer?.key,
+    // All videos and images
+    videos,
+    images,
     // URLs for linking
     metacriticUrl: `https://www.metacritic.com/${mediaType}/${(mediaType === 'movie' ? details.title : details.name).toLowerCase().replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-')}`,
     rottenTomatoesUrl: `https://www.rottentomatoes.com/${mediaType === 'movie' ? 'm' : 'tv'}/${(mediaType === 'movie' ? details.title : details.name).toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, '_')}`,

@@ -1,12 +1,13 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import VoiceInput from '@/components/shared/VoiceInput'
 import RatingSlider from '@/components/shared/RatingSlider'
 import RightPaneTabs, { LoggedItem } from '@/components/right-pane/RightPaneTabs'
 import QuestionCard from '@/components/left-pane/QuestionCard'
 import CharacterGallery, { CharacterSceneNote } from '@/components/CharacterGallery'
 import SoundtrackModal from '@/components/right-pane/SoundtrackModal'
+import DatePicker from '@/components/DatePicker'
 
 // Types
 interface StreamingOption {
@@ -147,9 +148,17 @@ interface LogData {
 
 // Talent preference tracking
 type TalentPreference = 'loved' | 'not-for-me' | null
+type TalentRole = 'director' | 'actor' | 'cinematographer' | 'composer' | 'writer' | 'producer' | 'musician' | 'band'
 
+interface TalentPreferenceEntry {
+  preference: TalentPreference
+  role: TalentRole
+}
+
+// Legacy format for backwards compatibility: just the preference
+// New format: { preference, role }
 interface TalentPreferenceData {
-  [name: string]: TalentPreference
+  [name: string]: TalentPreference | TalentPreferenceEntry
 }
 
 // Comprehensive user interaction tracking for AI-enhanced questions
@@ -296,6 +305,7 @@ function CompleteStep({
   setSelectedMedia,
   setQuestionIndex,
   setCharacterSceneNotes,
+  setRightPaneTab,
 }: {
   logData: LogData
   updateLogData: (updates: Partial<LogData>) => void
@@ -304,6 +314,7 @@ function CompleteStep({
   setSelectedMedia: (media: MediaResult | null) => void
   setQuestionIndex: (index: number) => void
   setCharacterSceneNotes: (notes: CharacterSceneNote[]) => void
+  setRightPaneTab: (tab: 'logging' | 'upnext' | 'drafts' | 'library' | 'recs' | 'profile') => void
 }) {
   const [followUpQuestions, setFollowUpQuestions] = useState<string[]>([])
   const [isLoadingQuestions, setIsLoadingQuestions] = useState(true)
@@ -434,9 +445,24 @@ function CompleteStep({
             setStep('search')
             setSearchQuery('')
             setSelectedMedia(null)
-            updateLogData({ mediaType: 'movie', title: '' })
+            // Reset ALL fields including experience data
+            updateLogData({
+              mediaType: 'movie',
+              title: '',
+              // Clear experience fields
+              consumptionDate: undefined,
+              location: undefined,
+              locationDetail: undefined,
+              firstTime: undefined,
+              socialContext: undefined,
+              companionNames: undefined,
+              overallRating: undefined,
+              notes: undefined,
+            })
             setQuestionIndex(0)
             setCharacterSceneNotes([])
+            // Auto-switch to the Now tab for the new log
+            setRightPaneTab('logging')
           }}
           className="px-6 py-3 bg-accent-blue text-white rounded-lg hover:bg-blue-600 transition-colors font-bold"
         >
@@ -611,9 +637,6 @@ export default function Home() {
     }
   }, [])
 
-  // Entry number (would come from database in real app)
-  const [entryNumber] = useState(1)
-
   // Up Next queue - shared between search and RightPaneTabs
   // Initialize from localStorage or empty array
   const [upNextQueue, setUpNextQueue] = useState<QueueItem[]>(() => {
@@ -637,7 +660,23 @@ export default function Home() {
       const saved = localStorage.getItem('smartMediaLogger_logged')
       if (saved) {
         try {
-          return JSON.parse(saved)
+          const items = JSON.parse(saved)
+          // One-time deduplication: keep first occurrence of each title+year
+          const seen = new Set<string>()
+          const deduplicated = items.filter((item: LoggedItem) => {
+            const key = `${item.title}-${item.year}`
+            if (seen.has(key)) {
+              return false
+            }
+            seen.add(key)
+            return true
+          })
+          // If we removed duplicates, save the cleaned version
+          if (deduplicated.length < items.length) {
+            console.log(`Deduplicated logged items: removed ${items.length - deduplicated.length} duplicates`)
+            localStorage.setItem('smartMediaLogger_logged', JSON.stringify(deduplicated))
+          }
+          return deduplicated
         } catch (e) {
           console.error('Failed to parse logged items from localStorage:', e)
         }
@@ -646,25 +685,78 @@ export default function Home() {
     return []
   })
 
-  // Add logged item callback
-  const addLoggedItem = (item: LoggedItem) => {
-    setLoggedItems(prev => [item, ...prev])
-  }
+  // Entry number - count ALL items of the same media type (including drafts) + 1
+  const entryNumber = useMemo(() => {
+    const countOfType = loggedItems.filter(
+      item => item.mediaType === logData.mediaType
+    ).length
+    return countOfType + 1
+  }, [loggedItems, logData.mediaType])
+
+  // Theater history for autofill - load from localStorage
+  const [theaterHistory, setTheaterHistory] = useState<string[]>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('smartMediaLogger_theaters')
+      if (saved) {
+        try {
+          return JSON.parse(saved)
+        } catch (e) {
+          console.error('Failed to parse theater history:', e)
+        }
+      }
+    }
+    return []
+  })
+
+  // Save theater history to localStorage when it changes
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('smartMediaLogger_theaters', JSON.stringify(theaterHistory))
+    }
+  }, [theaterHistory])
+
+  // Auto-fill theater when location is set to "theater"
+  useEffect(() => {
+    if (logData.location === 'theater' && !logData.locationDetail && theaterHistory.length > 0) {
+      // Auto-fill with the most recently used theater
+      updateLogData({ locationDetail: theaterHistory[0] })
+    }
+  }, [logData.location])
+
+  // Add logged item callback - memoized to prevent useEffect re-runs
+  const addLoggedItem = useCallback((item: LoggedItem) => {
+    setLoggedItems(prev => {
+      // Check for duplicates by id
+      if (prev.some(existing => existing.id === item.id)) {
+        return prev
+      }
+      return [item, ...prev]
+    })
+  }, [])
 
   // Update logged item callback
-  const updateLoggedItem = (id: number, changes: Partial<LoggedItem>) => {
+  const updateLoggedItem = useCallback((id: number, changes: Partial<LoggedItem>) => {
     setLoggedItems(prev => prev.map(item =>
       item.id === id ? { ...item, ...changes } : item
     ))
-  }
+  }, [])
 
   // Remove logged item callback
-  const removeLoggedItem = (id: number) => {
+  const removeLoggedItem = useCallback((id: number) => {
     setLoggedItems(prev => prev.filter(item => item.id !== id))
-  }
+  }, [])
 
   // Resume draft - load draft data back into logging flow
   const handleResumeDraft = (item: LoggedItem) => {
+    // Clear stale state from previous searches/URLs
+    setUrlMetadata(null)
+    setSearchResults([])
+    setSelectedMedia(null)
+    setSearchQuery('')
+
+    // Auto-switch to the Now tab when resuming a draft
+    setRightPaneTab('logging')
+
     // Load all the data back into logData
     updateLogData({
       mediaType: item.mediaType,
@@ -725,8 +817,9 @@ export default function Home() {
       notes: item.notes,
     })
 
-    // Remove from loggedItems since we're resuming
-    removeLoggedItem(item.id)
+    // Store the draft ID - we'll only remove it when logging is COMPLETED (not abandoned)
+    // This prevents data loss if user refreshes or cancels
+    resumingDraftIdRef.current = item.id
 
     // Determine the correct step to resume from based on what's already filled
     // Work backwards from the end to find the first incomplete step
@@ -825,8 +918,18 @@ export default function Home() {
       isDraft: true,
     }
 
-    addLoggedItem(newLoggedItem)
-    console.log('Saved & Exited:', newLoggedItem)
+    // If we're resuming a draft, update the existing one instead of creating a duplicate
+    if (resumingDraftIdRef.current !== null) {
+      // Update the existing draft with new data
+      const updatedItem = { ...newLoggedItem, id: resumingDraftIdRef.current }
+      removeLoggedItem(resumingDraftIdRef.current)
+      addLoggedItem(updatedItem)
+      console.log('Updated existing draft:', updatedItem)
+      resumingDraftIdRef.current = null
+    } else {
+      addLoggedItem(newLoggedItem)
+      console.log('Saved & Exited:', newLoggedItem)
+    }
 
     // Clear draft since we've saved
     localStorage.removeItem('smartMediaLogger_draft')
@@ -838,7 +941,20 @@ export default function Home() {
     setStep('search')
     setSearchQuery('')
     setSelectedMedia(null)
-    updateLogData({ mediaType: 'movie', title: '' })
+    // Reset ALL fields including experience data
+    updateLogData({
+      mediaType: 'movie',
+      title: '',
+      // Clear experience fields
+      consumptionDate: undefined,
+      location: undefined,
+      locationDetail: undefined,
+      firstTime: undefined,
+      socialContext: undefined,
+      companionNames: undefined,
+      overallRating: undefined,
+      notes: undefined,
+    })
     setQuestionIndex(0)
     setCharacterSceneNotes([])
     savedEntryIdRef.current = newLoggedItem.id.toString() // Prevent double-save
@@ -1265,10 +1381,14 @@ export default function Home() {
               cast: data.cast,
               genres: data.genres,
               poster: data.poster,
+              backdrop: data.backdrop,
               trailerVideoId: data.trailerVideoId || data.videoId,
               mediaYear: data.mediaYear,
               overview: data.overview,
               runtime: data.runtime,
+              // Videos and images from TMDB
+              videos: data.videos,
+              images: data.images,
               tmdbRating: data.tmdbRating,
               tmdbVoteCount: data.tmdbVoteCount,
               // External review site links
@@ -1296,10 +1416,57 @@ export default function Home() {
             if (titleInput) {
               titleInput.value = data.mediaTitle
             }
-            // Auto-set media type to movie or tv
-            if (data.detectedMediaType) {
-              updateLogData({ mediaType: data.detectedMediaType })
-            }
+            // Auto-set logData with all detected metadata so MediaCard can display it immediately
+            updateLogData({
+              mediaType: data.detectedMediaType || 'movie',
+              title: data.mediaTitle,
+              year: data.mediaYear,
+              tmdbId: data.tmdbId,
+              // Crew
+              director: data.director,
+              directors: data.directors,
+              cinematographer: data.cinematographer,
+              composer: data.composer,
+              writers: data.writers,
+              producers: data.producers,
+              editor: data.editor,
+              // Cast
+              cast: data.cast,
+              starring: data.cast?.map((c: any) => c.name),
+              genres: data.genres,
+              runtime: data.runtime,
+              // Media
+              poster: data.poster,
+              backdrop: data.backdrop,
+              trailerUrl: data.trailerVideoId ? `https://www.youtube.com/embed/${data.trailerVideoId}` : undefined,
+              trailerVideoId: data.trailerVideoId || data.videoId,
+              videoId: data.videoId,
+              overview: data.overview,
+              videos: data.videos,
+              images: data.images,
+              // Ratings
+              tmdbRating: data.tmdbRating,
+              tmdbVoteCount: data.tmdbVoteCount,
+              metacriticScore: data.metacriticScore,
+              metacriticData: data.metacriticData,
+              rottenTomatoesScore: data.rottenTomatoesScore,
+              rottenTomatoesData: data.rottenTomatoesData,
+              metacriticUrl: data.metacriticUrl,
+              rottenTomatoesUrl: data.rottenTomatoesUrl,
+              imdbUrl: data.imdbUrl,
+              imdbRating: data.imdbRating,
+              imdbVotes: data.imdbVotes,
+              // OMDB rich metadata
+              rated: data.rated,
+              plot: data.plot,
+              awards: data.awards,
+              boxOffice: data.boxOffice,
+              production: data.production,
+              country: data.country,
+              language: data.language,
+              // Source
+              sourceUrl: url,
+            })
           } else {
             // Check if there are clues this might be a movie/documentary
             const detectionInfo = data.detectionInfo
@@ -1307,11 +1474,9 @@ export default function Home() {
               // BE SMART: Proactively search for the movie/documentary
               console.log('Detected clues for possible movie/documentary:', detectionInfo)
               const searchTitle = detectionInfo.suggestedTitle || data.title
-              const searchType = detectionInfo.suggestedType || 'movie'
-
               try {
-                // Search TMDB to pre-fill the card
-                const searchResponse = await fetch(`/api/search?q=${encodeURIComponent(searchTitle)}&type=${searchType}`)
+                // Search TMDB to pre-fill the card (use multi-search to find both movies and TV)
+                const searchResponse = await fetch(`/api/search?q=${encodeURIComponent(searchTitle)}`)
                 if (searchResponse.ok) {
                   const searchResults = await searchResponse.json()
                   if (searchResults.results && searchResults.results.length > 0) {
@@ -1433,6 +1598,9 @@ export default function Home() {
   const handleMediaTypeConfirm = async (confirmedType: 'movie' | 'tv' | 'video') => {
     if (!mediaTypeConfirmation?.pendingData) return
 
+    // Auto-switch to the Now tab when user confirms they want to log this
+    setRightPaneTab('logging')
+
     const data = mediaTypeConfirmation.pendingData
     const title = mediaTypeConfirmation.suggestedTitle || data.title
 
@@ -1445,8 +1613,8 @@ export default function Home() {
     // User confirmed it's a movie/tv - try to fetch TMDB metadata
     setUrlLoading(true)
     try {
-      // Search TMDB for the movie/tv show
-      const searchResponse = await fetch(`/api/search?q=${encodeURIComponent(title)}&type=${confirmedType}`)
+      // Search TMDB for the movie/tv show (use multi-search to find both)
+      const searchResponse = await fetch(`/api/search?q=${encodeURIComponent(title)}`)
       if (searchResponse.ok) {
         const searchResults = await searchResponse.json()
         if (searchResults.results && searchResults.results.length > 0) {
@@ -1501,6 +1669,9 @@ export default function Home() {
   // Handle confirmation when we already have a pre-filled match - fetch FULL metadata
   const handleMediaTypeConfirmWithMatch = async () => {
     if (!mediaTypeConfirmation?.pendingData || !mediaTypeConfirmation?.foundMatch) return
+
+    // Auto-switch to the Now tab when user confirms they want to log this
+    setRightPaneTab('logging')
 
     const data = mediaTypeConfirmation.pendingData
     const match = mediaTypeConfirmation.foundMatch
@@ -1667,6 +1838,8 @@ export default function Home() {
 
   // Track if we've saved the current entry (to prevent duplicates)
   const savedEntryIdRef = useRef<string | null>(null)
+  // Track if we're resuming a draft (so we can remove it when logging completes)
+  const resumingDraftIdRef = useRef<number | null>(null)
 
   // Log complete interaction data when entry is saved
   useEffect(() => {
@@ -1756,15 +1929,31 @@ export default function Home() {
       addLoggedItem(newLoggedItem)
       console.log('Saved to My Stuff:', newLoggedItem)
 
+      // Save theater to history for future autofill
+      if (logData.location === 'theater' && logData.locationDetail) {
+        setTheaterHistory(prev => {
+          // Remove duplicates and add to front
+          const filtered = prev.filter(t => t.toLowerCase() !== logData.locationDetail!.toLowerCase())
+          return [logData.locationDetail!, ...filtered].slice(0, 10) // Keep max 10 theaters
+        })
+      }
+
+      // If we were resuming a draft, remove the old draft entry now that we've completed
+      if (resumingDraftIdRef.current !== null) {
+        removeLoggedItem(resumingDraftIdRef.current)
+        resumingDraftIdRef.current = null
+      }
+
       // Clear draft since we've completed
       localStorage.removeItem('smartMediaLogger_draft')
     }
-  }, [step, logData.title, logData.tmdbId, logData.consumptionDate, logData.overallRating, logData.notes, logData.companionNames, logData.socialContext, logData.location, logData.year, logData.mediaType, logData.director, entryNumber, userInteractions, addLoggedItem, urlMetadata?.videoId, searchQuery])
+  }, [step, logData.title, logData.tmdbId, logData.consumptionDate, logData.overallRating, logData.notes, logData.companionNames, logData.socialContext, logData.location, logData.locationDetail, logData.year, logData.mediaType, logData.director, entryNumber, userInteractions, addLoggedItem, removeLoggedItem, urlMetadata?.videoId, searchQuery])
 
-  // Reset saved entry ref when starting a new log
+  // Reset refs when starting a new log
   useEffect(() => {
     if (step === 'search') {
       savedEntryIdRef.current = null
+      resumingDraftIdRef.current = null
     }
   }, [step])
 
@@ -1774,8 +1963,21 @@ export default function Home() {
       // Clear persisted preview when starting a new search
       setPersistedQueuePreview(null)
       fetchUrlMetadata(searchQuery)
-      // Auto-set media type based on URL
-      updateLogData({ mediaType: guessMediaTypeFromUrl(searchQuery) })
+      // Auto-switch to the Now tab when user pastes a URL
+      setRightPaneTab('logging')
+      // Auto-set media type based on URL and clear experience fields
+      updateLogData({
+        mediaType: guessMediaTypeFromUrl(searchQuery),
+        // Clear experience fields so they don't bleed from previous movie
+        consumptionDate: undefined,
+        location: undefined,
+        locationDetail: undefined,
+        firstTime: undefined,
+        socialContext: undefined,
+        companionNames: undefined,
+        overallRating: undefined,
+        notes: undefined,
+      })
     } else {
       setUrlMetadata(null)
     }
@@ -1784,6 +1986,24 @@ export default function Home() {
   // Handle search
   const handleSearch = async () => {
     if (!searchQuery.trim()) return
+
+    // Clear stale data from previous searches
+    setSearchResults([])
+    setSelectedMedia(null)
+    // Clear experience fields so they don't bleed into the new movie
+    updateLogData({
+      consumptionDate: undefined,
+      location: undefined,
+      locationDetail: undefined,
+      firstTime: undefined,
+      socialContext: undefined,
+      companionNames: undefined,
+      overallRating: undefined,
+      notes: undefined,
+    })
+
+    // Auto-switch to the Now tab when user starts a new search
+    setRightPaneTab('logging')
 
     // Track search query
     setUserInteractions(prev => ({
@@ -1795,7 +2015,7 @@ export default function Home() {
 
     try {
       const response = await fetch(
-        `/api/search?q=${encodeURIComponent(searchQuery)}&type=${logData.mediaType}`
+        `/api/search?q=${encodeURIComponent(searchQuery)}`
       )
       const data = await response.json()
 
@@ -1844,7 +2064,8 @@ export default function Home() {
       }))
 
       if (results.length === 1) {
-        // Auto-select if only one result
+        // Auto-select if only one result - clear old results first
+        setSearchResults([])
         handleSelectMedia(results[0])
       } else if (results.length > 1) {
         setSearchResults(results)
@@ -1884,8 +2105,12 @@ export default function Home() {
 
   // Handle media selection - fetch FULL metadata from movie-details API
   const handleSelectMedia = async (media: MediaResult) => {
+    // Clear stale URL metadata from previous searches
+    setUrlMetadata(null)
     setSelectedMedia(media)
     setStep('analyzing')
+    // Auto-switch to the Now tab so user sees the active logging
+    setRightPaneTab('logging')
 
     try {
       // Fetch FULL metadata including cast with photos, all crew, OMDB scores, awards
@@ -1895,14 +2120,22 @@ export default function Home() {
 
       if (response.ok) {
         const fullData = await response.json()
-        console.log('Full metadata received:', fullData)
 
         setLogData({
-          ...logData,
+          // Start fresh - don't spread old logData which may have stale experience fields
+          mediaType: fullData.mediaType || media.mediaType,
           title: fullData.title || media.title,
           year: fullData.year || media.year,
-          mediaType: fullData.mediaType || media.mediaType,
           tmdbId: fullData.tmdbId || media.id,
+          // Reset experience fields (user will fill these in)
+          consumptionDate: undefined,
+          location: undefined,
+          locationDetail: undefined,
+          firstTime: undefined,
+          socialContext: undefined,
+          companionNames: undefined,
+          overallRating: undefined,
+          notes: undefined,
           // Full crew
           director: fullData.director,
           directors: fullData.directors,
@@ -1918,9 +2151,13 @@ export default function Home() {
           runtime: fullData.runtime,
           // Media
           poster: fullData.poster,
+          backdrop: fullData.backdrop,
           trailerUrl: fullData.trailerUrl,
           trailerVideoId: fullData.trailerVideoId,
           overview: fullData.overview,
+          // Videos and images from TMDB
+          videos: fullData.videos,
+          images: fullData.images,
           // Critic scores from OMDB
           metacriticScore: fullData.metacriticScore,
           rottenTomatoesScore: fullData.rottenTomatoesScore,
@@ -1942,25 +2179,43 @@ export default function Home() {
         // Fallback to basic data if full fetch fails
         console.log('Full metadata fetch failed, using basic data')
         setLogData({
-          ...logData,
+          // Start fresh
+          mediaType: media.mediaType,
           title: media.title,
           year: media.year,
-          mediaType: media.mediaType,
           tmdbId: media.id,
           director: media.director,
           poster: media.posterPath || media.posterUrl,
+          // Reset experience fields
+          consumptionDate: undefined,
+          location: undefined,
+          locationDetail: undefined,
+          firstTime: undefined,
+          socialContext: undefined,
+          companionNames: undefined,
+          overallRating: undefined,
+          notes: undefined,
         })
       }
     } catch (error) {
       console.error('Error fetching full metadata:', error)
       // Fallback to basic data
       setLogData({
-        ...logData,
+        // Start fresh
+        mediaType: media.mediaType,
         title: media.title,
         year: media.year,
-        mediaType: media.mediaType,
         tmdbId: media.id,
         director: media.director,
+        // Reset experience fields
+        consumptionDate: undefined,
+        location: undefined,
+        locationDetail: undefined,
+        firstTime: undefined,
+        socialContext: undefined,
+        companionNames: undefined,
+        overallRating: undefined,
+        notes: undefined,
       })
     }
 
@@ -2015,7 +2270,10 @@ export default function Home() {
   // Format date for display
   const formatDate = (dateString?: string) => {
     if (!dateString) return undefined
-    const date = new Date(dateString)
+    // Parse as local date (not UTC) by splitting the date string
+    // This prevents timezone shifts when displaying dates
+    const [year, month, day] = dateString.split('-').map(Number)
+    const date = new Date(year, month - 1, day) // month is 0-indexed
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
   }
 
@@ -2704,7 +2962,11 @@ export default function Home() {
                 ].map(({ label, days }) => {
                   const date = new Date()
                   date.setDate(date.getDate() - days)
-                  const dateStr = date.toISOString().split('T')[0]
+                  // Format as local date (YYYY-MM-DD) without timezone conversion
+                  const year = date.getFullYear()
+                  const month = String(date.getMonth() + 1).padStart(2, '0')
+                  const day = String(date.getDate()).padStart(2, '0')
+                  const dateStr = `${year}-${month}-${day}`
                   const isSelected = logData.consumptionDate === dateStr
                   return (
                     <button
@@ -2727,11 +2989,9 @@ export default function Home() {
 
               {/* Or pick a specific date */}
               <div className="text-accent-blue font-bold mb-2">Or pick a date:</div>
-              <input
-                type="date"
+              <DatePicker
                 value={logData.consumptionDate || ''}
-                onChange={(e) => updateLogData({ consumptionDate: e.target.value })}
-                className="w-full px-6 py-4 bg-white border-2 border-accent-blue rounded-xl text-ink-800 text-lg font-medium focus:outline-none focus:ring-2 focus:ring-accent-blue"
+                onChange={(date) => updateLogData({ consumptionDate: date })}
               />
             </QuestionCard>
           )}
@@ -2801,7 +3061,36 @@ export default function Home() {
               <h3 className="text-xl font-semibold text-ink-800 mb-4">
                 Which theater? (optional)
               </h3>
+
+              {/* Quick select from recent theaters */}
+              {theaterHistory.length > 0 && (
+                <div className="mb-4">
+                  <div className="text-sm text-ink-500 mb-2">Recent theaters:</div>
+                  <div className="flex flex-wrap gap-2">
+                    {theaterHistory.slice(0, 5).map((theater) => (
+                      <button
+                        key={theater}
+                        type="button"
+                        onClick={() => updateLogData({ locationDetail: theater })}
+                        className={`
+                          px-4 py-2 rounded-lg text-sm font-medium transition-all border-2
+                          ${logData.locationDetail === theater
+                            ? 'bg-accent-blue text-white border-accent-blue'
+                            : 'bg-white text-ink-700 border-accent-blue hover:bg-accent-blue hover:text-white'
+                          }
+                        `}
+                      >
+                        {theater}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <form onSubmit={(e) => { e.preventDefault(); goToNextStep() }}>
+                <div className="text-sm text-ink-500 mb-2">
+                  {theaterHistory.length > 0 ? 'Or enter a new theater:' : ''}
+                </div>
                 <VoiceInput
                   value={logData.locationDetail || ''}
                   onChange={(value) => updateLogData({ locationDetail: value })}
@@ -3090,6 +3379,7 @@ export default function Home() {
               setSelectedMedia={setSelectedMedia}
               setQuestionIndex={setQuestionIndex}
               setCharacterSceneNotes={setCharacterSceneNotes}
+              setRightPaneTab={setRightPaneTab}
             />
           )}
         </div>

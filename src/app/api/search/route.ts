@@ -38,7 +38,7 @@ function cleanSearchQuery(query: string): string {
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams
   const rawQuery = searchParams.get('q')
-  const type = searchParams.get('type') || 'movie'
+  const requestedType = searchParams.get('type') || 'all' // Default to 'all' to search both movies and TV
 
   if (!rawQuery) {
     return NextResponse.json({ error: 'Query is required' }, { status: 400 })
@@ -48,8 +48,20 @@ export async function GET(request: NextRequest) {
   const query = cleanSearchQuery(rawQuery)
 
   try {
-    const endpoint = type === 'tv' ? 'search/tv' : 'search/movie'
-    const searchUrl = `${TMDB_BASE_URL}/${endpoint}?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}&include_adult=false`
+    // Use multi-search to find both movies and TV shows, unless a specific type is requested
+    let searchUrl: string
+    let filterMediaType: string | null = null
+
+    if (requestedType === 'movie') {
+      searchUrl = `${TMDB_BASE_URL}/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}&include_adult=false`
+    } else if (requestedType === 'tv') {
+      searchUrl = `${TMDB_BASE_URL}/search/tv?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}&include_adult=false`
+    } else {
+      // Default: Use multi-search to find both movies and TV shows
+      searchUrl = `${TMDB_BASE_URL}/search/multi?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}&include_adult=false`
+      filterMediaType = null // Accept both movie and tv
+    }
+
     console.log('TMDB Search URL:', searchUrl.replace(TMDB_API_KEY, '***'))
 
     const response = await fetch(
@@ -63,43 +75,53 @@ export async function GET(request: NextRequest) {
     }
 
     const data = await response.json()
-    console.log('TMDB search results count:', data.results?.length, 'for query:', query)
+
+    // For multi-search, filter to only movie and tv results (exclude person results)
+    let filteredResults = data.results || []
+    if (requestedType === 'all') {
+      filteredResults = filteredResults.filter((item: any) =>
+        item.media_type === 'movie' || item.media_type === 'tv'
+      )
+    }
+
+    console.log('TMDB search results count:', filteredResults.length, 'for query:', query)
 
     const results = await Promise.all(
-      data.results.slice(0, 10).map(async (item: TMDBMovieResult | TMDBTVResult) => {
-        if (type === 'tv') {
-          const tvItem = item as TMDBTVResult
-          const credits = await fetchCredits(TMDB_API_KEY, tvItem.id, 'tv')
+      filteredResults.slice(0, 10).map(async (item: any) => {
+        // Determine media type: for multi-search, use item.media_type; otherwise use requestedType
+        const itemType = item.media_type || requestedType
+
+        if (itemType === 'tv') {
+          const credits = await fetchCredits(TMDB_API_KEY, item.id, 'tv')
           return {
-            id: tvItem.id,
-            title: tvItem.name,
-            year: tvItem.first_air_date ? parseInt(tvItem.first_air_date.substring(0, 4)) : null,
-            overview: tvItem.overview,
-            posterUrl: tvItem.poster_path
-              ? `https://image.tmdb.org/t/p/w200${tvItem.poster_path}`
+            id: item.id,
+            title: item.name || item.title,
+            year: item.first_air_date ? parseInt(item.first_air_date.substring(0, 4)) : null,
+            overview: item.overview,
+            posterUrl: item.poster_path
+              ? `https://image.tmdb.org/t/p/w200${item.poster_path}`
               : null,
             director: credits.creator,
             starring: credits.cast.slice(0, 5),
             type: 'tv'
           }
         } else {
-          const movieItem = item as TMDBMovieResult
-          const year = movieItem.release_date ? parseInt(movieItem.release_date.substring(0, 4)) : null
+          const year = item.release_date ? parseInt(item.release_date.substring(0, 4)) : null
           const [credits, details, omdb] = await Promise.all([
-            fetchCredits(TMDB_API_KEY, movieItem.id, 'movie'),
-            fetchMovieDetails(TMDB_API_KEY, movieItem.id),
-            fetchOMDBData(movieItem.title, year)
+            fetchCredits(TMDB_API_KEY, item.id, 'movie'),
+            fetchMovieDetails(TMDB_API_KEY, item.id),
+            fetchOMDBData(item.title, year)
           ])
           return {
-            id: movieItem.id,
-            title: movieItem.title,
+            id: item.id,
+            title: item.title,
             year,
-            overview: movieItem.overview,
-            posterUrl: movieItem.poster_path
-              ? `https://image.tmdb.org/t/p/w200${movieItem.poster_path}`
+            overview: item.overview,
+            posterUrl: item.poster_path
+              ? `https://image.tmdb.org/t/p/w200${item.poster_path}`
               : null,
-            posterPath: movieItem.poster_path
-              ? `https://image.tmdb.org/t/p/w500${movieItem.poster_path}`
+            posterPath: item.poster_path
+              ? `https://image.tmdb.org/t/p/w500${item.poster_path}`
               : null,
             director: credits.director,
             cinematographer: credits.cinematographer,

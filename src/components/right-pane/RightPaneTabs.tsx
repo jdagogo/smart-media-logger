@@ -184,6 +184,348 @@ function TalentPill({ name, onPreferenceChange, preference }: TalentPillProps) {
   )
 }
 
+// Talent role type
+type TalentRole = 'director' | 'actor' | 'cinematographer' | 'composer' | 'writer' | 'producer' | 'musician' | 'band'
+
+// Interactive preference pill for the preferences section
+function PreferencePill({
+  name,
+  role,
+  preference,
+  onUpdate,
+}: {
+  name: string
+  role: string
+  preference: 'loved' | 'not-for-me'
+  onUpdate: (name: string, pref: TalentPreference, role: string) => void
+}) {
+  const [showMenu, setShowMenu] = useState(false)
+
+  return (
+    <div className="relative inline-block">
+      <button
+        onClick={() => setShowMenu(!showMenu)}
+        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all cursor-pointer
+          ${preference === 'loved'
+            ? 'bg-red-50 text-red-700 border border-red-200 hover:bg-red-100'
+            : 'bg-paper-200 text-ink-500 border border-paper-400 hover:bg-paper-300'
+          }`}
+      >
+        {preference === 'loved' && <span>♥</span>}
+        {name}
+      </button>
+
+      {showMenu && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setShowMenu(false)} />
+          <div className="absolute left-0 top-full mt-1 z-20 bg-white rounded-lg shadow-lg border-2 border-accent-blue overflow-hidden min-w-[160px]">
+            <button
+              onClick={() => { onUpdate(name, preference === 'loved' ? null : 'loved', role); setShowMenu(false) }}
+              className={`w-full px-4 py-2 text-left text-sm hover:bg-paper-100 flex items-center gap-2 ${preference === 'loved' ? 'bg-pink-50 text-pink-700' : ''}`}
+            >
+              <span>♥</span> {preference === 'loved' ? 'Remove Love' : 'Love'}
+            </button>
+            <button
+              onClick={() => { onUpdate(name, preference === 'not-for-me' ? null : 'not-for-me', role); setShowMenu(false) }}
+              className={`w-full px-4 py-2 text-left text-sm hover:bg-paper-100 flex items-center gap-2 ${preference === 'not-for-me' ? 'bg-paper-200' : ''}`}
+            >
+              <span>○</span> {preference === 'not-for-me' ? 'Remove' : "Don't love"}
+            </button>
+            <button
+              onClick={() => { onUpdate(name, null, role); setShowMenu(false) }}
+              className="w-full px-4 py-2 text-left text-sm hover:bg-paper-100 flex items-center gap-2 border-t border-paper-200 text-red-600"
+            >
+              <span>✕</span> Remove from list
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+// Person search result from API
+interface PersonSearchResult {
+  id: number
+  name: string
+  role: string
+  department: string
+  profilePath: string | null
+  knownFor: string
+  popularity: number
+}
+
+// Full preferences section component
+function PreferencesSection({
+  talentPreferences,
+  onTalentPreferenceChange,
+}: {
+  talentPreferences: Record<string, any>
+  onTalentPreferenceChange?: (prefs: Record<string, any>) => void
+}) {
+  const [isAdding, setIsAdding] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchResults, setSearchResults] = useState<PersonSearchResult[]>([])
+  const [isSearching, setIsSearching] = useState(false)
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+
+  const roleLabels: Record<string, string> = {
+    director: 'Directors',
+    actor: 'Actors',
+    cinematographer: 'Cinematographers',
+    composer: 'Composers',
+    writer: 'Writers',
+    producer: 'Producers',
+    musician: 'Musicians',
+    band: 'Bands',
+  }
+
+  const roleOrder: TalentRole[] = ['director', 'actor', 'cinematographer', 'composer', 'musician', 'band', 'writer', 'producer']
+
+  // Helper to extract preference value
+  const getPref = (entry: any): 'loved' | 'not-for-me' | null => {
+    if (!entry) return null
+    if (typeof entry === 'object' && 'preference' in entry) return entry.preference
+    return entry
+  }
+
+  // Helper to extract role
+  const getRole = (entry: any): string => {
+    if (typeof entry === 'object' && 'role' in entry) return entry.role
+    return 'actor'
+  }
+
+  // Search for people with debounce
+  useEffect(() => {
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current)
+    }
+
+    if (!searchQuery || searchQuery.length < 2) {
+      setSearchResults([])
+      return
+    }
+
+    setIsSearching(true)
+    searchTimeoutRef.current = setTimeout(async () => {
+      try {
+        const response = await fetch(`/api/person-search?q=${encodeURIComponent(searchQuery)}`)
+        const data = await response.json()
+        setSearchResults(data.results || [])
+      } catch (error) {
+        console.error('Person search error:', error)
+        setSearchResults([])
+      } finally {
+        setIsSearching(false)
+      }
+    }, 300)
+
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current)
+      }
+    }
+  }, [searchQuery])
+
+  // Group by role
+  const lovedByRole: Record<string, string[]> = {}
+  const notForMeByRole: Record<string, string[]> = {}
+
+  Object.entries(talentPreferences).forEach(([name, entry]) => {
+    const pref = getPref(entry)
+    const role = getRole(entry)
+
+    if (pref === 'loved') {
+      if (!lovedByRole[role]) lovedByRole[role] = []
+      lovedByRole[role].push(name)
+    } else if (pref === 'not-for-me') {
+      if (!notForMeByRole[role]) notForMeByRole[role] = []
+      notForMeByRole[role].push(name)
+    }
+  })
+
+  // Sort names alphabetically within each role
+  Object.keys(lovedByRole).forEach(role => {
+    lovedByRole[role].sort((a, b) => a.localeCompare(b))
+  })
+  Object.keys(notForMeByRole).forEach(role => {
+    notForMeByRole[role].sort((a, b) => a.localeCompare(b))
+  })
+
+  const handleUpdate = (name: string, pref: TalentPreference, role: string) => {
+    const newPrefs = { ...talentPreferences }
+    if (pref === null) {
+      delete newPrefs[name]
+    } else {
+      newPrefs[name] = { preference: pref, role }
+    }
+    onTalentPreferenceChange?.(newPrefs)
+  }
+
+  const handleSelectPerson = (person: PersonSearchResult) => {
+    const newPrefs = {
+      ...talentPreferences,
+      [person.name]: { preference: 'loved' as const, role: person.role as TalentRole }
+    }
+    onTalentPreferenceChange?.(newPrefs)
+    setSearchQuery('')
+    setSearchResults([])
+    setIsAdding(false)
+  }
+
+  const hasAnyPrefs = Object.keys(lovedByRole).length > 0 || Object.keys(notForMeByRole).length > 0
+
+  return (
+    <div className="bg-white rounded-xl p-5 border-2 border-paper-300">
+      <h3 className="font-bold text-ink-800 mb-4">Your Talent Preferences</h3>
+
+      {/* Add new person with autocomplete */}
+      <div className="mb-5 pb-5 border-b border-paper-200">
+        {isAdding ? (
+          <div className="relative">
+            <div className="flex gap-2 mb-2">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search for a person (e.g., Martin Scorsese)..."
+                className="flex-1 px-4 py-3 border-2 border-accent-blue rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-accent-blue/20"
+                autoFocus
+              />
+              <button
+                type="button"
+                onClick={() => { setIsAdding(false); setSearchQuery(''); setSearchResults([]) }}
+                className="px-4 py-2 text-ink-500 hover:text-ink-700 text-lg"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Search results dropdown */}
+            {(searchResults.length > 0 || isSearching) && (
+              <div className="absolute left-0 right-12 top-full mt-1 bg-white border-2 border-accent-blue rounded-lg shadow-lg z-20 max-h-80 overflow-y-auto">
+                {isSearching ? (
+                  <div className="px-4 py-3 text-ink-500 text-sm">Searching...</div>
+                ) : (
+                  searchResults.map((person) => (
+                    <button
+                      key={person.id}
+                      onClick={() => handleSelectPerson(person)}
+                      className="w-full px-4 py-3 text-left hover:bg-paper-100 flex items-center gap-3 border-b border-paper-200 last:border-b-0"
+                    >
+                      {person.profilePath ? (
+                        <img
+                          src={person.profilePath}
+                          alt={person.name}
+                          className="w-10 h-10 rounded-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-10 h-10 rounded-full bg-paper-200 flex items-center justify-center text-ink-400">
+                          👤
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-ink-800">{person.name}</div>
+                        <div className="text-sm text-ink-500 flex items-center gap-2">
+                          <span className="capitalize">{person.role}</span>
+                          {person.knownFor && (
+                            <>
+                              <span className="text-ink-300">•</span>
+                              <span className="truncate">{person.knownFor}</span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                      <span className="text-red-500 text-lg">♥</span>
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
+
+            {searchQuery.length > 0 && searchQuery.length < 2 && (
+              <div className="text-sm text-ink-400 mt-1">Type at least 2 characters to search...</div>
+            )}
+          </div>
+        ) : (
+          <button
+            onClick={() => setIsAdding(true)}
+            className="w-full px-4 py-4 bg-paper-100 text-ink-600 rounded-lg font-medium border-2 border-dashed border-paper-400 hover:bg-accent-blue/10 hover:border-accent-blue hover:text-accent-blue transition-colors"
+          >
+            <div className="flex items-center justify-center gap-2 mb-1">
+              <span className="text-lg">+</span>
+              <span className="text-base">Add someone you love</span>
+            </div>
+            <div className="text-xs text-ink-400">
+              Directors, actors, cinematographers, composers, musicians, authors...
+            </div>
+          </button>
+        )}
+      </div>
+
+      {hasAnyPrefs ? (
+        <>
+          {/* Loved section */}
+          {Object.keys(lovedByRole).length > 0 && (
+            <div className="mb-5">
+              <div className="text-sm font-bold text-red-600 mb-3 flex items-center gap-1">
+                <span>♥</span> People You Love
+              </div>
+              <div className="space-y-3">
+                {roleOrder.filter(role => lovedByRole[role]?.length > 0).map((role) => (
+                  <div key={role}>
+                    <div className="text-xs text-ink-500 mb-1.5 uppercase tracking-wide">{roleLabels[role]}</div>
+                    <div className="flex flex-wrap gap-2">
+                      {lovedByRole[role].map((name) => (
+                        <PreferencePill
+                          key={name}
+                          name={name}
+                          role={role}
+                          preference="loved"
+                          onUpdate={handleUpdate}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Not for me section */}
+          {Object.keys(notForMeByRole).length > 0 && (
+            <div>
+              <div className="text-sm font-bold text-ink-500 mb-3">Not For You</div>
+              <div className="space-y-3">
+                {roleOrder.filter(role => notForMeByRole[role]?.length > 0).map((role) => (
+                  <div key={role}>
+                    <div className="text-xs text-ink-500 mb-1.5 uppercase tracking-wide">{roleLabels[role]}</div>
+                    <div className="flex flex-wrap gap-2">
+                      {notForMeByRole[role].map((name) => (
+                        <PreferencePill
+                          key={name}
+                          name={name}
+                          role={role}
+                          preference="not-for-me"
+                          onUpdate={handleUpdate}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
+      ) : (
+        <div className="text-center py-4 text-ink-400">
+          <p>No preferences yet. Add people above or mark them while logging movies!</p>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // Types
 type RightPaneTab = 'logging' | 'upnext' | 'drafts' | 'library' | 'recs' | 'profile'
 type MediaFilter = 'all' | 'movie' | 'tv' | 'books' | 'music' | 'podcasts' | 'video'
@@ -965,7 +1307,7 @@ export default function RightPaneTabs({
       }
     })
     const topDirectors = Object.entries(directorCounts)
-      .sort((a, b) => b[1].count - a[1].count)
+      .sort((a, b) => (b[1].avgRating || 0) - (a[1].avgRating || 0)) // Sort by highest rating
       .slice(0, 5)
       .map(([name, data]) => ({ name, count: data.count, avgRating: data.avgRating }))
 
@@ -1544,7 +1886,7 @@ export default function RightPaneTabs({
                   language={currentEntry.language}
                   genres={currentEntry.genres}
                   tmdbRating={currentEntry.tmdbRating}
-                  isBuilding={isLogging}
+                  isBuilding={true}
                   onEdit={onEdit}
                   onTalentPreferenceChange={onTalentPreferenceChange}
                   initialTalentPreferences={talentPreferences}
@@ -2222,7 +2564,11 @@ export default function RightPaneTabs({
 
             {/* Logged Items - Accordion Style (excluding drafts - they go in Drafts tab) */}
             <div className="space-y-2">
-              {sortItems(filterItems(loggedItems.filter(i => !i.isDraft), mediaFilter), sortMode).map((item) => {
+              {sortItems(filterItems(loggedItems.filter(i => !i.isDraft), mediaFilter), sortMode).map((item, index, array) => {
+                // Calculate entry number: count items of same type that come after this one + 1
+                const sameTypeItems = array.filter(i => i.mediaType === item.mediaType)
+                const positionInType = sameTypeItems.findIndex(i => i.id === item.id)
+                const itemEntryNumber = sameTypeItems.length - positionInType
                 const isExpanded = expandedLibraryId === item.id
                 const hasExpandedItem = expandedLibraryId !== null
                 return (
@@ -2433,7 +2779,7 @@ export default function RightPaneTabs({
                         })() : (
                           <div className="p-5 bg-gradient-to-b from-accent-blue/5 to-white space-y-4">
                             <MediaCard
-                              entryNumber={0}
+                              entryNumber={itemEntryNumber}
                               mediaType={item.mediaType}
                               title={item.title}
                               year={item.year}
@@ -2485,10 +2831,14 @@ export default function RightPaneTabs({
                               onUnsaveTrack={handleUnsaveMusicTrack}
                               savedTracks={savedMusicTracks}
                               onEdit={(changes) => {
-                                if (changes.rating !== undefined) {
-                                  onUpdateLoggedItem?.(item.id, { rating: changes.rating })
+                                // Translate dateWatched to dateConsumed for LoggedItem
+                                const translatedChanges = { ...changes }
+                                if ('dateWatched' in translatedChanges) {
+                                  translatedChanges.dateConsumed = translatedChanges.dateWatched
+                                  delete translatedChanges.dateWatched
                                 }
-                                console.log('Updated entry:', { id: item.id, changes })
+                                onUpdateLoggedItem?.(item.id, translatedChanges)
+                                console.log('Updated entry:', { id: item.id, changes: translatedChanges })
                               }}
                             />
 
@@ -2649,7 +2999,7 @@ export default function RightPaneTabs({
 
                 {/* Full MediaCard - EDITABLE */}
                 <MediaCard
-                  entryNumber={0}
+                  entryNumber={loggedItems.filter(i => i.mediaType === 'movie').length + 1}
                   mediaType="movie"
                   title={alreadySeenItem.title}
                   year={alreadySeenItem.year}
@@ -3587,49 +3937,11 @@ export default function RightPaneTabs({
               </div>
             )}
 
-            {/* Talent Preferences - Combined from props and local state */}
-            {(() => {
-              // Merge talent preferences from props and alreadySeenTalentPrefs
-              const allTalentPrefs = { ...talentPreferences, ...alreadySeenTalentPrefs }
-              const lovedTalent = Object.entries(allTalentPrefs).filter(([_, pref]) => pref === 'loved')
-              const notForMeTalent = Object.entries(allTalentPrefs).filter(([_, pref]) => pref === 'not-for-me')
-
-              if (lovedTalent.length === 0 && notForMeTalent.length === 0) return null
-
-              return (
-                <div className="bg-white rounded-xl p-5 border-2 border-paper-300">
-                  <h3 className="font-bold text-ink-800 mb-4">Your Talent Preferences</h3>
-
-                  {lovedTalent.length > 0 && (
-                    <div className="mb-4">
-                      <div className="text-sm font-bold text-red-600 mb-2 flex items-center gap-1">
-                        <span>♥</span> People You Love
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        {lovedTalent.map(([name]) => (
-                          <span key={name} className="px-3 py-1 bg-red-50 text-red-700 rounded-full text-sm font-medium border border-red-200">
-                            {name}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {notForMeTalent.length > 0 && (
-                    <div>
-                      <div className="text-sm font-bold text-ink-500 mb-2">Not For You</div>
-                      <div className="flex flex-wrap gap-2">
-                        {notForMeTalent.map(([name]) => (
-                          <span key={name} className="px-3 py-1 bg-paper-200 text-ink-500 rounded-full text-sm border border-paper-400">
-                            {name}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )
-            })()}
+            {/* Talent Preferences - Organized by role with interactive pills */}
+            <PreferencesSection
+              talentPreferences={{ ...talentPreferences, ...alreadySeenTalentPrefs }}
+              onTalentPreferenceChange={onTalentPreferenceChange}
+            />
           </div>
         )}
       </div>

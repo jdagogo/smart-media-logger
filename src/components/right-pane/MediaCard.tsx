@@ -2,6 +2,8 @@
 
 import { useState } from 'react'
 import SoundtrackModal from './SoundtrackModal'
+import NotesModal from './NotesModal'
+import DatePicker from '../DatePicker'
 
 interface StreamingOption {
   service: string
@@ -125,20 +127,22 @@ interface MediaCardProps {
 
 // Talent preference types
 type TalentPreference = 'loved' | 'not-for-me' | null
+type TalentRole = 'director' | 'actor' | 'cinematographer' | 'composer' | 'writer' | 'producer' | 'musician' | 'band'
 
 interface TalentPillProps {
   name: string
-  onPreferenceChange?: (name: string, preference: TalentPreference) => void
+  role: TalentRole
+  onPreferenceChange?: (name: string, preference: TalentPreference, role: TalentRole) => void
   preference?: TalentPreference
 }
 
 // Interactive pill component for people/entities with preference tracking
-function TalentPill({ name, onPreferenceChange, preference }: TalentPillProps) {
+function TalentPill({ name, role, onPreferenceChange, preference }: TalentPillProps) {
   const [showMenu, setShowMenu] = useState(false)
 
   const handleSelect = (pref: TalentPreference) => {
     if (onPreferenceChange) {
-      onPreferenceChange(name, pref)
+      onPreferenceChange(name, pref, role)
     }
     setShowMenu(false)
   }
@@ -254,24 +258,33 @@ export default function MediaCard({
 }: MediaCardProps) {
   const [showTrailer, setShowTrailer] = useState(false)
   const [showSoundtrack, setShowSoundtrack] = useState(false)
+  const [showNotesModal, setShowNotesModal] = useState(false)
   const [expandedPanel, setExpandedPanel] = useState<'metacritic' | 'rt' | null>(null)
   const [isEditing, setIsEditing] = useState(false)
   const [editData, setEditData] = useState<EditableFields>({})
-  const [talentPreferences, setTalentPreferences] = useState<Record<string, TalentPreference>>(initialTalentPreferences)
+  const [talentPreferences, setTalentPreferences] = useState<Record<string, TalentPreference | { preference: TalentPreference; role: TalentRole }>>(initialTalentPreferences)
 
-  const handleTalentPreference = (name: string, preference: TalentPreference) => {
+  // Helper to get just the preference value (handles both old and new format)
+  const getPreference = (name: string): TalentPreference => {
+    const entry = talentPreferences[name]
+    if (!entry) return null
+    if (typeof entry === 'object' && 'preference' in entry) return entry.preference
+    return entry as TalentPreference
+  }
+
+  const handleTalentPreference = (name: string, preference: TalentPreference, role: TalentRole) => {
     const newPreferences = {
       ...talentPreferences,
-      [name]: preference
+      [name]: preference ? { preference, role } : null
     }
     setTalentPreferences(newPreferences)
 
     // Notify parent of preference change
     if (onTalentPreferenceChange) {
-      onTalentPreferenceChange(newPreferences)
+      onTalentPreferenceChange(newPreferences as any)
     }
 
-    console.log('Talent preference updated:', { name, preference, allPreferences: newPreferences })
+    console.log('Talent preference updated:', { name, preference, role, allPreferences: newPreferences })
   }
 
   // Initialize edit data when entering edit mode
@@ -524,7 +537,8 @@ export default function MediaCard({
               ) : director ? (
                 <TalentPill
                   name={director}
-                  preference={talentPreferences[director]}
+                  role="director"
+                  preference={getPreference(director)}
                   onPreferenceChange={handleTalentPreference}
                 />
               ) : (
@@ -545,7 +559,8 @@ export default function MediaCard({
               ) : cinematographer ? (
                 <TalentPill
                   name={cinematographer}
-                  preference={talentPreferences[cinematographer]}
+                  role="cinematographer"
+                  preference={getPreference(cinematographer)}
                   onPreferenceChange={handleTalentPreference}
                 />
               ) : (
@@ -566,7 +581,8 @@ export default function MediaCard({
               ) : composer ? (
                 <TalentPill
                   name={composer}
-                  preference={talentPreferences[composer]}
+                  role="composer"
+                  preference={getPreference(composer)}
                   onPreferenceChange={handleTalentPreference}
                 />
               ) : (
@@ -584,7 +600,8 @@ export default function MediaCard({
                       <div className="flex-1 min-w-0">
                         <TalentPill
                           name={member.name}
-                          preference={talentPreferences[member.name]}
+                          role="actor"
+                          preference={getPreference(member.name)}
                           onPreferenceChange={handleTalentPreference}
                         />
                         <p className="text-xs text-ink-500 mt-0.5 truncate">as {member.character}</p>
@@ -763,6 +780,24 @@ export default function MediaCard({
           </div>
         )}
 
+        {/* Awards & Box Office */}
+        {(awards || boxOffice) && (
+          <div className="mb-6 p-4 bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl border border-amber-200">
+            {awards && awards !== 'N/A' && (
+              <div className="mb-2">
+                <span className="text-amber-600 font-bold">🏆 Awards: </span>
+                <span className="text-ink-800">{awards}</span>
+              </div>
+            )}
+            {boxOffice && boxOffice !== 'N/A' && (
+              <div>
+                <span className="text-green-600 font-bold">💰 Box Office: </span>
+                <span className="text-ink-800 font-bold text-lg">{boxOffice}</span>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Trailer Button */}
         {youtubeId && (
           <div className="mb-6">
@@ -880,11 +915,9 @@ export default function MediaCard({
           <div className="bg-white rounded-xl p-4 border-2 border-accent-blue">
             <div className="text-accent-blue font-bold mb-2">When</div>
             {isEditing ? (
-              <input
-                type="date"
+              <DatePicker
                 value={editData.dateWatched || ''}
-                onChange={(e) => setEditData({ ...editData, dateWatched: e.target.value })}
-                className="w-full bg-white border-2 border-accent-blue rounded-lg px-3 py-1"
+                onChange={(date) => setEditData({ ...editData, dateWatched: date })}
               />
             ) : dateWatched ? (
               <span className="text-ink-800 font-medium">{dateWatched}</span>
@@ -1008,19 +1041,25 @@ export default function MediaCard({
 
         {/* Notes */}
         <div className="bg-white rounded-xl p-5 border-2 border-accent-blue">
-          <div className="text-accent-blue font-bold mb-2">Your Notes</div>
-          {isEditing ? (
-            <textarea
-              value={editData.notes || ''}
-              onChange={(e) => setEditData({ ...editData, notes: e.target.value })}
-              placeholder="What did you think? How did it make you feel?"
-              className="w-full bg-white border-2 border-accent-blue rounded-lg px-3 py-2 min-h-[100px] resize-none"
-            />
-          ) : (
-            <div className="text-ink-800 leading-relaxed text-lg min-h-[60px]">
-              {notes || <span className="italic">What did you think? How did it make you feel?</span>}
-            </div>
-          )}
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-accent-blue font-bold">Your Notes</div>
+            <button
+              onClick={() => setShowNotesModal(true)}
+              className="text-sm px-3 py-1 bg-accent-blue/10 text-accent-blue rounded-lg hover:bg-accent-blue hover:text-white transition-colors font-medium"
+            >
+              {notes ? 'Edit' : 'Add Notes'}
+            </button>
+          </div>
+          <div
+            className="text-ink-800 leading-relaxed text-lg min-h-[60px] cursor-pointer hover:bg-paper-50 rounded-lg p-2 -m-2 transition-colors"
+            onClick={() => setShowNotesModal(true)}
+          >
+            {notes ? (
+              <div className="whitespace-pre-wrap">{notes}</div>
+            ) : (
+              <span className="italic text-ink-400">Click to add your thoughts...</span>
+            )}
+          </div>
         </div>
       </div>
 
@@ -1034,6 +1073,19 @@ export default function MediaCard({
         onSaveTrack={onSaveTrack}
         onUnsaveTrack={onUnsaveTrack}
         savedTracks={savedTracks}
+      />
+
+      {/* Notes Modal */}
+      <NotesModal
+        isOpen={showNotesModal}
+        onClose={() => setShowNotesModal(false)}
+        onSave={(newNotes) => {
+          if (onEdit) {
+            onEdit({ notes: newNotes })
+          }
+        }}
+        movieTitle={title}
+        initialNotes={notes}
       />
     </div>
   )

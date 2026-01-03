@@ -70,8 +70,16 @@ export async function GET(request: NextRequest) {
         metadata.genres = tmdbData.genres
         metadata.overview = tmdbData.overview
         metadata.poster = tmdbData.poster
+        metadata.backdrop = tmdbData.backdrop
         metadata.runtime = tmdbData.runtime
-        metadata.trailerVideoId = videoId  // Keep the YouTube trailer
+        metadata.trailerVideoId = videoId  // Keep the YouTube trailer from user input
+        // TMDB videos and images
+        metadata.videos = tmdbData.videos
+        metadata.images = tmdbData.images
+        // If TMDB has a trailer and user didn't provide one, use TMDB's trailer
+        if (tmdbData.trailerKey && !videoId) {
+          metadata.trailerVideoId = tmdbData.trailerKey
+        }
         // TMDB rating
         metadata.tmdbRating = tmdbData.tmdbRating
         metadata.tmdbVoteCount = tmdbData.tmdbVoteCount
@@ -446,8 +454,8 @@ async function fetchTMDBData(title: string, year?: number): Promise<{
     const mediaType = result.media_type as 'movie' | 'tv'
     const tmdbId = result.id
 
-    // Fetch detailed info with credits
-    const detailsUrl = `https://api.themoviedb.org/3/${mediaType}/${tmdbId}?api_key=${TMDB_API_KEY}&append_to_response=credits`
+    // Fetch detailed info with credits, videos, and images
+    const detailsUrl = `https://api.themoviedb.org/3/${mediaType}/${tmdbId}?api_key=${TMDB_API_KEY}&append_to_response=credits,videos,images`
     const detailsResponse = await fetch(detailsUrl)
 
     if (!detailsResponse.ok) {
@@ -531,6 +539,42 @@ async function fetchTMDBData(title: string, year?: number): Promise<{
 
     const releaseYear = new Date(mediaType === 'movie' ? details.release_date : details.first_air_date).getFullYear()
 
+    // Extract videos (trailers, clips, featurettes, etc.)
+    const videos = details.videos?.results?.map((v: any) => ({
+      id: v.id,
+      key: v.key,
+      name: v.name,
+      site: v.site,
+      type: v.type, // Trailer, Teaser, Clip, Featurette, etc.
+      official: v.official,
+    })) || []
+
+    // Extract images (backdrops, posters, stills)
+    const images = {
+      backdrops: details.images?.backdrops?.slice(0, 10).map((img: any) => ({
+        path: `https://image.tmdb.org/t/p/w1280${img.file_path}`,
+        width: img.width,
+        height: img.height,
+      })) || [],
+      posters: details.images?.posters?.slice(0, 5).map((img: any) => ({
+        path: `https://image.tmdb.org/t/p/w500${img.file_path}`,
+        width: img.width,
+        height: img.height,
+      })) || [],
+      stills: details.images?.stills?.slice(0, 10).map((img: any) => ({
+        path: `https://image.tmdb.org/t/p/w780${img.file_path}`,
+        width: img.width,
+        height: img.height,
+      })) || [],
+    }
+
+    // Get official trailer URL
+    const officialTrailer = details.videos?.results?.find(
+      (v: any) => v.type === 'Trailer' && v.site === 'YouTube' && v.official
+    ) || details.videos?.results?.find(
+      (v: any) => v.type === 'Trailer' && v.site === 'YouTube'
+    )
+
     return {
       id: tmdbId,
       title: mediaType === 'movie' ? details.title : details.name,
@@ -547,7 +591,14 @@ async function fetchTMDBData(title: string, year?: number): Promise<{
       genres,
       overview: details.overview,
       poster: details.poster_path ? `https://image.tmdb.org/t/p/w500${details.poster_path}` : undefined,
+      backdrop: details.backdrop_path ? `https://image.tmdb.org/t/p/w1280${details.backdrop_path}` : undefined,
       runtime: details.runtime,
+      // Videos from TMDB
+      videos,
+      trailerKey: officialTrailer?.key,
+      trailerUrl: officialTrailer ? `https://www.youtube.com/embed/${officialTrailer.key}` : undefined,
+      // Images from TMDB
+      images,
       // TMDB ratings
       tmdbRating: details.vote_average ? Math.round(details.vote_average * 10) : undefined, // Convert to 0-100
       tmdbVoteCount: details.vote_count,
@@ -661,8 +712,23 @@ function extractMetadata(html: string, videoId: string) {
     genres?: string[]
     overview?: string
     poster?: string
+    backdrop?: string
     runtime?: number
     trailerVideoId?: string
+    // TMDB videos and images
+    videos?: Array<{
+      id: string
+      key: string
+      name: string
+      site: string
+      type: string
+      official: boolean
+    }>
+    images?: {
+      backdrops: Array<{ path: string; width: number; height: number }>
+      posters: Array<{ path: string; width: number; height: number }>
+      stills: Array<{ path: string; width: number; height: number }>
+    }
     // TMDB rating
     tmdbRating?: number
     tmdbVoteCount?: number
