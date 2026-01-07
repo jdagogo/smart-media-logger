@@ -35,6 +35,11 @@ function cleanSearchQuery(query: string): string {
     .trim()
 }
 
+// Normalize accented characters (â → a, é → e, etc.) for fallback search
+function normalizeAccents(str: string): string {
+  return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+}
+
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams
   const rawQuery = searchParams.get('q')
@@ -74,7 +79,7 @@ export async function GET(request: NextRequest) {
       throw new Error('TMDB API error')
     }
 
-    const data = await response.json()
+    let data = await response.json()
 
     // For multi-search, filter to only movie and tv results (exclude person results)
     let filteredResults = data.results || []
@@ -85,6 +90,26 @@ export async function GET(request: NextRequest) {
     }
 
     console.log('TMDB search results count:', filteredResults.length, 'for query:', query)
+
+    // If no results found, try with normalized accents (Sirât → Sirat)
+    if (filteredResults.length === 0) {
+      const normalizedQuery = normalizeAccents(query)
+      if (normalizedQuery !== query) {
+        console.log('Trying normalized search:', normalizedQuery)
+        const normalizedUrl = searchUrl.replace(encodeURIComponent(query), encodeURIComponent(normalizedQuery))
+        const normalizedResponse = await fetch(normalizedUrl, { next: { revalidate: 3600 } })
+        if (normalizedResponse.ok) {
+          const normalizedData = await normalizedResponse.json()
+          filteredResults = normalizedData.results || []
+          if (requestedType === 'all') {
+            filteredResults = filteredResults.filter((item: any) =>
+              item.media_type === 'movie' || item.media_type === 'tv'
+            )
+          }
+          console.log('Normalized search results count:', filteredResults.length)
+        }
+      }
+    }
 
     const results = await Promise.all(
       filteredResults.slice(0, 10).map(async (item: any) => {

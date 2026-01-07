@@ -23,8 +23,10 @@ declare global {
 }
 import MediaCard from './MediaCard'
 import SoundtrackModal from './SoundtrackModal'
+import LoggedItemModal from './LoggedItemModal'
 import CharacterGallery from '@/components/CharacterGallery'
 import { highlightEntities } from '@/components/shared/VoiceInput'
+import { getRatingColorClass } from '@/lib/ratingColors'
 
 // YouTube Player component for music with auto-advance
 function MusicYouTubePlayer({
@@ -526,6 +528,1456 @@ function PreferencesSection({
   )
 }
 
+// Transform "you"/"user" references to observational language for extracted contexts
+// Returns empty string for non-meaningful filler contexts
+function sanitizeContext(context: string): string {
+  if (!context) return ''
+
+  // Filter out filler/empty contexts
+  const fillerPhrases = [
+    'no explicit commentary',
+    'not mentioned',
+    'no specific mention',
+    'no direct commentary',
+    'not explicitly mentioned',
+    'no commentary',
+    'mentioned in passing',
+    'briefly mentioned',
+    'no specific commentary',
+    'not discussed',
+    'no mention'
+  ]
+  const lowerContext = context.toLowerCase().trim()
+  if (fillerPhrases.some(filler => lowerContext.includes(filler) || lowerContext === filler)) {
+    return ''
+  }
+
+  let sanitized = context
+
+  // Handle "The user" patterns
+  sanitized = sanitized.replace(/\bThe user\b/gi, '')
+  sanitized = sanitized.replace(/\bthe user's\b/gi, 'the')
+  sanitized = sanitized.replace(/\buser's\b/gi, 'the')
+  sanitized = sanitized.replace(/\buser\b/gi, '')
+
+  // Handle "You" patterns at start of sentences or after punctuation
+  sanitized = sanitized.replace(/^You\s+/i, '')
+  sanitized = sanitized.replace(/\.\s+You\s+/g, '. ')
+  sanitized = sanitized.replace(/,\s+you\s+/g, ', ')
+  sanitized = sanitized.replace(/\byou\s+/gi, '')
+  sanitized = sanitized.replace(/\byour\b/gi, 'the')
+
+  // Handle "they" that was meant to refer to user
+  sanitized = sanitized.replace(/\bthey praised\b/gi, 'Praised')
+  sanitized = sanitized.replace(/\bthey mentioned\b/gi, 'Mentioned')
+  sanitized = sanitized.replace(/\bthey noted\b/gi, 'Noted')
+  sanitized = sanitized.replace(/\bthey described\b/gi, 'Described')
+  sanitized = sanitized.replace(/\bthey called\b/gi, 'Called')
+  sanitized = sanitized.replace(/\bthey said\b/gi, 'Said')
+
+  // Clean up double spaces and leading/trailing whitespace
+  sanitized = sanitized.replace(/\s+/g, ' ').trim()
+
+  // Capitalize first letter
+  if (sanitized.length > 0) {
+    sanitized = sanitized.charAt(0).toUpperCase() + sanitized.slice(1)
+  }
+
+  return sanitized
+}
+
+// Personal Media Model - aggregates AI-extracted intelligence from user's comments
+function PersonalMediaModel({ loggedItems, onUpdateLoggedItem, onNavigateToItem }: {
+  loggedItems: LoggedItem[]
+  onUpdateLoggedItem?: (id: number, changes: Partial<LoggedItem>) => void
+  onNavigateToItem?: (itemId: number) => void
+}) {
+  const [isAnalyzing, setIsAnalyzing] = useState(false)
+  const [analyzeProgress, setAnalyzeProgress] = useState({ current: 0, total: 0 })
+  const [expandedSection, setExpandedSection] = useState<string | null>(null)
+  const [expandedPerson, setExpandedPerson] = useState<string | null>(null)
+  const [previewItemId, setPreviewItemId] = useState<number | null>(null)
+  const [isFullView, setIsFullView] = useState(false)
+  const [mediaTab, setMediaTab] = useState<'trailer' | 'cast' | 'scenes' | 'videos'>('trailer')
+  const [selectedVideoKey, setSelectedVideoKey] = useState<string | null>(null)
+  const [activeVideoIndex, setActiveVideoIndex] = useState(0)
+  const [movieMedia, setMovieMedia] = useState<{
+    scenes: Array<{ id: string; url: string; urlLarge: string }>
+    cast: Array<{ id: string; actorName: string; characterName: string; url: string; urlLarge: string }>
+    videos: Array<{ id: string; videoType: string; name: string; key: string; thumbnailUrl: string }>
+  } | null>(null)
+  const [loadingMedia, setLoadingMedia] = useState(false)
+
+  // Get the item being previewed
+  const previewItem = previewItemId ? loggedItems.find(item => item.id === previewItemId) : null
+
+  // Fetch movie media when full view opens
+  useEffect(() => {
+    if (isFullView && previewItem && !movieMedia && !loadingMedia) {
+      setLoadingMedia(true)
+      fetch(`/api/movie-images?title=${encodeURIComponent(previewItem.title)}&year=${previewItem.year}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.images) {
+            setMovieMedia(data.images)
+          }
+        })
+        .catch(err => console.error('Failed to fetch movie media:', err))
+        .finally(() => setLoadingMedia(false))
+    }
+  }, [isFullView, previewItem, movieMedia, loadingMedia])
+
+  // Close modal and reset state
+  const closePreview = () => {
+    setPreviewItemId(null)
+    setIsFullView(false)
+    setMediaTab('trailer')
+    setActiveVideoIndex(0)
+    setSelectedVideoKey(null)
+    setMovieMedia(null)
+  }
+
+  // Get the trailer video (first trailer found)
+  const getTrailer = (): { key: string; name: string } | null => {
+    if (!previewItem) return null
+
+    // From API: find the first Trailer type
+    if (movieMedia?.videos && movieMedia.videos.length > 0) {
+      const trailer = movieMedia.videos.find(v => v.videoType === 'Trailer' || v.videoType === 'Teaser')
+      if (trailer) return { key: trailer.key, name: trailer.name }
+    }
+
+    // Fallback to item's own trailer data
+    if (previewItem.trailerVideoId) {
+      return { key: previewItem.trailerVideoId, name: 'Official Trailer' }
+    }
+    if (previewItem.trailerUrl) {
+      const match = previewItem.trailerUrl.match(/(?:youtube\.com\/(?:embed\/|watch\?v=)|youtu\.be\/)([^&\s]+)/)
+      if (match) return { key: match[1], name: 'Official Trailer' }
+    }
+    return null
+  }
+
+  // Get all non-trailer videos (clips, featurettes, behind the scenes, etc.)
+  const getOtherVideos = (): Array<{ key: string; name: string; type: string; thumbnailUrl: string }> => {
+    if (!previewItem) return []
+
+    // From API: exclude trailers/teasers
+    if (movieMedia?.videos && movieMedia.videos.length > 0) {
+      return movieMedia.videos
+        .filter(v => v.videoType !== 'Trailer' && v.videoType !== 'Teaser')
+        .map(v => ({
+          key: v.key,
+          name: v.name,
+          type: v.videoType,
+          thumbnailUrl: v.thumbnailUrl || `https://img.youtube.com/vi/${v.key}/mqdefault.jpg`
+        }))
+    }
+
+    // Fallback: collect non-trailer videos from item
+    const videos: Array<{ key: string; name: string; type: string; thumbnailUrl: string }> = []
+    const trailerId = previewItem.trailerVideoId ||
+      (previewItem.trailerUrl?.match(/(?:youtube\.com\/(?:embed\/|watch\?v=)|youtu\.be\/)([^&\s]+)/)?.[1])
+
+    if (previewItem.videoId && previewItem.videoId !== trailerId) {
+      videos.push({
+        key: previewItem.videoId,
+        name: 'Video',
+        type: 'Clip',
+        thumbnailUrl: `https://img.youtube.com/vi/${previewItem.videoId}/mqdefault.jpg`
+      })
+    }
+
+    if (previewItem.sourceUrl) {
+      const match = previewItem.sourceUrl.match(/(?:youtube\.com\/(?:embed\/|watch\?v=)|youtu\.be\/)([^&\s]+)/)
+      if (match && match[1] !== trailerId && !videos.some(v => v.key === match[1])) {
+        videos.push({
+          key: match[1],
+          name: 'Related Video',
+          type: 'Clip',
+          thumbnailUrl: `https://img.youtube.com/vi/${match[1]}/mqdefault.jpg`
+        })
+      }
+    }
+
+    return videos
+  }
+
+  // Legacy function for backwards compat
+  const getVideos = () => {
+    const trailer = getTrailer()
+    const others = getOtherVideos()
+    const videos: { id: string; label: string; type: string }[] = []
+    if (trailer) videos.push({ id: trailer.key, label: trailer.name, type: 'trailer' })
+    others.forEach(v => videos.push({ id: v.key, label: v.name, type: v.type }))
+    return videos
+  }
+
+  // Analyze all items with notes
+  const handleAnalyzeAll = async (forceReanalyze: boolean = false) => {
+    const itemsToAnalyze = loggedItems.filter(item =>
+      item.notes && item.notes.trim().length >= 10 &&
+      (forceReanalyze || !item.extractedEntities)
+    )
+
+    if (itemsToAnalyze.length === 0) {
+      alert(forceReanalyze ? 'No items with notes to reanalyze!' : 'All items already analyzed!')
+      return
+    }
+
+    setIsAnalyzing(true)
+    setAnalyzeProgress({ current: 0, total: itemsToAnalyze.length })
+
+    for (let i = 0; i < itemsToAnalyze.length; i++) {
+      const item = itemsToAnalyze[i]
+      setAnalyzeProgress({ current: i + 1, total: itemsToAnalyze.length })
+
+      try {
+        const castNames = item.cast?.map((c: any) => c.name || c) || []
+        const crewList = [
+          item.director && { name: item.director, job: 'Director' },
+          item.cinematographer && { name: item.cinematographer, job: 'Cinematographer' },
+          item.composer && { name: item.composer, job: 'Composer' },
+          ...(item.writers?.map((w: string) => ({ name: w, job: 'Writer' })) || []),
+        ].filter(Boolean)
+
+        const response = await fetch('/api/extract-entities', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            comment: item.notes,
+            title: item.title,
+            year: item.year,
+            mediaType: item.mediaType,
+            cast: castNames,
+            crew: crewList,
+            score: item.rating,
+          }),
+        })
+
+        if (response.ok) {
+          const extracted = await response.json()
+          // Always update to mark as analyzed, even if no entities found
+          onUpdateLoggedItem?.(item.id, {
+            extractedEntities: extracted.entities || [],
+            extractedThemes: extracted.themes || [],
+            overallSentiment: extracted.overall_sentiment || 'neutral',
+          })
+        }
+      } catch (err) {
+        console.error(`Failed to analyze "${item.title}":`, err)
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 400))
+    }
+
+    setIsAnalyzing(false)
+    setAnalyzeProgress({ current: 0, total: 0 })
+  }
+
+  // Count items with notes (analyzable)
+  const itemsWithNotes = loggedItems.filter(item =>
+    item.notes && item.notes.trim().length >= 10
+  ).length
+
+  // Count items that have been analyzed (have extractedEntities array, even if empty)
+  const itemsAnalyzed = loggedItems.filter(item =>
+    item.extractedEntities !== undefined
+  ).length
+
+  // Aggregate all extracted data
+  const entityCounts: Record<string, {
+    count: number
+    positive: number
+    negative: number
+    neutral: number
+    mixed: number
+    type: string
+    contexts: { text: string; movieTitle: string; itemId: number }[]
+    movies: { title: string; itemId: number }[]
+  }> = {}
+
+  const themeCounts: Record<string, { count: number; movies: string[] }> = {}
+  const decadeCounts: Record<string, { count: number; avgRating: number; ratings: number[] }> = {}
+  let totalPositive = 0
+  let totalNegative = 0
+  let totalNeutral = 0
+  let totalMixed = 0
+
+  loggedItems.forEach(item => {
+    // Track decades
+    if (item.year) {
+      const decade = `${Math.floor(item.year / 10) * 10}s`
+      if (!decadeCounts[decade]) {
+        decadeCounts[decade] = { count: 0, avgRating: 0, ratings: [] }
+      }
+      decadeCounts[decade].count++
+      if (item.rating) {
+        decadeCounts[decade].ratings.push(item.rating)
+      }
+    }
+
+    // Track entities (filter out null/empty names)
+    if (item.extractedEntities && item.extractedEntities.length > 0) {
+      item.extractedEntities.forEach(entity => {
+        const name = entity.resolved
+        // Skip null, undefined, empty, or "null" string entities
+        if (!name || name === 'null' || name === 'undefined' || name.trim() === '') return
+        if (!entityCounts[name]) {
+          entityCounts[name] = {
+            count: 0, positive: 0, negative: 0, neutral: 0, mixed: 0,
+            type: entity.type, contexts: [], movies: []
+          }
+        }
+        entityCounts[name].count++
+        entityCounts[name][entity.sentiment]++
+        if (entity.context) {
+          entityCounts[name].contexts.push({
+            text: entity.context,
+            movieTitle: item.title,
+            itemId: item.id
+          })
+        }
+        if (!entityCounts[name].movies.some(m => m.itemId === item.id)) {
+          entityCounts[name].movies.push({ title: item.title, itemId: item.id })
+        }
+
+        if (entity.sentiment === 'positive') totalPositive++
+        else if (entity.sentiment === 'negative') totalNegative++
+        else if (entity.sentiment === 'neutral') totalNeutral++
+        else if (entity.sentiment === 'mixed') totalMixed++
+      })
+    }
+
+    // Track themes
+    if (item.extractedThemes) {
+      item.extractedThemes.forEach(theme => {
+        if (!themeCounts[theme]) {
+          themeCounts[theme] = { count: 0, movies: [] }
+        }
+        themeCounts[theme].count++
+        if (!themeCounts[theme].movies.includes(item.title)) {
+          themeCounts[theme].movies.push(item.title)
+        }
+      })
+    }
+  })
+
+  // Calculate decade averages
+  Object.keys(decadeCounts).forEach(decade => {
+    const ratings = decadeCounts[decade].ratings
+    decadeCounts[decade].avgRating = ratings.length > 0
+      ? Math.round(ratings.reduce((a, b) => a + b, 0) / ratings.length)
+      : 0
+  })
+
+  // Sort everything
+  const sortedEntities = Object.entries(entityCounts)
+    .sort((a, b) => b[1].count - a[1].count)
+
+  const sortedThemes = Object.entries(themeCounts)
+    .sort((a, b) => b[1].count - a[1].count)
+
+  const sortedDecades = Object.entries(decadeCounts)
+    .sort((a, b) => parseInt(b[0]) - parseInt(a[0]))
+
+  const totalSentiments = totalPositive + totalNegative + totalNeutral + totalMixed
+  const positivityScore = totalSentiments > 0 ? Math.round((totalPositive / totalSentiments) * 100) : 0
+
+  // Find favorite decade (highest avg rating with at least 2 films)
+  const favoriteDecade = sortedDecades
+    .filter(([_, data]) => data.count >= 2 && data.avgRating > 0)
+    .sort((a, b) => b[1].avgRating - a[1].avgRating)[0]
+
+  // Get people you love (high positive ratio)
+  const lovedPeople = sortedEntities
+    .filter(([_, data]) => data.count >= 1 && (data.positive / data.count) >= 0.8)
+    .slice(0, 5)
+
+  // Get people with mixed feelings
+  const mixedPeople = sortedEntities
+    .filter(([_, data]) => data.mixed > 0 || (data.positive > 0 && data.negative > 0))
+    .slice(0, 3)
+
+  const getTypeIcon = (type: string) => {
+    switch (type) {
+      case 'director': return '🎬'
+      case 'actor': return '🎭'
+      case 'cinematographer': return '📷'
+      case 'composer': return '🎵'
+      case 'writer': return '✍️'
+      case 'subject': return '👤'
+      default: return '⭐'
+    }
+  }
+
+  const getTypeLabel = (type: string) => {
+    switch (type) {
+      case 'director': return 'Director'
+      case 'actor': return 'Actor'
+      case 'cinematographer': return 'DP'
+      case 'composer': return 'Composer'
+      case 'writer': return 'Writer'
+      case 'subject': return 'Subject'
+      default: return 'Person'
+    }
+  }
+
+  // Generate AI insights based on patterns
+  const generateInsights = () => {
+    const insights: { type: 'pattern' | 'preference' | 'trend' | 'discovery'; text: string; confidence: number }[] = []
+
+    // Decade preference insight
+    if (favoriteDecade && favoriteDecade[1].count >= 2) {
+      insights.push({
+        type: 'preference',
+        text: `Strong affinity for ${favoriteDecade[0]} cinema detected. Average rating: ${favoriteDecade[1].avgRating}% across ${favoriteDecade[1].count} films.`,
+        confidence: Math.min(95, 70 + favoriteDecade[1].count * 5)
+      })
+    }
+
+    // High positivity insight
+    if (positivityScore >= 70) {
+      insights.push({
+        type: 'pattern',
+        text: `Consistently positive sentiment in commentary. ${positivityScore}% of mentions express appreciation or admiration.`,
+        confidence: 88
+      })
+    }
+
+    // Top theme insight
+    if (sortedThemes.length > 0) {
+      const topTheme = sortedThemes[0]
+      insights.push({
+        type: 'discovery',
+        text: `"${topTheme[0]}" emerges as primary focus area, appearing in ${topTheme[1].count} entries.`,
+        confidence: 82
+      })
+    }
+
+    // Director vs actor preference
+    const directors = sortedEntities.filter(([_, d]) => d.type === 'director')
+    const actors = sortedEntities.filter(([_, d]) => d.type === 'actor')
+    if (directors.length > actors.length && directors.length >= 2) {
+      insights.push({
+        type: 'trend',
+        text: `Director-focused viewing pattern. ${directors.length} directors tracked vs ${actors.length} actors.`,
+        confidence: 76
+      })
+    } else if (actors.length > directors.length && actors.length >= 3) {
+      insights.push({
+        type: 'trend',
+        text: `Performance-oriented viewing. ${actors.length} actors tracked with emphasis on acting craft.`,
+        confidence: 76
+      })
+    }
+
+    // Loved person insight
+    if (lovedPeople.length > 0) {
+      const topLoved = lovedPeople[0]
+      insights.push({
+        type: 'preference',
+        text: `High affinity signal: ${topLoved[0]} (${topLoved[1].type}) — mentioned ${topLoved[1].count}x with ${Math.round((topLoved[1].positive / topLoved[1].count) * 100)}% positive sentiment.`,
+        confidence: 91
+      })
+    }
+
+    return insights.slice(0, 4)
+  }
+
+  const insights = generateInsights()
+
+  // Empty state
+  if (itemsWithNotes === 0) {
+    return (
+      <div className="space-y-4">
+        <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl p-6 border border-slate-700">
+          <div className="flex items-center gap-4 mb-4">
+            <div className="w-12 h-12 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-xl flex items-center justify-center">
+              <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+              </svg>
+            </div>
+            <div>
+              <h3 className="font-bold text-white text-lg">Media Intelligence Model</h3>
+              <p className="text-slate-400 text-sm">Awaiting data for analysis</p>
+            </div>
+          </div>
+          <p className="text-slate-300 text-sm leading-relaxed">
+            This system analyzes commentary and notes to build a personalized taste model.
+            Entity recognition, sentiment analysis, and pattern detection activate once sufficient data is logged.
+          </p>
+          <div className="mt-4 flex items-center gap-2 text-slate-500 text-xs">
+            <div className="w-2 h-2 bg-slate-600 rounded-full animate-pulse" />
+            <span>Minimum 1 entry with notes required</span>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Analyzing state
+  if (isAnalyzing) {
+    return (
+      <div className="space-y-4">
+        <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl p-6 border border-cyan-500/30">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 border-3 border-cyan-500 border-t-transparent rounded-full animate-spin" />
+              <div>
+                <h3 className="font-bold text-white">Processing Entries</h3>
+                <p className="text-cyan-400 text-sm">{analyzeProgress.current} of {analyzeProgress.total}</p>
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="text-2xl font-mono text-cyan-400">{Math.round((analyzeProgress.current / analyzeProgress.total) * 100)}%</div>
+            </div>
+          </div>
+          <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-gradient-to-r from-cyan-500 to-blue-500 transition-all duration-300"
+              style={{ width: `${(analyzeProgress.current / analyzeProgress.total) * 100}%` }}
+            />
+          </div>
+          <div className="mt-4 grid grid-cols-3 gap-4 text-center text-xs">
+            <div className="text-slate-400">
+              <div className="text-cyan-400 font-mono">NLP</div>
+              <div>Entity Extraction</div>
+            </div>
+            <div className="text-slate-400">
+              <div className="text-cyan-400 font-mono">SENT</div>
+              <div>Sentiment Analysis</div>
+            </div>
+            <div className="text-slate-400">
+              <div className="text-cyan-400 font-mono">PAT</div>
+              <div>Pattern Detection</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Main dashboard
+  return (
+    <div className="space-y-4">
+      {/* Header Card */}
+      <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl p-5 border border-slate-700">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-cyan-500/20">
+              <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+              </svg>
+            </div>
+            <div>
+              <h3 className="font-bold text-white text-lg">Media Intelligence</h3>
+              <p className="text-slate-400 text-xs">{itemsAnalyzed} entries analyzed</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+            <span className="text-green-400 text-xs font-medium">Active</span>
+          </div>
+        </div>
+
+        {/* Core Metrics */}
+        <div className="grid grid-cols-4 gap-3">
+          <div className="bg-slate-800/50 rounded-xl p-3 text-center border border-slate-700">
+            <div className="text-2xl font-bold text-white">{sortedEntities.length}</div>
+            <div className="text-slate-400 text-xs">Entities</div>
+          </div>
+          <div className="bg-slate-800/50 rounded-xl p-3 text-center border border-slate-700">
+            <div className="text-2xl font-bold text-white">{sortedThemes.length}</div>
+            <div className="text-slate-400 text-xs">Themes</div>
+          </div>
+          <div className="bg-slate-800/50 rounded-xl p-3 text-center border border-slate-700">
+            <div className="text-2xl font-bold text-cyan-400">{positivityScore}%</div>
+            <div className="text-slate-400 text-xs">Positivity</div>
+          </div>
+          <div className="bg-slate-800/50 rounded-xl p-3 text-center border border-slate-700">
+            <div className="text-2xl font-bold text-white">{sortedDecades.length}</div>
+            <div className="text-slate-400 text-xs">Eras</div>
+          </div>
+        </div>
+      </div>
+
+      {/* AI Insights */}
+      {insights.length > 0 && (
+        <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl p-5 border border-slate-700">
+          <div className="flex items-center gap-2 mb-4">
+            <svg className="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+            <h3 className="font-bold text-white">AI Insights</h3>
+            <span className="text-xs text-slate-500 ml-auto">Confidence-weighted</span>
+          </div>
+          <div className="space-y-3">
+            {insights.map((insight, idx) => (
+              <div key={idx} className="bg-slate-800/50 rounded-xl p-4 border border-slate-700">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className={`text-xs font-medium px-2 py-0.5 rounded ${
+                        insight.type === 'pattern' ? 'bg-purple-500/20 text-purple-400' :
+                        insight.type === 'preference' ? 'bg-green-500/20 text-green-400' :
+                        insight.type === 'trend' ? 'bg-blue-500/20 text-blue-400' :
+                        'bg-amber-500/20 text-amber-400'
+                      }`}>
+                        {insight.type.toUpperCase()}
+                      </span>
+                    </div>
+                    <p className="text-slate-300 text-sm leading-relaxed">{insight.text}</p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <div className="text-lg font-mono text-slate-300">{insight.confidence}%</div>
+                    <div className="text-xs text-slate-500">conf.</div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Sentiment Distribution */}
+      {totalSentiments > 0 && (
+        <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl p-5 border border-slate-700">
+          <h3 className="font-bold text-white mb-4 flex items-center gap-2">
+            <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+            </svg>
+            Sentiment Distribution
+          </h3>
+          <div className="h-4 bg-slate-800 rounded-full overflow-hidden flex mb-3">
+            <div className="bg-green-500 h-full transition-all" style={{ width: `${(totalPositive / totalSentiments) * 100}%` }} />
+            <div className="bg-slate-500 h-full transition-all" style={{ width: `${(totalNeutral / totalSentiments) * 100}%` }} />
+            <div className="bg-amber-500 h-full transition-all" style={{ width: `${(totalMixed / totalSentiments) * 100}%` }} />
+            <div className="bg-red-500 h-full transition-all" style={{ width: `${(totalNegative / totalSentiments) * 100}%` }} />
+          </div>
+          <div className="grid grid-cols-4 gap-2 text-center text-xs">
+            <div>
+              <div className="text-green-400 font-bold">{totalPositive}</div>
+              <div className="text-slate-500">Positive</div>
+            </div>
+            <div>
+              <div className="text-slate-400 font-bold">{totalNeutral}</div>
+              <div className="text-slate-500">Neutral</div>
+            </div>
+            <div>
+              <div className="text-amber-400 font-bold">{totalMixed}</div>
+              <div className="text-slate-500">Mixed</div>
+            </div>
+            <div>
+              <div className="text-red-400 font-bold">{totalNegative}</div>
+              <div className="text-slate-500">Critical</div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Era Analysis */}
+      {sortedDecades.length > 0 && (
+        <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl p-5 border border-slate-700">
+          <button
+            onClick={() => setExpandedSection(expandedSection === 'decades' ? null : 'decades')}
+            className="w-full flex items-center justify-between"
+          >
+            <h3 className="font-bold text-white flex items-center gap-2">
+              <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              Era Analysis
+            </h3>
+            <svg className={`w-5 h-5 text-slate-400 transition-transform ${expandedSection === 'decades' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          {expandedSection === 'decades' && (
+            <div className="mt-4 space-y-2">
+              {sortedDecades.map(([decade, data]) => {
+                const maxCount = Math.max(...sortedDecades.map(d => d[1].count))
+                const barWidth = (data.count / maxCount) * 100
+                return (
+                  <div key={decade} className="flex items-center gap-3">
+                    <div className="w-14 font-mono text-sm text-slate-400">{decade}</div>
+                    <div className="flex-1 h-6 bg-slate-800 rounded overflow-hidden">
+                      <div
+                        className="h-full bg-gradient-to-r from-cyan-600 to-blue-600 flex items-center justify-end px-2"
+                        style={{ width: `${Math.max(barWidth, 12)}%` }}
+                      >
+                        <span className="text-xs text-white font-medium">{data.count}</span>
+                      </div>
+                    </div>
+                    <div className="w-12 text-right">
+                      <span className={`text-sm font-medium ${
+                        data.avgRating >= 80 ? 'text-green-400' :
+                        data.avgRating >= 60 ? 'text-amber-400' : 'text-slate-400'
+                      }`}>{data.avgRating > 0 ? `${data.avgRating}%` : '—'}</span>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Entity Tracking */}
+      {sortedEntities.length > 0 && (
+        <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl p-5 border border-slate-700">
+          <button
+            onClick={() => setExpandedSection(expandedSection === 'entities' ? null : 'entities')}
+            className="w-full flex items-center justify-between"
+          >
+            <h3 className="font-bold text-white flex items-center gap-2">
+              <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+              Entity Tracking ({sortedEntities.length})
+            </h3>
+            <svg className={`w-5 h-5 text-slate-400 transition-transform ${expandedSection === 'entities' ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          {expandedSection === 'entities' && (
+            <div className="mt-4 space-y-2">
+              {sortedEntities.slice(0, 15).map(([name, data]) => {
+                const sentimentRatio = data.count > 0 ? data.positive / data.count : 0
+                return (
+                  <div key={name}>
+                    <button
+                      onClick={() => setExpandedPerson(expandedPerson === name ? null : name)}
+                      className="w-full bg-slate-800/50 rounded-lg p-3 border border-slate-700 hover:border-slate-600 transition-colors"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <span className="text-lg">{getTypeIcon(data.type)}</span>
+                          <div className="text-left">
+                            <div className="text-white font-medium">{name}</div>
+                            <div className="text-slate-500 text-xs">{getTypeLabel(data.type)} · {data.count} mention{data.count !== 1 ? 's' : ''}</div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <div className={`text-xs font-medium px-2 py-1 rounded ${
+                            sentimentRatio >= 0.8 ? 'bg-green-500/20 text-green-400' :
+                            sentimentRatio >= 0.5 ? 'bg-blue-500/20 text-blue-400' :
+                            sentimentRatio >= 0.3 ? 'bg-amber-500/20 text-amber-400' :
+                            'bg-slate-500/20 text-slate-400'
+                          }`}>
+                            {Math.round(sentimentRatio * 100)}% pos
+                          </div>
+                          <svg className={`w-4 h-4 text-slate-500 transition-transform ${expandedPerson === name ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </div>
+                      </div>
+                    </button>
+                    {expandedPerson === name && (
+                      <div className="mt-2 ml-4 p-4 bg-slate-800/30 rounded-lg border-l-2 border-cyan-500">
+                        <div className="grid grid-cols-4 gap-4 mb-3 text-center text-xs">
+                          <div>
+                            <div className="text-green-400 font-bold">{data.positive}</div>
+                            <div className="text-slate-500">Positive</div>
+                          </div>
+                          <div>
+                            <div className="text-slate-400 font-bold">{data.neutral}</div>
+                            <div className="text-slate-500">Neutral</div>
+                          </div>
+                          <div>
+                            <div className="text-amber-400 font-bold">{data.mixed}</div>
+                            <div className="text-slate-500">Mixed</div>
+                          </div>
+                          <div>
+                            <div className="text-red-400 font-bold">{data.negative}</div>
+                            <div className="text-slate-500">Negative</div>
+                          </div>
+                        </div>
+                        {data.contexts.filter(ctx => sanitizeContext(ctx.text)).length > 0 && (
+                          <div className="space-y-2">
+                            <div className="text-xs text-slate-500 uppercase tracking-wide">Extracted Context</div>
+                            {data.contexts
+                              .filter(ctx => sanitizeContext(ctx.text))
+                              .slice(0, 3)
+                              .map((ctx, i) => (
+                                <button
+                                  key={i}
+                                  onClick={() => setPreviewItemId(ctx.itemId)}
+                                  className="text-left w-full group"
+                                >
+                                  <p className="text-slate-300 text-sm italic border-l-2 border-slate-600 pl-3 group-hover:border-cyan-400 group-hover:text-cyan-300 transition-colors">
+                                    "{sanitizeContext(ctx.text)}"
+                                    <span className="text-slate-500 text-xs ml-2 group-hover:text-cyan-400">— {ctx.movieTitle}</span>
+                                  </p>
+                                </button>
+                              ))}
+                          </div>
+                        )}
+                        {data.movies.length > 0 && (
+                          <div className="mt-3 text-xs text-slate-500">
+                            Appears in:{' '}
+                            {data.movies.map((movie, i) => (
+                              <span key={movie.itemId}>
+                                <button
+                                  onClick={() => setPreviewItemId(movie.itemId)}
+                                  className="text-slate-400 hover:text-cyan-400 hover:underline transition-colors"
+                                >
+                                  {movie.title}
+                                </button>
+                                {i < data.movies.length - 1 && ', '}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Theme Analysis */}
+      {sortedThemes.length > 0 && (
+        <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl p-5 border border-slate-700">
+          <h3 className="font-bold text-white mb-4 flex items-center gap-2">
+            <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+            </svg>
+            Theme Analysis
+          </h3>
+          <div className="flex flex-wrap gap-2">
+            {sortedThemes.map(([theme, data]) => (
+              <span
+                key={theme}
+                className="px-3 py-1.5 bg-slate-800 rounded-lg text-sm text-slate-300 border border-slate-700 capitalize"
+              >
+                {theme}
+                <span className="ml-2 text-cyan-400 font-mono text-xs">{data.count}</span>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Actions */}
+      <div className="flex gap-3">
+        <button
+          onClick={() => handleAnalyzeAll(true)}
+          className="flex-1 py-3 bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-bold rounded-xl hover:from-cyan-500 hover:to-blue-500 transition-all shadow-lg shadow-cyan-500/20"
+        >
+          Reanalyze All
+        </button>
+        {itemsAnalyzed < itemsWithNotes && (
+          <button
+            onClick={() => handleAnalyzeAll(false)}
+            className="flex-1 py-3 bg-slate-800 text-white font-bold rounded-xl border border-slate-700 hover:bg-slate-700 transition-colors"
+          >
+            Analyze {itemsWithNotes - itemsAnalyzed} New
+          </button>
+        )}
+      </div>
+
+      {/* Item Preview Modal */}
+      {previewItem && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={closePreview}>
+          <div
+            className={`bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl w-full overflow-y-auto border border-slate-700 shadow-2xl transition-all duration-300 ${
+              isFullView ? 'max-w-5xl max-h-[95vh]' : 'max-w-3xl max-h-[90vh]'
+            }`}
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Header with poster */}
+            <div className="relative">
+              {previewItem.poster && (
+                <div className={`overflow-hidden rounded-t-2xl transition-all duration-300 ${isFullView ? 'h-80' : 'h-64'}`}>
+                  <img
+                    src={previewItem.poster}
+                    alt={previewItem.title}
+                    className="w-full h-full object-cover opacity-40"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-slate-900/50 to-transparent" />
+                </div>
+              )}
+              {/* Back button (in full view) */}
+              {isFullView && (
+                <button
+                  onClick={() => setIsFullView(false)}
+                  className="absolute top-3 left-3 px-3 py-1.5 bg-slate-800/80 hover:bg-slate-700 rounded-full flex items-center gap-2 text-slate-400 hover:text-white transition-colors text-sm"
+                >
+                  ← Back
+                </button>
+              )}
+              <button
+                onClick={closePreview}
+                className="absolute top-3 right-3 w-8 h-8 bg-slate-800/80 hover:bg-slate-700 rounded-full flex items-center justify-center text-slate-400 hover:text-white transition-colors"
+              >
+                ✕
+              </button>
+              <div className={`${previewItem.poster ? 'absolute bottom-4 left-6 right-6' : 'p-6 pb-2'}`}>
+                <h3 className={`font-bold text-white transition-all ${isFullView ? 'text-3xl' : 'text-2xl'}`}>{previewItem.title}</h3>
+                <div className="flex items-center gap-3 text-slate-400 text-sm mt-2">
+                  <span>{previewItem.year}</span>
+                  {previewItem.director && <span>• {previewItem.director}</span>}
+                  {previewItem.runtime && <span>• {previewItem.runtime} min</span>}
+                  {previewItem.rating && (
+                    <span className={`font-bold ${getRatingColorClass(previewItem.rating)}`}>{previewItem.rating}%</span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className={`space-y-5 transition-all ${isFullView ? 'p-8' : 'p-6'}`}>
+              {/* Full view: Complete entry */}
+              {isFullView ? (
+                <div className="space-y-8">
+                  {/* Media Gallery with Tabs */}
+                  {(() => {
+                    const trailer = getTrailer()
+                    const otherVideos = getOtherVideos()
+                    const castData = movieMedia?.cast || previewItem.cast?.map(m => ({
+                      id: `cast-${m.name}`,
+                      actorName: m.name,
+                      characterName: m.character || '',
+                      url: m.profilePath ? `https://image.tmdb.org/t/p/w185${m.profilePath}` : null,
+                      urlLarge: m.profilePath ? `https://image.tmdb.org/t/p/w500${m.profilePath}` : null
+                    })) || []
+
+                    return (
+                      <div>
+                        {/* Tab buttons - Order: Trailer, Cast, Scenes, Videos */}
+                        <div className="flex gap-2 mb-3 overflow-x-auto pb-1">
+                          {(trailer || loadingMedia) && (
+                            <button
+                              onClick={() => { setMediaTab('trailer'); setSelectedVideoKey(null) }}
+                              className={`flex-shrink-0 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                                mediaTab === 'trailer'
+                                  ? 'bg-cyan-600 text-white'
+                                  : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                              }`}
+                            >
+                              ▶ Trailer
+                            </button>
+                          )}
+                          {castData.length > 0 && (
+                            <button
+                              onClick={() => setMediaTab('cast')}
+                              className={`flex-shrink-0 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                                mediaTab === 'cast'
+                                  ? 'bg-cyan-600 text-white'
+                                  : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                              }`}
+                            >
+                              👥 Cast
+                            </button>
+                          )}
+                          {(movieMedia?.scenes?.length || 0) > 0 && (
+                            <button
+                              onClick={() => setMediaTab('scenes')}
+                              className={`flex-shrink-0 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                                mediaTab === 'scenes'
+                                  ? 'bg-cyan-600 text-white'
+                                  : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                              }`}
+                            >
+                              🎬 Scenes
+                            </button>
+                          )}
+                          {otherVideos.length > 0 && (
+                            <button
+                              onClick={() => setMediaTab('videos')}
+                              className={`flex-shrink-0 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                                mediaTab === 'videos'
+                                  ? 'bg-cyan-600 text-white'
+                                  : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                              }`}
+                            >
+                              🎥 Videos ({otherVideos.length})
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Tab content */}
+                        <div className="rounded-xl overflow-hidden bg-slate-800/50 shadow-2xl">
+                          {/* Trailer - embedded, ready to play */}
+                          {mediaTab === 'trailer' && trailer && (
+                            <div className="aspect-video">
+                              <iframe
+                                key={trailer.key}
+                                src={`https://www.youtube.com/embed/${trailer.key}`}
+                                className="w-full h-full"
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                allowFullScreen
+                              />
+                            </div>
+                          )}
+
+                          {/* Trailer fallback - show poster if no trailer */}
+                          {mediaTab === 'trailer' && !trailer && previewItem.poster && (
+                            <div className="flex justify-center p-6 bg-black/50">
+                              <img
+                                src={previewItem.poster}
+                                alt={previewItem.title}
+                                className="max-h-[50vh] rounded-xl shadow-2xl"
+                              />
+                            </div>
+                          )}
+
+                          {/* Cast - bigger thumbnails */}
+                          {mediaTab === 'cast' && castData.length > 0 && (
+                            <div className="p-4">
+                              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-4">
+                                {castData.map((member, i) => (
+                                  <div key={member.id || i} className="group">
+                                    <div className="aspect-[2/3] rounded-lg overflow-hidden bg-slate-700 mb-2 shadow-lg">
+                                      {(member.url || member.urlLarge) ? (
+                                        <img
+                                          src={member.urlLarge || member.url || ''}
+                                          alt={member.actorName}
+                                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                          loading="lazy"
+                                        />
+                                      ) : (
+                                        <div className="w-full h-full flex items-center justify-center text-slate-600 text-3xl">
+                                          👤
+                                        </div>
+                                      )}
+                                    </div>
+                                    <div className="text-center">
+                                      <div className="text-slate-200 text-sm font-medium truncate">{member.actorName}</div>
+                                      {member.characterName && (
+                                        <div className="text-slate-500 text-xs truncate">{member.characterName}</div>
+                                      )}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Scenes - grid of scene images */}
+                          {mediaTab === 'scenes' && movieMedia?.scenes && movieMedia.scenes.length > 0 && (
+                            <div className="p-4">
+                              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                                {movieMedia.scenes.map((scene, i) => (
+                                  <div key={scene.id || i} className="group cursor-pointer">
+                                    <div className="aspect-video rounded-lg overflow-hidden bg-slate-700 shadow-lg">
+                                      <img
+                                        src={scene.url}
+                                        alt={`Scene ${i + 1}`}
+                                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                        loading="lazy"
+                                      />
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Videos - thumbnails grid with player above when selected */}
+                          {mediaTab === 'videos' && otherVideos.length > 0 && (
+                            <div>
+                              {/* Video player - shows when a video is selected */}
+                              {selectedVideoKey && (
+                                <div className="aspect-video border-b border-slate-700">
+                                  <iframe
+                                    key={selectedVideoKey}
+                                    src={`https://www.youtube.com/embed/${selectedVideoKey}?autoplay=1`}
+                                    className="w-full h-full"
+                                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                    allowFullScreen
+                                  />
+                                </div>
+                              )}
+                              {/* Video thumbnails grid */}
+                              <div className="p-4">
+                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                                  {otherVideos.map((video) => (
+                                    <button
+                                      key={video.key}
+                                      onClick={() => setSelectedVideoKey(video.key)}
+                                      className={`group text-left rounded-lg overflow-hidden transition-all ${
+                                        selectedVideoKey === video.key
+                                          ? 'ring-2 ring-cyan-500'
+                                          : 'hover:ring-2 hover:ring-slate-500'
+                                      }`}
+                                    >
+                                      <div className="aspect-video bg-slate-700 relative">
+                                        <img
+                                          src={video.thumbnailUrl}
+                                          alt={video.name}
+                                          className="w-full h-full object-cover"
+                                          loading="lazy"
+                                        />
+                                        <div className="absolute inset-0 flex items-center justify-center bg-black/30 group-hover:bg-black/50 transition-colors">
+                                          <div className="w-10 h-10 rounded-full bg-white/90 flex items-center justify-center">
+                                            <span className="text-slate-900 text-lg ml-0.5">▶</span>
+                                          </div>
+                                        </div>
+                                        <div className="absolute top-1 left-1 px-1.5 py-0.5 bg-black/70 rounded text-[10px] text-slate-300">
+                                          {video.type}
+                                        </div>
+                                      </div>
+                                      <div className="p-2 bg-slate-800">
+                                        <div className="text-slate-200 text-xs font-medium line-clamp-2">{video.name}</div>
+                                      </div>
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })()}
+
+                  {/* Synopsis + Notes Row */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Plot/Overview */}
+                    {(previewItem.plot || previewItem.overview) && (
+                      <div>
+                        <div className="text-xs text-slate-500 uppercase tracking-wide mb-2">Synopsis</div>
+                        <p className="text-slate-300 text-base leading-relaxed">
+                          {previewItem.plot || previewItem.overview}
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Your Notes */}
+                    {previewItem.notes && (
+                      <div>
+                        <div className="text-xs text-slate-500 uppercase tracking-wide mb-2">Your Notes</div>
+                        <p className="text-slate-300 text-base leading-relaxed bg-slate-800/50 rounded-lg p-4 border-l-2 border-cyan-500">
+                          {previewItem.notes}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Genres */}
+                  {previewItem.genres && previewItem.genres.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {previewItem.genres.map((genre, i) => (
+                        <span key={i} className="px-3 py-1.5 bg-slate-700 text-slate-300 rounded-full text-sm">
+                          {genre}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Ratings Row */}
+                  {(previewItem.rating || previewItem.imdbRating || previewItem.tmdbRating || previewItem.metacriticScore || previewItem.rottenTomatoesScore) && (
+                    <div>
+                      <div className="text-xs text-slate-500 uppercase tracking-wide mb-3">Ratings</div>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+                        {previewItem.rating && (
+                          <div className="bg-cyan-500/10 rounded-xl p-4 text-center border border-cyan-500/30">
+                            <div className="text-cyan-400 font-bold text-2xl">{previewItem.rating}%</div>
+                            <div className="text-slate-400 text-xs mt-1">Your Rating</div>
+                          </div>
+                        )}
+                        {previewItem.imdbRating && (
+                          <div className="bg-amber-500/10 rounded-xl p-4 text-center">
+                            <div className="text-amber-400 font-bold text-2xl">{previewItem.imdbRating}</div>
+                            <div className="text-slate-500 text-xs mt-1">IMDb</div>
+                          </div>
+                        )}
+                        {previewItem.tmdbRating && (
+                          <div className="bg-green-500/10 rounded-xl p-4 text-center">
+                            <div className="text-green-400 font-bold text-2xl">{Math.round(previewItem.tmdbRating * 10)}%</div>
+                            <div className="text-slate-500 text-xs mt-1">TMDB</div>
+                          </div>
+                        )}
+                        {previewItem.metacriticScore && (
+                          <div className="bg-yellow-500/10 rounded-xl p-4 text-center">
+                            <div className="text-yellow-400 font-bold text-2xl">{previewItem.metacriticScore}</div>
+                            <div className="text-slate-500 text-xs mt-1">Metacritic</div>
+                          </div>
+                        )}
+                        {previewItem.rottenTomatoesScore && (
+                          <div className="bg-red-500/10 rounded-xl p-4 text-center">
+                            <div className="text-red-400 font-bold text-2xl">{previewItem.rottenTomatoesScore}%</div>
+                            <div className="text-slate-500 text-xs mt-1">Rotten Tomatoes</div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Two column layout for remaining details */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    {/* Left column */}
+                    <div className="space-y-6">
+                      {/* Viewing Context */}
+                      <div>
+                        <div className="text-xs text-slate-500 uppercase tracking-wide mb-2">Viewing Context</div>
+                        <div className="bg-slate-800/50 rounded-xl p-5 space-y-3">
+                          {previewItem.dateConsumed && (
+                            <div className="flex items-center gap-3 text-slate-300">
+                              <span className="text-2xl">📅</span>
+                              <div>
+                                <div className="font-medium">{new Date(previewItem.dateConsumed).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}</div>
+                              </div>
+                            </div>
+                          )}
+                          {previewItem.location && (
+                            <div className="flex items-center gap-3 text-slate-300">
+                              <span className="text-2xl">📍</span>
+                              <div>
+                                <div className="font-medium">{previewItem.location}</div>
+                                {previewItem.locationDetail && <div className="text-slate-500 text-sm">{previewItem.locationDetail}</div>}
+                              </div>
+                            </div>
+                          )}
+                          {previewItem.socialContext && (
+                            <div className="flex items-center gap-3 text-slate-300">
+                              <span className="text-2xl">👥</span>
+                              <div>
+                                <div className="font-medium">{previewItem.socialContext}</div>
+                                {previewItem.companionNames && <div className="text-slate-500 text-sm">{previewItem.companionNames}</div>}
+                              </div>
+                            </div>
+                          )}
+                          {previewItem.firstTime !== undefined && (
+                            <div className="flex items-center gap-3 text-slate-300">
+                              <span className="text-2xl">{previewItem.firstTime ? '✨' : '🔄'}</span>
+                              <div className="font-medium">{previewItem.firstTime ? 'First time viewing' : 'Rewatch'}</div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Extracted Entities with context */}
+                      {previewItem.extractedEntities && previewItem.extractedEntities.length > 0 && (
+                        <div>
+                          <div className="text-xs text-slate-500 uppercase tracking-wide mb-2">People You Mentioned</div>
+                          <div className="space-y-3">
+                            {previewItem.extractedEntities.map((entity, i) => (
+                              <div key={i} className="bg-slate-800/30 rounded-lg p-3">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span
+                                    className={`px-2 py-0.5 rounded-full text-xs ${
+                                      entity.sentiment === 'positive' ? 'bg-green-500/20 text-green-300' :
+                                      entity.sentiment === 'negative' ? 'bg-red-500/20 text-red-300' :
+                                      entity.sentiment === 'mixed' ? 'bg-amber-500/20 text-amber-300' :
+                                      'bg-slate-700 text-slate-300'
+                                    }`}
+                                  >
+                                    {entity.type}
+                                  </span>
+                                  <span className="text-slate-200 font-medium">{entity.resolved}</span>
+                                </div>
+                                {entity.context && sanitizeContext(entity.context) && (
+                                  <p className="text-slate-400 text-sm italic pl-2 border-l-2 border-slate-700">"{sanitizeContext(entity.context)}"</p>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Themes */}
+                      {previewItem.extractedThemes && previewItem.extractedThemes.length > 0 && (
+                        <div>
+                          <div className="text-xs text-slate-500 uppercase tracking-wide mb-2">Themes</div>
+                          <div className="flex flex-wrap gap-2">
+                            {previewItem.extractedThemes.map((theme, i) => (
+                              <span key={i} className="px-4 py-2 bg-purple-500/20 text-purple-300 rounded-full text-sm">
+                                {theme}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Right column */}
+                    <div className="space-y-6">
+                      {/* Crew Grid */}
+                      <div>
+                        <div className="text-xs text-slate-500 uppercase tracking-wide mb-3">Crew</div>
+                        <div className="grid grid-cols-2 gap-4">
+                          {previewItem.director && (
+                            <div className="bg-slate-800/30 rounded-lg p-3">
+                              <div className="text-slate-500 text-xs uppercase">Director</div>
+                              <div className="text-slate-200 font-medium">{previewItem.director}</div>
+                            </div>
+                          )}
+                          {previewItem.cinematographer && (
+                            <div className="bg-slate-800/30 rounded-lg p-3">
+                              <div className="text-slate-500 text-xs uppercase">Cinematographer</div>
+                              <div className="text-slate-200 font-medium">{previewItem.cinematographer}</div>
+                            </div>
+                          )}
+                          {previewItem.composer && (
+                            <div className="bg-slate-800/30 rounded-lg p-3">
+                              <div className="text-slate-500 text-xs uppercase">Composer</div>
+                              <div className="text-slate-200 font-medium">{previewItem.composer}</div>
+                            </div>
+                          )}
+                          {previewItem.writers && previewItem.writers.length > 0 && (
+                            <div className="bg-slate-800/30 rounded-lg p-3">
+                              <div className="text-slate-500 text-xs uppercase">Writers</div>
+                              <div className="text-slate-200 font-medium">{previewItem.writers.slice(0, 3).join(', ')}</div>
+                            </div>
+                          )}
+                          {previewItem.editor && (
+                            <div className="bg-slate-800/30 rounded-lg p-3">
+                              <div className="text-slate-500 text-xs uppercase">Editor</div>
+                              <div className="text-slate-200 font-medium">{previewItem.editor}</div>
+                            </div>
+                          )}
+                          {previewItem.producers && previewItem.producers.length > 0 && (
+                            <div className="bg-slate-800/30 rounded-lg p-3">
+                              <div className="text-slate-500 text-xs uppercase">Producers</div>
+                              <div className="text-slate-200 font-medium">{previewItem.producers.slice(0, 2).map(p => p.name).join(', ')}</div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Film Details */}
+                      {(previewItem.rated || previewItem.runtime || previewItem.language || previewItem.country || previewItem.boxOffice || previewItem.awards) && (
+                        <div>
+                          <div className="text-xs text-slate-500 uppercase tracking-wide mb-3">Details</div>
+                          <div className="bg-slate-800/30 rounded-xl p-4 space-y-3">
+                            {previewItem.rated && (
+                              <div className="flex justify-between">
+                                <span className="text-slate-500">Rated</span>
+                                <span className="text-slate-300 font-medium">{previewItem.rated}</span>
+                              </div>
+                            )}
+                            {previewItem.runtime && (
+                              <div className="flex justify-between">
+                                <span className="text-slate-500">Runtime</span>
+                                <span className="text-slate-300 font-medium">{previewItem.runtime} min</span>
+                              </div>
+                            )}
+                            {previewItem.language && (
+                              <div className="flex justify-between">
+                                <span className="text-slate-500">Language</span>
+                                <span className="text-slate-300 font-medium">{previewItem.language}</span>
+                              </div>
+                            )}
+                            {previewItem.country && (
+                              <div className="flex justify-between">
+                                <span className="text-slate-500">Country</span>
+                                <span className="text-slate-300 font-medium">{previewItem.country}</span>
+                              </div>
+                            )}
+                            {previewItem.boxOffice && (
+                              <div className="flex justify-between">
+                                <span className="text-slate-500">Box Office</span>
+                                <span className="text-slate-300 font-medium">{previewItem.boxOffice}</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Awards */}
+                      {previewItem.awards && (
+                        <div>
+                          <div className="text-xs text-slate-500 uppercase tracking-wide mb-2">Awards</div>
+                          <div className="bg-amber-500/10 rounded-xl p-4 border border-amber-500/20">
+                            <div className="text-amber-300">🏆 {previewItem.awards}</div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  {/* Preview mode: Simple layout */}
+                  {/* Date & Context */}
+                  <div className="flex flex-wrap gap-2 text-xs">
+                    {previewItem.dateConsumed && (
+                      <span className="px-2 py-1 bg-slate-800 rounded-full text-slate-400">
+                        📅 {new Date(previewItem.dateConsumed).toLocaleDateString()}
+                      </span>
+                    )}
+                    {previewItem.location && (
+                      <span className="px-2 py-1 bg-slate-800 rounded-full text-slate-400">
+                        📍 {previewItem.location}
+                      </span>
+                    )}
+                    {previewItem.socialContext && (
+                      <span className="px-2 py-1 bg-slate-800 rounded-full text-slate-400">
+                        👥 {previewItem.socialContext}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Notes */}
+                  {previewItem.notes && (
+                    <div>
+                      <div className="text-xs text-slate-500 uppercase tracking-wide mb-2">Notes</div>
+                      <p className="text-slate-300 text-base leading-relaxed bg-slate-800/50 rounded-lg p-4 border-l-2 border-cyan-500">
+                        {previewItem.notes}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Extracted Entities */}
+                  {previewItem.extractedEntities && previewItem.extractedEntities.length > 0 && (
+                    <div>
+                      <div className="text-xs text-slate-500 uppercase tracking-wide mb-2">Mentioned</div>
+                      <div className="flex flex-wrap gap-2">
+                        {previewItem.extractedEntities.map((entity, i) => (
+                          <span
+                            key={i}
+                            className={`px-3 py-1.5 rounded-full text-sm ${
+                              entity.sentiment === 'positive' ? 'bg-green-500/20 text-green-300' :
+                              entity.sentiment === 'negative' ? 'bg-red-500/20 text-red-300' :
+                              entity.sentiment === 'mixed' ? 'bg-amber-500/20 text-amber-300' :
+                              'bg-slate-700 text-slate-300'
+                            }`}
+                          >
+                            {entity.resolved}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Themes */}
+                  {previewItem.extractedThemes && previewItem.extractedThemes.length > 0 && (
+                    <div>
+                      <div className="text-xs text-slate-500 uppercase tracking-wide mb-2">Themes</div>
+                      <div className="flex flex-wrap gap-2">
+                        {previewItem.extractedThemes.map((theme, i) => (
+                          <span key={i} className="px-3 py-1.5 bg-purple-500/20 text-purple-300 rounded-full text-sm">
+                            {theme}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* View Full Entry button */}
+                  <button
+                    onClick={() => setIsFullView(true)}
+                    className="w-full py-3 mt-2 bg-cyan-600 hover:bg-cyan-500 text-white font-medium rounded-xl transition-colors flex items-center justify-center gap-2"
+                  >
+                    View Full Entry
+                    <span className="text-cyan-200">→</span>
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // Types
 type RightPaneTab = 'logging' | 'upnext' | 'drafts' | 'library' | 'recs' | 'profile'
 type MediaFilter = 'all' | 'movie' | 'tv' | 'books' | 'music' | 'podcasts' | 'video'
@@ -625,6 +2077,15 @@ interface AlreadySeenData {
   imdbRating?: string
 }
 
+// Extracted entity from AI analysis
+export interface ExtractedEntity {
+  mentioned: string        // What the user actually said/typed
+  resolved: string         // The correct name
+  type: 'actor' | 'director' | 'cinematographer' | 'composer' | 'writer' | 'producer' | 'subject' | 'character' | 'other_person'
+  sentiment: 'positive' | 'negative' | 'neutral' | 'mixed'
+  context?: string         // Brief context about what they said
+}
+
 // Export LoggedItem type for use in parent
 export interface LoggedItem extends QueueItem {
   rating?: number
@@ -636,6 +2097,10 @@ export interface LoggedItem extends QueueItem {
   locationDetail?: string
   firstTime?: boolean
   isDraft?: boolean  // True if saved via Save & Exit before completing flow
+  // AI-extracted data from user's comments
+  extractedEntities?: ExtractedEntity[]
+  extractedThemes?: string[]
+  overallSentiment?: 'positive' | 'negative' | 'neutral' | 'mixed'
 }
 
 interface RightPaneTabsProps {
@@ -894,6 +2359,7 @@ export default function RightPaneTabs({
   const [recsQuery, setRecsQuery] = useState('')
   const [prefsInput, setPrefsInput] = useState('')
   const [selectedItem, setSelectedItem] = useState<LoggedItem | null>(null)
+  const [analyzingItemId, setAnalyzingItemId] = useState<number | null>(null)
 
   // Dismissed recommendations - load from localStorage
   const [dismissedRecs, setDismissedRecs] = useState<Set<string>>(() => {
@@ -955,6 +2421,7 @@ export default function RightPaneTabs({
   const [expandedQueueId, setExpandedQueueId] = useState<number | null>(null)
   const [expandedLibraryId, setExpandedLibraryId] = useState<number | null>(null)
   const [expandedMusicInfoId, setExpandedMusicInfoId] = useState<number | null>(null)
+  const [modalItem, setModalItem] = useState<LoggedItem | null>(null)
   const [expandedCriticPanel, setExpandedCriticPanel] = useState<'metacritic' | 'rt' | null>(null)
   const [expandedRecTitle, setExpandedRecTitle] = useState<string | null>(null)
 
@@ -1368,7 +2835,7 @@ export default function RightPaneTabs({
     { id: 'drafts', label: 'Drafts', showCount: true, count: draftsCount },
     { id: 'library', label: 'My Stuff' },
     { id: 'recs', label: 'Recommendations' },
-    { id: 'profile', label: 'My Preferences & Data' },
+    { id: 'profile', label: 'My Media Model' },
   ]
 
   const mediaFilters: { id: MediaFilter; label: string }[] = [
@@ -2582,9 +4049,9 @@ export default function RightPaneTabs({
                           : 'border-paper-300 hover:border-accent-blue'
                     }`}
                   >
-                    {/* Collapsed Header - Click to expand */}
+                    {/* Collapsed Header - Click to open modal */}
                     <button
-                      onClick={() => setExpandedLibraryId(isExpanded ? null : item.id)}
+                      onClick={() => setModalItem(item)}
                       className="w-full p-4 text-left flex justify-between items-center hover:bg-paper-50 transition-colors"
                     >
                       <div className="flex-1">
@@ -2614,12 +4081,7 @@ export default function RightPaneTabs({
                       </div>
                       <div className="flex items-center gap-3">
                         {item.rating && (
-                          <span className={`text-lg font-bold ${
-                            item.rating >= 90 ? 'text-red-600' :
-                            item.rating >= 80 ? 'text-green-600' :
-                            item.rating >= 60 ? 'text-orange-600' :
-                            'text-accent-blue'
-                          }`}>
+                          <span className={`text-lg font-bold ${getRatingColorClass(item.rating)}`}>
                             {item.rating}%
                           </span>
                         )}
@@ -2868,7 +4330,7 @@ export default function RightPaneTabs({
                               )}
                               {item.notes ? (
                                 <div className="bg-white rounded-lg p-3 text-sm text-ink-700 leading-relaxed border border-paper-300">
-                                  {highlightEntities(item.notes)}
+                                  {item.notes}
                                 </div>
                               ) : (
                                 <button
@@ -2902,6 +4364,137 @@ export default function RightPaneTabs({
                                 </div>
                               )}
                             </div>
+
+                            {/* AI-Extracted Analysis for this movie */}
+                            {item.notes && item.notes.trim().length >= 10 && (
+                              <div className="bg-gradient-to-br from-purple-50 to-blue-50 rounded-xl p-4 border border-purple-200">
+                                <div className="flex items-center justify-between mb-3">
+                                  <h4 className="font-bold text-purple-800 flex items-center gap-2 text-sm">
+                                    <span>🧠</span> AI Analysis
+                                  </h4>
+                                  <button
+                                    disabled={analyzingItemId === item.id}
+                                    onClick={async () => {
+                                      setAnalyzingItemId(item.id)
+                                      try {
+                                        const castNames = item.cast?.map((c: any) => c.name || c) || []
+                                        const crewList = [
+                                          item.director && { name: item.director, job: 'Director' },
+                                          item.cinematographer && { name: item.cinematographer, job: 'Cinematographer' },
+                                          item.composer && { name: item.composer, job: 'Composer' },
+                                        ].filter(Boolean)
+
+                                        const response = await fetch('/api/extract-entities', {
+                                          method: 'POST',
+                                          headers: { 'Content-Type': 'application/json' },
+                                          body: JSON.stringify({
+                                            comment: item.notes,
+                                            title: item.title,
+                                            year: item.year,
+                                            mediaType: item.mediaType,
+                                            cast: castNames,
+                                            crew: crewList,
+                                            score: item.rating,
+                                          }),
+                                        })
+
+                                        if (response.ok) {
+                                          const extracted = await response.json()
+                                          onUpdateLoggedItem?.(item.id, {
+                                            extractedEntities: extracted.entities || [],
+                                            extractedThemes: extracted.themes || [],
+                                            overallSentiment: extracted.overall_sentiment,
+                                          })
+                                        }
+                                      } catch (err) {
+                                        console.error('Reanalyze failed:', err)
+                                      }
+                                      setAnalyzingItemId(null)
+                                    }}
+                                    className={`text-xs px-3 py-1.5 rounded font-medium transition-colors ${
+                                      analyzingItemId === item.id
+                                        ? 'bg-purple-400 text-white cursor-wait'
+                                        : 'bg-purple-600 text-white hover:bg-purple-700'
+                                    }`}
+                                  >
+                                    {analyzingItemId === item.id ? (
+                                      <span className="flex items-center gap-1">
+                                        <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                        Analyzing...
+                                      </span>
+                                    ) : item.extractedEntities ? '🔄 Reanalyze' : '🔍 Analyze'}
+                                  </button>
+                                </div>
+
+                                {/* Show analysis or prompt to analyze */}
+                                {item.extractedEntities && item.extractedEntities.length > 0 ? (
+                                  <>
+                                    {/* People Mentioned */}
+                                    <div className="mb-3">
+                                      <div className="text-xs font-semibold text-purple-600 uppercase tracking-wide mb-2">People Mentioned</div>
+                                      <div className="space-y-1.5">
+                                        {item.extractedEntities.map((entity, idx) => (
+                                      <div key={idx} className="flex items-start gap-2 text-sm">
+                                        <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${
+                                          entity.sentiment === 'positive' ? 'bg-green-100 text-green-700' :
+                                          entity.sentiment === 'negative' ? 'bg-red-100 text-red-700' :
+                                          entity.sentiment === 'mixed' ? 'bg-yellow-100 text-yellow-700' :
+                                          'bg-gray-100 text-gray-600'
+                                        }`}>
+                                          {entity.sentiment === 'positive' ? '👍' : entity.sentiment === 'negative' ? '👎' : '➖'}
+                                        </span>
+                                        <div className="flex-1">
+                                          <span className="font-medium text-purple-900">{entity.resolved}</span>
+                                          <span className="text-purple-500 text-xs ml-1">({entity.type})</span>
+                                          {entity.context && (
+                                            <p className="text-purple-600 text-xs italic mt-0.5">"{sanitizeContext(entity.context)}"</p>
+                                          )}
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+
+                                {/* Themes */}
+                                {item.extractedThemes && item.extractedThemes.length > 0 && (
+                                  <div className="mb-3">
+                                    <div className="text-xs font-semibold text-purple-600 uppercase tracking-wide mb-2">Themes</div>
+                                    <div className="flex flex-wrap gap-1.5">
+                                      {item.extractedThemes.map((theme, idx) => (
+                                        <span key={idx} className="px-2 py-1 bg-white rounded-full text-xs text-purple-700 border border-purple-200 capitalize">
+                                          {theme}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+
+                                    {/* Overall Sentiment */}
+                                    {item.overallSentiment && (
+                                      <div className="pt-2 border-t border-purple-200">
+                                        <div className="flex items-center gap-2">
+                                          <span className="text-xs text-purple-600">Overall:</span>
+                                          <span className={`text-xs font-bold px-2 py-0.5 rounded ${
+                                            item.overallSentiment === 'positive' ? 'bg-green-100 text-green-700' :
+                                            item.overallSentiment === 'negative' ? 'bg-red-100 text-red-700' :
+                                            item.overallSentiment === 'mixed' ? 'bg-yellow-100 text-yellow-700' :
+                                            'bg-gray-100 text-gray-600'
+                                          }`}>
+                                            {item.overallSentiment === 'positive' ? '😊 Positive' :
+                                             item.overallSentiment === 'negative' ? '😕 Negative' :
+                                             item.overallSentiment === 'mixed' ? '🤔 Mixed' : '😐 Neutral'}
+                                          </span>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </>
+                                ) : (
+                                  <p className="text-purple-600 text-sm">
+                                    Click "Analyze" to extract people, themes, and sentiment from your notes.
+                                  </p>
+                                )}
+                              </div>
+                            )}
                             {/* Draft Actions - Resume and Delete */}
                             {item.isDraft && (
                               <div className="bg-amber-50 border-2 border-amber-300 rounded-xl p-4 space-y-3">
@@ -3820,6 +5413,9 @@ export default function RightPaneTabs({
               </div>
             </div>
 
+            {/* Personal Media Model - AI-extracted intelligence */}
+            <PersonalMediaModel loggedItems={loggedItems} onUpdateLoggedItem={onUpdateLoggedItem} />
+
             {/* Your Top Rated - REAL DATA */}
             {computedStats.topRated.length > 0 && (
               <div className="bg-white rounded-xl p-5 border-2 border-accent-blue">
@@ -3953,6 +5549,21 @@ export default function RightPaneTabs({
         movieTitle={soundtrackMovie?.title || ''}
         movieYear={soundtrackMovie?.year}
         composer={soundtrackMovie?.composer}
+        onSaveTrack={handleSaveMusicTrack}
+        onUnsaveTrack={handleUnsaveMusicTrack}
+        savedTracks={savedMusicTracks}
+      />
+
+      {/* Logged Item Detail Modal */}
+      <LoggedItemModal
+        isOpen={!!modalItem}
+        onClose={() => setModalItem(null)}
+        item={modalItem}
+        onDelete={onRemoveLoggedItem}
+        onResumeDraft={onResumeDraft}
+        onUpdateItem={onUpdateLoggedItem}
+        talentPreferences={talentPreferences}
+        onTalentPreferenceChange={onTalentPreferenceChange}
         onSaveTrack={handleSaveMusicTrack}
         onUnsaveTrack={handleUnsaveMusicTrack}
         savedTracks={savedMusicTracks}

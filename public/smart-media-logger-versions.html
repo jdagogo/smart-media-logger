@@ -337,8 +337,8 @@
             <h2>Quick Start</h2>
 
             <div class="alert warning">
-                <strong>v1.8.0-alpha - Bug Fixes</strong><br>
-                January 2, 2026. Bug fixes for dates, duplicates, preferences, and date picker. Dev server works fine.
+                <strong>v1.9.0-alpha - Rating Colors & UI Polish</strong><br>
+                January 7, 2026. Metacritic-style rating colors, fresh score scraping, UI improvements. Dev server works fine.
             </div>
 
             <div style="margin-bottom: 20px;">
@@ -712,11 +712,89 @@
                 </div>
             </div>
 
-            <!-- v1.8.0-alpha - Bug Fixes -->
+            <!-- v1.9.0-alpha - Rating Colors & UI Polish -->
             <div class="version-card" style="border: 3px solid #f59e0b;">
                 <div class="version-header">
-                    <div class="version-title">v1.8.0-alpha</div>
+                    <div class="version-title">v1.9.0-alpha</div>
                     <div class="status development">CURRENT</div>
+                </div>
+
+                <div class="info-section">
+                    <div class="info-row">
+                        <span class="info-label">Branch:</span>
+                        <span>v1.9-rating-colors</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Port:</span>
+                        <span>3006</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Date:</span>
+                        <span>January 7, 2026</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Focus:</span>
+                        <span>Rating Colors & UI Polish</span>
+                    </div>
+                </div>
+
+                <p style="margin-bottom: 15px; font-weight: 600; color: #166534;">New in this version:</p>
+                <div class="features">
+                    <div class="feature-tag done">Metacritic-style rating colors (red/yellow/green)</div>
+                    <div class="feature-tag done">Gradient color bleeding between ranges</div>
+                    <div class="feature-tag done">Fresh IMDB score scraping (direct)</div>
+                    <div class="feature-tag done">Fresh Metacritic score scraping (direct)</div>
+                    <div class="feature-tag done">Fresh Rotten Tomatoes score scraping (direct)</div>
+                    <div class="feature-tag done">IMDB rating fixed (7.0 not 7)</div>
+                    <div class="feature-tag done">Poster size aligned with video</div>
+                    <div class="feature-tag done">In-place video expansion (not overlay)</div>
+                    <div class="feature-tag done">"My Score" label with blue accent</div>
+                    <div class="feature-tag done">External scores use consistent colors</div>
+                    <div class="feature-tag done">Refresh Data button moved to awards box</div>
+                    <div class="feature-tag done">Awards tooltip on hover</div>
+                    <div class="feature-tag done">Rating slider colors match score</div>
+                    <div class="feature-tag done">Experience section colors match score</div>
+                </div>
+
+                <p style="margin-bottom: 15px; font-weight: 600;">Rating Color Scheme:</p>
+                <div style="background: #F5F1E8; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                    <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 8px;">
+                        <span style="background: #DC2626; color: white; padding: 4px 12px; border-radius: 4px; font-weight: bold;">0-39</span>
+                        <span style="color: #666;">Red (Unfavorable) - Brightest at lowest</span>
+                    </div>
+                    <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 8px;">
+                        <span style="background: #F59E0B; color: white; padding: 4px 12px; border-radius: 4px; font-weight: bold;">40-64</span>
+                        <span style="color: #666;">Yellow/Amber (Mixed)</span>
+                    </div>
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <span style="background: #22C55E; color: white; padding: 4px 12px; border-radius: 4px; font-weight: bold;">65-100</span>
+                        <span style="color: #666;">Green (Favorable) - Brightest at highest</span>
+                    </div>
+                </div>
+
+                <p style="margin-bottom: 15px; font-weight: 600; color: #991B1B;">Still broken (from earlier versions):</p>
+                <div class="features">
+                    <div class="feature-tag broken">Entity recognition weak</div>
+                    <div class="feature-tag broken">No Claude API integration</div>
+                    <div class="feature-tag broken">TypeScript build fails</div>
+                    <div class="feature-tag broken">page.tsx is 3000+ lines</div>
+                </div>
+
+                <div class="action-buttons">
+                    <a href="http://localhost:3006" target="_blank" class="btn btn-primary">
+                        Open App
+                    </a>
+                    <a href="https://github.com/jdagogo/smart-media-logger/tree/v1.9-rating-colors" target="_blank" class="btn btn-secondary">
+                        GitHub
+                    </a>
+                </div>
+            </div>
+
+            <!-- v1.8.0-alpha - Bug Fixes -->
+            <div class="version-card">
+                <div class="version-header">
+                    <div class="version-title">v1.8.0-alpha</div>
+                    <div class="status stable">PREVIOUS</div>
                 </div>
 
                 <div class="info-section">
@@ -893,7 +971,28 @@
         <div class="ecosystem-section">
             <h2>Changelog</h2>
             <div style="background: #F5F1E8; padding: 20px; border-radius: 8px;">
-                <h3 style="margin-bottom: 10px;">v1.8.0-alpha - January 2, 2026</h3>
+                <h3 style="margin-bottom: 10px;">v1.9.0-alpha - January 7, 2026</h3>
+                <ul style="line-height: 1.8; color: #666; margin-left: 20px;">
+                    <li><strong>NEW:</strong> Metacritic-style rating color scheme (red 0-39, yellow 40-64, green 65-100)</li>
+                    <li><strong>NEW:</strong> Gradient color bleeding - worst scores brightest red, best scores brightest green</li>
+                    <li><strong>NEW:</strong> Direct IMDB scraping for fresh ratings (bypasses stale OMDB data)</li>
+                    <li><strong>NEW:</strong> Direct Metacritic scraping for fresh scores</li>
+                    <li><strong>NEW:</strong> Direct Rotten Tomatoes scraping for fresh scores</li>
+                    <li><strong>NEW:</strong> Centralized ratingColors.ts utility for consistent colors app-wide</li>
+                    <li><strong>NEW:</strong> "My Score" label above user rating in modal header</li>
+                    <li><strong>NEW:</strong> Awards tooltip in awards/box office box (hover to see details)</li>
+                    <li><strong>FIXED:</strong> IMDB rating format (now shows "7.0" not "7")</li>
+                    <li><strong>FIXED:</strong> RT scraper finding wrong page (tries without year first)</li>
+                    <li><strong>FIXED:</strong> Metacritic scraper parsing multiple JSON-LD blocks</li>
+                    <li><strong>CHANGED:</strong> Poster size increased ~7% to align with video</li>
+                    <li><strong>CHANGED:</strong> Video expansion now in-place (not separate overlay modal)</li>
+                    <li><strong>CHANGED:</strong> Refresh Data button moved to below awards/box office box</li>
+                    <li><strong>CHANGED:</strong> External scores (IMDB, RT, MC) now use rating color scheme</li>
+                    <li><strong>CHANGED:</strong> Rating slider and stars match score color</li>
+                    <li><strong>CHANGED:</strong> "Your Rating" in experience section uses rating colors</li>
+                </ul>
+
+                <h3 style="margin-top: 20px; margin-bottom: 10px;">v1.8.0-alpha - January 2, 2026</h3>
                 <ul style="line-height: 1.8; color: #666; margin-left: 20px;">
                     <li><strong>FIXED:</strong> Date display showing wrong day (UTC vs local time issue)</li>
                     <li><strong>FIXED:</strong> Today button returning wrong date</li>

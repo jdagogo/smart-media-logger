@@ -1,6 +1,38 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY || 'AIzaSyAcAPLUflo9lDlsexKFzr5FHvvgGvF0xb8'
+// Multiple API keys for rotation when quota is exceeded
+const YOUTUBE_API_KEYS = [
+  process.env.YOUTUBE_API_KEY || 'AIzaSyAcAPLUflo9lDlsexKFzr5FHvvgGvF0xb8',
+  'AIzaSyAvY1tE7ZGl_0o5WEnTQRAM-cGjZVvXHUk',
+  'AIzaSyBtnmJG3BR-7Z9lDTvZFuGEry9vQEZmu4k',
+]
+let currentKeyIndex = 0
+
+function getNextApiKey(): string {
+  const key = YOUTUBE_API_KEYS[currentKeyIndex]
+  currentKeyIndex = (currentKeyIndex + 1) % YOUTUBE_API_KEYS.length
+  return key
+}
+
+async function fetchWithKeyRotation(url: URL, maxRetries = 3): Promise<Response> {
+  for (let i = 0; i < maxRetries; i++) {
+    const key = YOUTUBE_API_KEYS[(currentKeyIndex + i) % YOUTUBE_API_KEYS.length]
+    url.searchParams.set('key', key)
+    const response = await fetch(url.toString())
+    if (response.ok) {
+      return response
+    }
+    if (response.status === 403) {
+      console.log(`API key ${i + 1} quota exceeded, trying next key...`)
+      continue
+    }
+    return response // Return non-quota errors immediately
+  }
+  // All keys exhausted
+  const lastKey = YOUTUBE_API_KEYS[(currentKeyIndex + maxRetries - 1) % YOUTUBE_API_KEYS.length]
+  url.searchParams.set('key', lastKey)
+  return fetch(url.toString())
+}
 
 // Manual playlist overrides for movies where auto-search returns wrong results
 // Use "movie title:music" key for Music From overrides
@@ -52,11 +84,10 @@ export async function GET(request: NextRequest) {
       searchUrl.searchParams.set('q', searchQuery)
       searchUrl.searchParams.set('type', 'playlist')
       searchUrl.searchParams.set('maxResults', '5')
-      searchUrl.searchParams.set('key', YOUTUBE_API_KEY)
 
       console.log('Searching YouTube for playlist:', searchQuery, '(type:', searchType, ')')
 
-      const searchResponse = await fetch(searchUrl.toString())
+      const searchResponse = await fetchWithKeyRotation(searchUrl)
       if (!searchResponse.ok) {
         const errorData = await searchResponse.json()
         console.error('YouTube search error:', errorData)
@@ -126,9 +157,8 @@ export async function GET(request: NextRequest) {
     const playlistUrl = new URL('https://www.googleapis.com/youtube/v3/playlists')
     playlistUrl.searchParams.set('part', 'snippet,contentDetails')
     playlistUrl.searchParams.set('id', targetPlaylistId)
-    playlistUrl.searchParams.set('key', YOUTUBE_API_KEY)
 
-    const playlistResponse = await fetch(playlistUrl.toString())
+    const playlistResponse = await fetchWithKeyRotation(playlistUrl)
     const playlistData = await playlistResponse.json()
 
     const playlistInfo = playlistData.items?.[0]
@@ -138,11 +168,10 @@ export async function GET(request: NextRequest) {
     itemsUrl.searchParams.set('part', 'snippet,contentDetails')
     itemsUrl.searchParams.set('playlistId', targetPlaylistId)
     itemsUrl.searchParams.set('maxResults', '50') // Get up to 50 tracks
-    itemsUrl.searchParams.set('key', YOUTUBE_API_KEY)
 
     console.log('Fetching playlist items for:', targetPlaylistId)
 
-    const itemsResponse = await fetch(itemsUrl.toString())
+    const itemsResponse = await fetchWithKeyRotation(itemsUrl)
     if (!itemsResponse.ok) {
       const errorData = await itemsResponse.json()
       console.error('YouTube playlist items error:', errorData)

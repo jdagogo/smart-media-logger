@@ -88,8 +88,8 @@ export async function GET(request: NextRequest) {
         metadata.rottenTomatoesUrl = tmdbData.rottenTomatoesUrl
         metadata.imdbUrl = tmdbData.imdbUrl
 
-        // Fetch critic scores from OMDB (most reliable source)
-        const omdbData = await fetchOMDBData(tmdbData.title, tmdbData.year)
+        // Fetch critic scores from OMDB (most reliable source) - use IMDB ID when available
+        const omdbData = await fetchOMDBData(tmdbData.title, tmdbData.year, tmdbData.imdbId)
 
         if (omdbData) {
           if (omdbData.metacriticScore) {
@@ -129,11 +129,24 @@ export async function GET(request: NextRequest) {
           if (metacriticData && !metadata.metacriticScore) {
             metadata.metacriticScore = metacriticData.score
             metadata.metacriticData = metacriticData
+            // Use the scraped URL since it's the one that actually worked
+            metadata.metacriticUrl = metacriticData.url
           }
 
           if (rottenTomatoesData && !metadata.rottenTomatoesScore) {
             metadata.rottenTomatoesScore = rottenTomatoesData.tomatometer
             metadata.rottenTomatoesData = rottenTomatoesData
+            // Use the scraped URL since it's the one that actually worked
+            metadata.rottenTomatoesUrl = rottenTomatoesData.url
+          }
+        }
+
+        // Fallback: Fetch IMDB directly if OMDB didn't have the rating
+        if (!metadata.imdbRating && tmdbData.imdbId) {
+          const imdbData = await fetchIMDBData(tmdbData.imdbId)
+          if (imdbData) {
+            if (imdbData.imdbRating) metadata.imdbRating = imdbData.imdbRating
+            if (imdbData.imdbVotes) metadata.imdbVotes = imdbData.imdbVotes
           }
         }
       }
@@ -365,6 +378,7 @@ async function fetchTMDBData(title: string, year?: number): Promise<{
   metacriticUrl?: string
   rottenTomatoesUrl?: string
   imdbUrl?: string
+  imdbId?: string
 } | null> {
   try {
     // Clean up title - remove brackets, extra info, quotes, punctuation
@@ -442,6 +456,21 @@ async function fetchTMDBData(title: string, year?: number): Promise<{
             return resultTitle.includes(originalLower) || originalLower.includes(resultTitle)
           })
           if (result) console.log('TMDB found with short title:', result.title || result.name)
+        }
+      }
+    }
+
+    // Strategy 5: Try with normalized accents (Sirât → Sirat)
+    if (!result) {
+      const normalizedTitle = cleanTitle.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      if (normalizedTitle !== cleanTitle) {
+        console.log('Trying normalized accents:', normalizedTitle)
+        const searchUrl = `https://api.themoviedb.org/3/search/multi?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(normalizedTitle)}`
+        const searchResponse = await fetch(searchUrl)
+        if (searchResponse.ok) {
+          const searchData = await searchResponse.json()
+          result = searchData.results?.find((r: any) => r.media_type === 'movie' || r.media_type === 'tv')
+          if (result) console.log('TMDB found with normalized accents:', result.title || result.name)
         }
       }
     }
@@ -606,6 +635,8 @@ async function fetchTMDBData(title: string, year?: number): Promise<{
       metacriticUrl: `https://www.metacritic.com/${mediaType}/${titleForUrl}`,
       rottenTomatoesUrl: `https://www.rottentomatoes.com/${mediaType === 'movie' ? 'm' : 'tv'}/${rtTitleForUrl}`,
       imdbUrl: details.imdb_id ? `https://www.imdb.com/title/${details.imdb_id}` : undefined,
+      // IMDB ID for reliable OMDB lookups
+      imdbId: details.imdb_id,
     }
   } catch (error) {
     console.error('TMDB fetch error:', error)
@@ -614,7 +645,7 @@ async function fetchTMDBData(title: string, year?: number): Promise<{
 }
 
 // Fetch rich metadata from OMDB API
-async function fetchOMDBData(title: string, year: number): Promise<{
+async function fetchOMDBData(title: string, year: number, imdbId?: string): Promise<{
   metacriticScore?: number
   rottenTomatoesScore?: number
   imdbRating?: string
@@ -628,7 +659,10 @@ async function fetchOMDBData(title: string, year: number): Promise<{
   language?: string
 } | null> {
   try {
-    const url = `https://www.omdbapi.com/?apikey=${OMDB_API_KEY}&t=${encodeURIComponent(title)}&y=${year}&type=movie&plot=full`
+    // Prefer IMDB ID lookup (most reliable) over title search
+    const url = imdbId
+      ? `https://www.omdbapi.com/?apikey=${OMDB_API_KEY}&i=${imdbId}&plot=full`
+      : `https://www.omdbapi.com/?apikey=${OMDB_API_KEY}&t=${encodeURIComponent(title)}&y=${year}&type=movie&plot=full`
     console.log('Fetching OMDB:', url)
 
     const response = await fetch(url)
@@ -678,6 +712,95 @@ async function fetchOMDBData(title: string, year: number): Promise<{
     }
   } catch (error) {
     console.error('OMDB fetch error:', error)
+    return null
+  }
+}
+
+// Fetch IMDB data directly when OMDB fails - scrapes the JSON-LD structured data
+async function fetchIMDBData(imdbId: string): Promise<{
+  imdbRating?: string
+  imdbVotes?: string
+  genres?: string[]
+  runtime?: string
+  description?: string
+} | null> {
+  if (!imdbId) return null
+
+  try {
+    const url = `https://www.imdb.com/title/${imdbId}/`
+    console.log('Fetching IMDB directly:', url)
+
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+      },
+    })
+
+    if (!response.ok) {
+      console.log('IMDB fetch failed:', response.status)
+      return null
+    }
+
+    const html = await response.text()
+
+    // Extract JSON-LD structured data - most reliable source
+    const jsonLdMatch = html.match(/<script type="application\/ld\+json">(\{[\s\S]*?"@type"\s*:\s*"Movie"[\s\S]*?\})<\/script>/)
+    if (!jsonLdMatch) {
+      // Try alternative pattern
+      const altMatch = html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/)
+      if (altMatch) {
+        try {
+          const data = JSON.parse(altMatch[1])
+          if (data.aggregateRating) {
+            const rating = data.aggregateRating.ratingValue
+            const votes = data.aggregateRating.ratingCount
+            console.log(`IMDB direct found: rating=${rating}, votes=${votes}`)
+            return {
+              imdbRating: rating ? String(rating) : undefined,
+              imdbVotes: votes ? String(votes) : undefined,
+              genres: data.genre,
+              description: data.description,
+            }
+          }
+        } catch (e) {
+          // Continue to other methods
+        }
+      }
+    } else {
+      try {
+        const data = JSON.parse(jsonLdMatch[1])
+        if (data.aggregateRating) {
+          const rating = data.aggregateRating.ratingValue
+          const votes = data.aggregateRating.ratingCount
+          console.log(`IMDB direct found: rating=${rating}, votes=${votes}`)
+          return {
+            imdbRating: rating ? String(rating) : undefined,
+            imdbVotes: votes ? String(votes) : undefined,
+            genres: data.genre,
+            runtime: data.duration,
+            description: data.description,
+          }
+        }
+      } catch (e) {
+        console.error('Failed to parse IMDB JSON-LD:', e)
+      }
+    }
+
+    // Fallback: try to extract from og:title which often has rating
+    const ogTitleMatch = html.match(/og:title[^>]*content="[^"]*⭐\s*([\d.]+)/)
+    if (ogTitleMatch) {
+      console.log(`IMDB from og:title: rating=${ogTitleMatch[1]}`)
+      return {
+        imdbRating: ogTitleMatch[1],
+      }
+    }
+
+    console.log('No IMDB rating found in page')
+    return null
+  } catch (error) {
+    console.error('IMDB fetch error:', error)
     return null
   }
 }
@@ -847,7 +970,7 @@ function decodeHtmlEntities(text: string): string {
     .replace(/&#x2F;/g, '/')
 }
 
-// Fetch Metacritic data by scraping their movie page
+// Fetch Metacritic data - try direct URL first, then search
 async function fetchMetacriticData(title: string, year: number, mediaType: string): Promise<{
   score: number
   criticReviews?: number
@@ -856,28 +979,76 @@ async function fetchMetacriticData(title: string, year: number, mediaType: strin
   url: string
   topReviews?: Array<{ critic: string; outlet: string; quote: string; score?: number }>
 } | null> {
+  const headers = {
+    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+    'Accept-Language': 'en-US,en;q=0.5',
+  }
+
   try {
-    // Construct search URL - Metacritic uses kebab-case
+    // Build URL slug - handle em-dashes (—) which become --- in Metacritic URLs
     const slug = title
       .toLowerCase()
+      .replace(/\s*[—–]\s*/g, '---')  // Em-dash/en-dash with surrounding spaces → triple dash
       .replace(/[^a-z0-9\s-]/g, '')
       .replace(/\s+/g, '-')
-      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '')
 
-    const url = `https://www.metacritic.com/${mediaType}/${slug}`
-    console.log('Fetching Metacritic:', url)
+    // Try direct URL first
+    const directUrl = `https://www.metacritic.com/${mediaType}/${slug}`
+    console.log('Trying Metacritic direct URL:', directUrl)
 
-    const response = await fetch(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.5',
-      },
-    })
+    let response = await fetch(directUrl, { headers })
+    let successUrl = directUrl
 
+    // If direct URL fails, try search
     if (!response.ok) {
-      console.log(`Metacritic fetch failed for ${slug}: ${response.status}`)
-      return null
+      console.log('Direct URL failed, trying search...')
+      const searchUrl = `https://www.metacritic.com/search/${encodeURIComponent(title)}/?page=1&category=${mediaType}`
+      const searchResponse = await fetch(searchUrl, { headers })
+
+      if (!searchResponse.ok) {
+        console.log('Metacritic search failed:', searchResponse.status)
+        return null
+      }
+
+      const searchHtml = await searchResponse.text()
+
+      // Extract search results with titles to find best match
+      const resultPattern = /<a[^>]*href="(\/movie\/[^"]+)"[^>]*>([^<]*)</g
+      const searchTitleLower = title.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim()
+      const searchWords = searchTitleLower.split(/\s+/).filter(w => w.length > 2)
+
+      let bestMatch: { path: string; title: string; score: number } | null = null
+      let match
+
+      while ((match = resultPattern.exec(searchHtml)) !== null) {
+        const [, path, resultTitle] = match
+        const resultTitleLower = resultTitle.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim()
+        const resultWords = resultTitleLower.split(/\s+/).filter(w => w.length > 2)
+        const matchingWords = searchWords.filter(w => resultWords.includes(w))
+        const matchScore = matchingWords.length / Math.max(searchWords.length, 1)
+
+        console.log(`Metacritic result: "${resultTitle}" score: ${matchScore.toFixed(2)}`)
+
+        if (matchScore > 0.5 && (!bestMatch || matchScore > bestMatch.score)) {
+          bestMatch = { path, title: resultTitle, score: matchScore }
+        }
+      }
+
+      if (!bestMatch) {
+        console.log('No matching Metacritic result for:', title)
+        return null
+      }
+
+      successUrl = `https://www.metacritic.com${bestMatch.path}`
+      console.log('Best Metacritic match:', bestMatch.title, 'at', successUrl)
+      response = await fetch(successUrl, { headers })
+
+      if (!response.ok) {
+        console.log('Metacritic movie page fetch failed:', response.status)
+        return null
+      }
     }
 
     const html = await response.text()
@@ -968,7 +1139,7 @@ async function fetchMetacriticData(title: string, year: number, mediaType: strin
       score,
       criticReviews,
       userScore,
-      url,
+      url: successUrl,
     }
   } catch (error) {
     console.error('Metacritic scraping error:', error)

@@ -1,9 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import SoundtrackModal from './SoundtrackModal'
 import NotesModal from './NotesModal'
 import DatePicker from '../DatePicker'
+import { getRatingColorClass } from '@/lib/ratingColors'
 
 interface StreamingOption {
   service: string
@@ -123,6 +124,13 @@ interface MediaCardProps {
   onSaveTrack?: (track: { title: string; artist: string; videoId: string; thumbnail: string; fromMovie: string }) => void
   onUnsaveTrack?: (videoId: string) => void
   savedTracks?: Record<string, boolean>
+  // Refresh metadata
+  onRefreshMetadata?: () => void
+  refreshingMetadata?: boolean
+  // Awards tooltip
+  awardsTooltip?: string | null
+  loadingAwards?: boolean
+  onAwardsHover?: () => void
 }
 
 // Talent preference types
@@ -255,6 +263,11 @@ export default function MediaCard({
   onSaveTrack,
   onUnsaveTrack,
   savedTracks = {},
+  onRefreshMetadata,
+  refreshingMetadata,
+  awardsTooltip,
+  loadingAwards,
+  onAwardsHover,
 }: MediaCardProps) {
   const [showTrailer, setShowTrailer] = useState(false)
   const [showSoundtrack, setShowSoundtrack] = useState(false)
@@ -263,6 +276,11 @@ export default function MediaCard({
   const [isEditing, setIsEditing] = useState(false)
   const [editData, setEditData] = useState<EditableFields>({})
   const [talentPreferences, setTalentPreferences] = useState<Record<string, TalentPreference | { preference: TalentPreference; role: TalentRole }>>(initialTalentPreferences)
+
+  // Sync talentPreferences when initialTalentPreferences prop changes
+  useEffect(() => {
+    setTalentPreferences(initialTalentPreferences)
+  }, [initialTalentPreferences])
 
   // Helper to get just the preference value (handles both old and new format)
   const getPreference = (name: string): TalentPreference => {
@@ -385,19 +403,7 @@ export default function MediaCard({
         </div>
       )}
 
-      {/* Source URL link */}
-      {sourceUrl && !videoId && (
-        <div className="bg-orange-50 px-8 py-3 border-b-2 border-orange-200">
-          <a
-            href={sourceUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 text-sm text-orange-600 hover:text-orange-700 font-medium"
-          >
-            🔗 Open on {new URL(sourceUrl).hostname.replace('www.', '')}
-          </a>
-        </div>
-      )}
+      {/* Source URL link - removed as redundant when video is embedded */}
 
       {/* ═══════════════════════════════════════════════════════════════ */}
       {/* FILM INFO SECTION */}
@@ -782,17 +788,53 @@ export default function MediaCard({
 
         {/* Awards & Box Office */}
         {(awards || boxOffice) && (
-          <div className="mb-6 p-4 bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl border border-amber-200">
-            {awards && awards !== 'N/A' && (
-              <div className="mb-2">
-                <span className="text-amber-600 font-bold">🏆 Awards: </span>
-                <span className="text-ink-800">{awards}</span>
-              </div>
-            )}
-            {boxOffice && boxOffice !== 'N/A' && (
-              <div>
-                <span className="text-green-600 font-bold">💰 Box Office: </span>
-                <span className="text-ink-800 font-bold text-lg">{boxOffice}</span>
+          <div className="mb-2">
+            <div className="p-4 bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl border border-amber-200">
+              {awards && awards !== 'N/A' && (
+                <div className="mb-2 relative group inline-block">
+                  <a
+                    href={imdbUrl ? `${imdbUrl}/awards` : '#'}
+                    target={imdbUrl ? '_blank' : undefined}
+                    rel="noopener noreferrer"
+                    className="hover:bg-amber-100 rounded-lg px-2 py-1 -mx-2 -my-1 transition-colors cursor-pointer inline-block"
+                    onMouseEnter={onAwardsHover}
+                    onClick={(e) => !imdbUrl && e.preventDefault()}
+                  >
+                    <span className="text-amber-600 font-bold">🏆 Awards: </span>
+                    <span className="text-ink-800">{awards}</span>
+                  </a>
+                  {/* Tooltip */}
+                  <div className="absolute bottom-full left-0 mb-2 px-5 py-4 bg-ink-800 text-white text-sm rounded-xl shadow-2xl whitespace-pre-wrap min-w-[320px] max-w-md z-50 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                    {loadingAwards
+                      ? 'Loading awards...'
+                      : awardsTooltip
+                        ? awardsTooltip
+                        : imdbUrl
+                          ? 'Hover to load award details...'
+                          : 'No IMDB link available'}
+                    <div className="absolute top-full left-8 border-8 border-transparent border-t-ink-800" />
+                  </div>
+                </div>
+              )}
+              {boxOffice && boxOffice !== 'N/A' && (
+                <div>
+                  <span className="text-green-600 font-bold">💰 Box Office: </span>
+                  <span className="text-ink-800 font-bold text-lg">{boxOffice}</span>
+                </div>
+              )}
+            </div>
+            {/* Refresh Data Button - right justified below */}
+            {onRefreshMetadata && (
+              <div className="flex justify-end mt-2">
+                <button
+                  onClick={onRefreshMetadata}
+                  disabled={refreshingMetadata}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-ink-600 hover:bg-accent-blue/15 hover:text-ink-800 rounded-lg transition-all disabled:opacity-50"
+                  title="Refresh ratings, awards, and box office data"
+                >
+                  <span className={refreshingMetadata ? 'animate-spin' : ''}>🔄</span>
+                  {refreshingMetadata ? 'Refreshing...' : 'Refresh Data'}
+                </button>
               </div>
             )}
           </div>
@@ -896,14 +938,14 @@ export default function MediaCard({
                 onChange={(e) => setEditData({ ...editData, rating: parseInt(e.target.value) })}
                 className="flex-1"
               />
-              <span className="text-2xl font-bold text-accent-blue min-w-[60px]">
+              <span className={`text-2xl font-bold min-w-[60px] ${getRatingColorClass(editData.rating || 50)}`}>
                 {editData.rating || 50}%
               </span>
             </div>
           ) : rating !== undefined ? (
             <div className="flex items-center gap-4">
-              <span className="text-4xl font-bold text-accent-blue">{rating}%</span>
-              <span className="text-3xl text-accent-blue tracking-wider">{getStars(rating)}</span>
+              <span className={`text-4xl font-bold ${getRatingColorClass(rating)}`}>{rating}%</span>
+              <span className={`text-3xl tracking-wider ${getRatingColorClass(rating)}`}>{getStars(rating)}</span>
             </div>
           ) : (
             <span className="text-ink-800 italic text-lg">Not rated yet</span>

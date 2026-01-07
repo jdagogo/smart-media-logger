@@ -35,14 +35,25 @@ export async function GET(request: NextRequest) {
     // Now fetch OMDB data for Metacritic, RT, IMDB scores
     const omdbData = await fetchOMDBData(tmdbData.title, tmdbData.year, tmdbData.imdbId)
 
+    // Fallback: Fetch IMDB directly if OMDB didn't have the rating
+    let imdbRating = omdbData?.imdbRating
+    let imdbVotes = omdbData?.imdbVotes
+    if (!imdbRating && tmdbData.imdbId) {
+      const imdbData = await fetchIMDBData(tmdbData.imdbId)
+      if (imdbData) {
+        imdbRating = imdbData.imdbRating
+        imdbVotes = imdbData.imdbVotes
+      }
+    }
+
     // Merge all the data
     const fullMetadata = {
       ...tmdbData,
       // OMDB critic scores
       metacriticScore: omdbData?.metacriticScore,
       rottenTomatoesScore: omdbData?.rottenTomatoesScore,
-      imdbRating: omdbData?.imdbRating,
-      imdbVotes: omdbData?.imdbVotes,
+      imdbRating,
+      imdbVotes,
       // OMDB rich metadata
       rated: omdbData?.rated,
       awards: omdbData?.awards,
@@ -254,6 +265,68 @@ async function fetchOMDBData(title: string, year: number, imdbId?: string) {
     }
   } catch (error) {
     console.error('OMDB fetch error:', error)
+    return null
+  }
+}
+
+// Fetch IMDB data directly when OMDB fails - scrapes the JSON-LD structured data
+async function fetchIMDBData(imdbId: string): Promise<{
+  imdbRating?: string
+  imdbVotes?: string
+} | null> {
+  if (!imdbId) return null
+
+  try {
+    const url = `https://www.imdb.com/title/${imdbId}/`
+    console.log('Fetching IMDB directly:', url)
+
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+      },
+    })
+
+    if (!response.ok) {
+      console.log('IMDB fetch failed:', response.status)
+      return null
+    }
+
+    const html = await response.text()
+
+    // Extract JSON-LD structured data - most reliable source
+    const jsonLdMatch = html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/)
+    if (jsonLdMatch) {
+      try {
+        const data = JSON.parse(jsonLdMatch[1])
+        if (data.aggregateRating) {
+          const rating = data.aggregateRating.ratingValue
+          const votes = data.aggregateRating.ratingCount
+          console.log(`IMDB direct found: rating=${rating}, votes=${votes}`)
+          return {
+            imdbRating: rating ? String(rating) : undefined,
+            imdbVotes: votes ? String(votes) : undefined,
+          }
+        }
+      } catch (e) {
+        console.error('Failed to parse IMDB JSON-LD:', e)
+      }
+    }
+
+    // Fallback: try to extract from og:title which often has rating
+    const ogTitleMatch = html.match(/og:title[^>]*content="[^"]*⭐\s*([\d.]+)/)
+    if (ogTitleMatch) {
+      console.log(`IMDB from og:title: rating=${ogTitleMatch[1]}`)
+      return {
+        imdbRating: ogTitleMatch[1],
+      }
+    }
+
+    console.log('No IMDB rating found in page')
+    return null
+  } catch (error) {
+    console.error('IMDB fetch error:', error)
     return null
   }
 }

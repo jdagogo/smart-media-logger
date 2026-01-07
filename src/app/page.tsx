@@ -1610,18 +1610,106 @@ export default function Home() {
       return
     }
 
+    // ALWAYS update mediaType immediately when user confirms - even if TMDB search fails
+    updateLogData({ mediaType: confirmedType })
+    setUrlMetadata(prev => prev ? { ...prev, detectedMediaType: confirmedType } : null)
+
     // User confirmed it's a movie/tv - try to fetch TMDB metadata
     setUrlLoading(true)
     try {
-      // Search TMDB for the movie/tv show (use multi-search to find both)
+      // Helper to normalize accented characters for search
+      const normalizeForSearch = (str: string) =>
+        str.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+
+      // Try original title first, then normalized version
+      let match = null
       const searchResponse = await fetch(`/api/search?q=${encodeURIComponent(title)}`)
       if (searchResponse.ok) {
         const searchResults = await searchResponse.json()
         if (searchResults.results && searchResults.results.length > 0) {
-          const match = searchResults.results[0]
-          console.log('Found TMDB match after confirmation:', match)
+          match = searchResults.results[0]
+        }
+      }
 
-          // Update metadata with the TMDB data
+      // If no results, try with normalized title (remove accents like â → a)
+      if (!match) {
+        const normalizedTitle = normalizeForSearch(title)
+        if (normalizedTitle !== title) {
+          console.log('Trying normalized search:', normalizedTitle)
+          const normalizedResponse = await fetch(`/api/search?q=${encodeURIComponent(normalizedTitle)}`)
+          if (normalizedResponse.ok) {
+            const normalizedResults = await normalizedResponse.json()
+            if (normalizedResults.results && normalizedResults.results.length > 0) {
+              match = normalizedResults.results[0]
+            }
+          }
+        }
+      }
+
+      if (match) {
+        console.log('Found TMDB match after confirmation:', match)
+
+        // Fetch full metadata including critic scores
+        try {
+          const detailsResponse = await fetch(
+            `/api/movie-details?tmdbId=${match.id || match.tmdbId}&title=${encodeURIComponent(match.title)}&year=${match.year}&type=${confirmedType}`
+          )
+          if (detailsResponse.ok) {
+            const fullData = await detailsResponse.json()
+            console.log('Full metadata for confirmed movie:', fullData)
+
+            // Update metadata with COMPLETE data including critic scores
+            setUrlMetadata({
+              title: fullData.title,
+              author: data.author,
+              authorUrl: data.authorUrl,
+              thumbnail: fullData.poster || data.thumbnail,
+              videoId: data.videoId,
+              description: fullData.overview || data.description,
+              duration: fullData.runtime ? `${fullData.runtime} min` : data.duration,
+              viewCount: data.viewCount,
+              publishDate: fullData.year?.toString(),
+              category: data.category,
+              isTrailer: true,
+              detectedMediaType: confirmedType,
+              tmdbId: fullData.tmdbId,
+              director: fullData.director,
+              directors: fullData.directors,
+              cinematographer: fullData.cinematographer,
+              composer: fullData.composer,
+              writers: fullData.writers,
+              cast: fullData.cast,
+              genres: fullData.genres,
+              poster: fullData.poster,
+              trailerVideoId: fullData.trailerVideoId || data.videoId,
+              trailerUrl: fullData.trailerUrl,
+              tmdbRating: fullData.tmdbRating,
+              overview: fullData.overview,
+              runtime: fullData.runtime,
+              // OMDB critic scores
+              metacriticScore: fullData.metacriticScore,
+              rottenTomatoesScore: fullData.rottenTomatoesScore,
+              imdbRating: fullData.imdbRating,
+              imdbVotes: fullData.imdbVotes,
+              metacriticUrl: fullData.metacriticUrl,
+              rottenTomatoesUrl: fullData.rottenTomatoesUrl,
+              imdbUrl: fullData.imdbUrl,
+              // Rich metadata
+              rated: fullData.rated,
+              awards: fullData.awards,
+              boxOffice: fullData.boxOffice,
+              plot: fullData.plot,
+            })
+
+            // Auto-fill title input
+            const titleInput = document.getElementById('url-title-input') as HTMLInputElement
+            if (titleInput) {
+              titleInput.value = fullData.title
+            }
+          }
+        } catch (detailsError) {
+          console.error('Error fetching full movie details:', detailsError)
+          // Still use basic match data
           setUrlMetadata({
             title: match.title,
             author: data.author,
@@ -1644,19 +1732,20 @@ export default function Home() {
             tmdbRating: match.tmdbRating,
             overview: match.overview,
             runtime: match.runtime,
-            metacriticScore: match.metacriticScore,
-            rottenTomatoesScore: match.rottenTomatoesScore,
           })
 
-          // Update logData with the correct media type
-          updateLogData({ mediaType: confirmedType })
-
-          // Auto-fill title input
           const titleInput = document.getElementById('url-title-input') as HTMLInputElement
           if (titleInput) {
             titleInput.value = match.title
           }
         }
+      } else {
+        console.log('No TMDB match found for:', title, '- keeping user-confirmed type:', confirmedType)
+        // Even without a match, update urlMetadata to reflect the confirmed type
+        setUrlMetadata(prev => prev ? {
+          ...prev,
+          detectedMediaType: confirmedType,
+        } : null)
       }
     } catch (error) {
       console.error('Error fetching TMDB data after confirmation:', error)
@@ -1929,6 +2018,51 @@ export default function Home() {
       addLoggedItem(newLoggedItem)
       console.log('Saved to My Stuff:', newLoggedItem)
 
+      // Extract entities from notes using AI (async, updates item after)
+      if (logData.notes && logData.notes.trim().length >= 10) {
+        const extractEntities = async () => {
+          try {
+            const castNames = logData.cast?.map((c: any) => c.name || c) || []
+            const crewList = [
+              logData.director && { name: logData.director, job: 'Director' },
+              logData.cinematographer && { name: logData.cinematographer, job: 'Cinematographer' },
+              logData.composer && { name: logData.composer, job: 'Composer' },
+              ...(logData.writers?.map((w: string) => ({ name: w, job: 'Writer' })) || []),
+            ].filter(Boolean)
+
+            const response = await fetch('/api/extract-entities', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                comment: logData.notes,
+                title: logData.title,
+                year: logData.year,
+                mediaType: logData.mediaType,
+                cast: castNames,
+                crew: crewList,
+                score: logData.overallRating,
+              }),
+            })
+
+            if (response.ok) {
+              const extracted = await response.json()
+              if (extracted.entities?.length > 0 || extracted.themes?.length > 0) {
+                console.log('Extracted entities:', extracted)
+                // Update the item with extracted data
+                updateLoggedItem(newLoggedItem.id, {
+                  extractedEntities: extracted.entities,
+                  extractedThemes: extracted.themes,
+                  overallSentiment: extracted.overall_sentiment,
+                })
+              }
+            }
+          } catch (err) {
+            console.error('Entity extraction failed:', err)
+          }
+        }
+        extractEntities()
+      }
+
       // Save theater to history for future autofill
       if (logData.location === 'theater' && logData.locationDetail) {
         setTheaterHistory(prev => {
@@ -1947,7 +2081,7 @@ export default function Home() {
       // Clear draft since we've completed
       localStorage.removeItem('smartMediaLogger_draft')
     }
-  }, [step, logData.title, logData.tmdbId, logData.consumptionDate, logData.overallRating, logData.notes, logData.companionNames, logData.socialContext, logData.location, logData.locationDetail, logData.year, logData.mediaType, logData.director, entryNumber, userInteractions, addLoggedItem, removeLoggedItem, urlMetadata?.videoId, searchQuery])
+  }, [step, logData.title, logData.tmdbId, logData.consumptionDate, logData.overallRating, logData.notes, logData.companionNames, logData.socialContext, logData.location, logData.locationDetail, logData.year, logData.mediaType, logData.director, logData.cast, logData.cinematographer, logData.composer, logData.writers, entryNumber, userInteractions, addLoggedItem, removeLoggedItem, updateLoggedItem, urlMetadata?.videoId, searchQuery])
 
   // Reset refs when starting a new log
   useEffect(() => {

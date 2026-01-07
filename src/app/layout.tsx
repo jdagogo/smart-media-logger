@@ -27,7 +27,7 @@ export default function RootLayout({
                 className="ml-2 text-xs font-mono px-2 py-0.5 bg-blue-900/20 text-blue-900 rounded hover:bg-blue-900/30 transition-colors"
                 title="View version info and known issues"
               >
-                v1.8.0-alpha
+                v1.9.0-alpha
               </a>
             </div>
           </div>
