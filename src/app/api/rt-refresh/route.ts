@@ -17,13 +17,27 @@ export async function GET(request: NextRequest) {
       .replace(/\s+/g, '_')
       .trim()
 
+    // Also try without leading articles (The, A, An) - RT often drops these
+    const slugWithoutArticle = slug
+      .replace(/^(the|a|an)_/, '')
+
     // Try multiple URL patterns - prioritize without year since RT often doesn't include it
     const urlsToTry = [
       `https://www.rottentomatoes.com/m/${slug}`,
       `https://www.rottentomatoes.com/m/${slug.replace(/_/g, '')}`,
+      // Try without leading article
+      ...(slugWithoutArticle !== slug ? [
+        `https://www.rottentomatoes.com/m/${slugWithoutArticle}`,
+        `https://www.rottentomatoes.com/m/${slugWithoutArticle.replace(/_/g, '')}`,
+      ] : []),
       ...(year ? [
         `https://www.rottentomatoes.com/m/${slug}_${year}`,
         `https://www.rottentomatoes.com/m/${slug}${year}`,
+        // With year, without article
+        ...(slugWithoutArticle !== slug ? [
+          `https://www.rottentomatoes.com/m/${slugWithoutArticle}_${year}`,
+          `https://www.rottentomatoes.com/m/${slugWithoutArticle}${year}`,
+        ] : []),
       ] : []),
     ]
 

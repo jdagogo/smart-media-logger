@@ -1981,7 +1981,7 @@ function PersonalMediaModel({ loggedItems, onUpdateLoggedItem, onNavigateToItem 
 // Types
 type RightPaneTab = 'logging' | 'upnext' | 'drafts' | 'library' | 'recs' | 'profile'
 type MediaFilter = 'all' | 'movie' | 'tv' | 'books' | 'music' | 'podcasts' | 'video'
-type SortMode = 'date' | 'score'
+type SortMode = 'date' | 'score' | 'source' | 'title'
 
 interface QueueItem {
   id: number
@@ -2101,6 +2101,10 @@ export interface LoggedItem extends QueueItem {
   extractedEntities?: ExtractedEntity[]
   extractedThemes?: string[]
   overallSentiment?: 'positive' | 'negative' | 'neutral' | 'mixed'
+  // Music-specific fields
+  fromMovie?: string      // Movie title this music is from (legacy, single source)
+  fromMovieYear?: number  // Year of the source movie (legacy, single source)
+  fromMovies?: Array<{ title: string; year?: number }>  // Multiple soundtrack sources
 }
 
 interface RightPaneTabsProps {
@@ -2519,25 +2523,40 @@ export default function RightPaneTabs({
     videoId: string
     thumbnail: string
     fromMovie: string
+    fromMovieYear?: number
   }) => {
-    // Check if already saved - prevent duplicates
-    if (savedMusicTracks[track.videoId]) {
-      console.log('Track already saved, skipping:', track.videoId)
-      return
-    }
+    const newSource = { title: track.fromMovie, year: track.fromMovieYear }
 
-    // Also check loggedItems to prevent duplicates
-    const alreadyLogged = loggedItems.some(
+    // Check if song already exists in loggedItems
+    const existingItem = loggedItems.find(
       item => item.mediaType === 'music' && item.videoId === track.videoId
     )
-    if (alreadyLogged) {
-      console.log('Track already in logged items, skipping:', track.videoId)
-      // Still update savedMusicTracks state for UI consistency
+
+    if (existingItem) {
+      // Song already exists - add the new source if not already present
+      const existingSources = existingItem.fromMovies ||
+        (existingItem.fromMovie ? [{ title: existingItem.fromMovie, year: existingItem.fromMovieYear }] : [])
+
+      // Check if this source is already in the list
+      const sourceAlreadyExists = existingSources.some(
+        s => s.title.toLowerCase() === newSource.title.toLowerCase()
+      )
+
+      if (!sourceAlreadyExists) {
+        // Add the new source
+        const updatedSources = [...existingSources, newSource]
+        onUpdateLoggedItem?.(existingItem.id, { fromMovies: updatedSources })
+        console.log('Added new source to existing track:', track.title, 'from', track.fromMovie)
+      } else {
+        console.log('Source already exists for track:', track.title, 'from', track.fromMovie)
+      }
+
+      // Ensure savedMusicTracks state is updated for UI consistency
       setSavedMusicTracks(prev => ({ ...prev, [track.videoId]: true }))
       return
     }
 
-    // Add to logged items as music
+    // New song - create item with fromMovies array
     const musicItem: LoggedItem = {
       id: Date.now(),
       title: track.title,
@@ -2547,7 +2566,9 @@ export default function RightPaneTabs({
       addedAt: new Date().toISOString().split('T')[0],
       videoId: track.videoId,
       thumbnail: track.thumbnail,
-      description: `From the ${track.fromMovie} soundtrack`,
+      fromMovie: track.fromMovie,
+      fromMovieYear: track.fromMovieYear,
+      fromMovies: [newSource], // Initialize with first source
       rating: undefined, // User can rate later
       dateConsumed: new Date().toISOString().split('T')[0],
     }
@@ -2567,6 +2588,7 @@ export default function RightPaneTabs({
         artist: track.artist,
         thumbnail: track.thumbnail,
         fromMovie: track.fromMovie,
+        fromMovieYear: track.fromMovieYear,
         savedAt: new Date().toISOString(),
       })
       localStorage.setItem('smartMediaLogger_savedMusic', JSON.stringify(savedMusic))
@@ -2818,6 +2840,36 @@ export default function RightPaneTabs({
         const aRating = (a as LoggedItem).rating ?? 0
         const bRating = (b as LoggedItem).rating ?? 0
         return bRating - aRating
+      }
+      if (sort === 'source') {
+        // Sort by source A-Z (for multi-source songs, use alphabetically-first source)
+        const aItem = a as LoggedItem
+        const bItem = b as LoggedItem
+
+        // Get all sources for each item (check fromMovies, fromMovie, or parse from description)
+        const getFirstSource = (item: LoggedItem): string => {
+          if (item.fromMovies && item.fromMovies.length > 0) {
+            const titles = item.fromMovies.map(s => s.title).filter(Boolean)
+            return titles.sort((x, y) => x.toLowerCase().localeCompare(y.toLowerCase()))[0] || ''
+          }
+          if (item.fromMovie) {
+            return item.fromMovie
+          }
+          // Fallback: parse from description like "From the X soundtrack"
+          if (item.description) {
+            const match = item.description.match(/^From the\s+(.+?)\s+soundtrack$/i)
+            if (match) return match[1]
+          }
+          return ''
+        }
+
+        const aSource = getFirstSource(aItem).toLowerCase()
+        const bSource = getFirstSource(bItem).toLowerCase()
+        return aSource.localeCompare(bSource)
+      }
+      if (sort === 'title') {
+        // Sort by song/item title A-Z
+        return a.title.localeCompare(b.title)
       }
       // Default: sort by date (most recent first)
       const aDate = (a as LoggedItem).dateConsumed || a.addedAt || ''
@@ -3383,7 +3435,7 @@ export default function RightPaneTabs({
                   className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
                     mediaFilter === filter.id
                       ? 'bg-accent-blue text-white'
-                      : 'bg-paper-100 text-ink-600 hover:bg-paper-200 border border-paper-400'
+                      : 'bg-paper-100 text-ink-600 hover:bg-accent-blue/20 hover:text-accent-blue hover:border-accent-blue border border-paper-400'
                   }`}
                 >
                   {filter.label}
@@ -3436,13 +3488,13 @@ export default function RightPaneTabs({
                           ? 'border-orange-400 shadow-lg scale-[1.01]'
                           : hasExpandedItem
                             ? 'border-paper-300 opacity-90 hover:opacity-100 hover:border-accent-blue hover:border-2 hover:bg-blue-100 hover:shadow-md hover:scale-[1.01]'
-                            : 'border-paper-300 hover:border-orange-300'
+                            : 'border-paper-300 hover:border-accent-blue hover:bg-accent-blue/5 hover:shadow-md'
                       }`}
                     >
                       {/* Collapsed Header - Click to expand */}
                       <button
                         onClick={() => setExpandedQueueId(isExpanded ? null : item.id)}
-                        className="w-full p-4 text-left flex justify-between items-center hover:bg-paper-50 transition-colors"
+                        className="w-full p-4 text-left flex justify-between items-center transition-colors"
                       >
                         <div className="flex-1">
                           <h3 className="font-bold text-ink-800">{item.title}</h3>
@@ -3998,7 +4050,7 @@ export default function RightPaneTabs({
                   className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
                     mediaFilter === filter.id
                       ? 'bg-accent-blue text-white'
-                      : 'bg-paper-100 text-ink-600 hover:bg-paper-200 border border-paper-400'
+                      : 'bg-paper-100 text-ink-600 hover:bg-accent-blue/20 hover:text-accent-blue hover:border-accent-blue border border-paper-400'
                   }`}
                 >
                   {filter.label}
@@ -4006,30 +4058,77 @@ export default function RightPaneTabs({
               ))}
             </div>
 
-            {/* Sort Toggle */}
+            {/* Sort Toggle - different options for music vs other media */}
             <div className="flex items-center gap-2 mb-4">
-              <span className="text-sm text-ink-500">Sort:</span>
+              <span className="text-xs font-bold text-ink-800">Sort:</span>
               <div className="flex rounded-lg overflow-hidden border border-paper-400">
-                <button
-                  onClick={() => setSortMode('date')}
-                  className={`px-3 py-1 text-sm font-medium transition-all ${
-                    sortMode === 'date'
-                      ? 'bg-accent-blue text-white'
-                      : 'bg-paper-100 text-ink-600 hover:bg-paper-200'
-                  }`}
-                >
-                  Date
-                </button>
-                <button
-                  onClick={() => setSortMode('score')}
-                  className={`px-3 py-1 text-sm font-medium transition-all ${
-                    sortMode === 'score'
-                      ? 'bg-accent-blue text-white'
-                      : 'bg-paper-100 text-ink-600 hover:bg-paper-200'
-                  }`}
-                >
-                  Score
-                </button>
+                {mediaFilter === 'music' ? (
+                  <>
+                    <button
+                      onClick={() => setSortMode('date')}
+                      className={`px-2.5 py-0.5 text-xs font-medium transition-all ${
+                        sortMode === 'date'
+                          ? 'bg-accent-blue text-white'
+                          : 'bg-paper-100 text-ink-600 hover:bg-accent-blue/20 hover:text-accent-blue'
+                      }`}
+                    >
+                      Date Added
+                    </button>
+                    <button
+                      onClick={() => setSortMode('source')}
+                      className={`px-2.5 py-0.5 text-xs font-medium transition-all ${
+                        sortMode === 'source'
+                          ? 'bg-accent-blue text-white'
+                          : 'bg-paper-100 text-ink-600 hover:bg-accent-blue/20 hover:text-accent-blue'
+                      }`}
+                    >
+                      Source A-Z
+                    </button>
+                    <button
+                      onClick={() => setSortMode('title')}
+                      className={`px-2.5 py-0.5 text-xs font-medium transition-all ${
+                        sortMode === 'title'
+                          ? 'bg-accent-blue text-white'
+                          : 'bg-paper-100 text-ink-600 hover:bg-accent-blue/20 hover:text-accent-blue'
+                      }`}
+                    >
+                      Song Name A-Z
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      onClick={() => setSortMode('date')}
+                      className={`px-2.5 py-0.5 text-xs font-medium transition-all ${
+                        sortMode === 'date'
+                          ? 'bg-accent-blue text-white'
+                          : 'bg-paper-100 text-ink-600 hover:bg-accent-blue/20 hover:text-accent-blue'
+                      }`}
+                    >
+                      Date Added
+                    </button>
+                    <button
+                      onClick={() => setSortMode('score')}
+                      className={`px-2.5 py-0.5 text-xs font-medium transition-all ${
+                        sortMode === 'score'
+                          ? 'bg-accent-blue text-white'
+                          : 'bg-paper-100 text-ink-600 hover:bg-accent-blue/20 hover:text-accent-blue'
+                      }`}
+                    >
+                      My Score
+                    </button>
+                    <button
+                      onClick={() => setSortMode('title')}
+                      className={`px-2.5 py-0.5 text-xs font-medium transition-all ${
+                        sortMode === 'title'
+                          ? 'bg-accent-blue text-white'
+                          : 'bg-paper-100 text-ink-600 hover:bg-accent-blue/20 hover:text-accent-blue'
+                      }`}
+                    >
+                      Name A-Z
+                    </button>
+                  </>
+                )}
               </div>
             </div>
 
@@ -4050,13 +4149,13 @@ export default function RightPaneTabs({
                         ? 'border-accent-blue shadow-lg scale-[1.01]'
                         : hasExpandedItem
                           ? 'border-paper-300 opacity-90 hover:opacity-100 hover:border-accent-blue hover:border-2 hover:bg-blue-100 hover:shadow-md hover:scale-[1.01]'
-                          : 'border-paper-300 hover:border-accent-blue'
+                          : 'border-paper-300 hover:border-accent-blue hover:bg-accent-blue/5 hover:shadow-md'
                     }`}
                   >
                     {/* Collapsed Header - Click to open modal */}
                     <button
                       onClick={() => setModalItem(item)}
-                      className="w-full p-4 text-left flex justify-between items-center hover:bg-paper-50 transition-colors"
+                      className="w-full p-4 text-left flex justify-between items-center transition-colors"
                     >
                       <div className="flex-1">
                         {/* Media type badge for songs */}
@@ -4072,11 +4171,43 @@ export default function RightPaneTabs({
                             : <>{item.year} {item.director && `• ${item.director}`}</>
                           }
                         </p>
-                        {item.mediaType === 'music' && item.description && (
-                          <p className="text-xs text-ink-400 mt-1">
-                            {item.description}
-                          </p>
-                        )}
+                        {item.mediaType === 'music' && (item.fromMovies?.length || item.fromMovie || item.description) && (() => {
+                          // Get all sources (fromMovies array, or fallback to legacy single source)
+                          const sources = item.fromMovies?.length
+                            ? item.fromMovies
+                            : item.fromMovie
+                              ? [{ title: item.fromMovie, year: item.fromMovieYear }]
+                              : item.description
+                                ? [{ title: item.description.replace(/^From the\s+/, '').replace(/\s+soundtrack$/, ''), year: undefined }]
+                                : []
+
+                          if (sources.length === 0) return null
+
+                          return (
+                            <p className="text-xs mt-1">
+                              <span className="text-ink-500">From the </span>
+                              {sources.map((source, idx) => (
+                                <span key={source.title}>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      setSoundtrackMovie({
+                                        title: source.title,
+                                        year: source.year || new Date().getFullYear(),
+                                        composer: undefined
+                                      })
+                                    }}
+                                    className="text-accent-blue font-bold italic hover:underline"
+                                  >
+                                    {source.title}
+                                  </button>
+                                  {idx < sources.length - 1 && <span className="text-ink-500"> & </span>}
+                                </span>
+                              ))}
+                              <span className="text-ink-500"> {sources.length > 1 ? 'soundtracks' : 'soundtrack'}</span>
+                            </p>
+                          )
+                        })()}
                         {item.mediaType !== 'music' && item.dateConsumed && (
                           <p className="text-xs text-ink-400 mt-1">
                             Watched {item.dateConsumed}
@@ -4722,7 +4853,7 @@ export default function RightPaneTabs({
                   className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
                     mediaFilter === filter.id
                       ? 'bg-accent-blue text-white'
-                      : 'bg-paper-100 text-ink-600 hover:bg-paper-200 border border-paper-400'
+                      : 'bg-paper-100 text-ink-600 hover:bg-accent-blue/20 hover:text-accent-blue hover:border-accent-blue border border-paper-400'
                   }`}
                 >
                   {filter.label}
@@ -5583,6 +5714,14 @@ export default function RightPaneTabs({
         onSaveTrack={handleSaveMusicTrack}
         onUnsaveTrack={handleUnsaveMusicTrack}
         savedTracks={savedMusicTracks}
+        onOpenSoundtrack={(movie) => {
+          setModalItem(null) // Close the current modal first
+          setSoundtrackMovie({
+            title: movie.title,
+            year: movie.year || new Date().getFullYear(),
+            composer: undefined
+          })
+        }}
       />
     </div>
   )

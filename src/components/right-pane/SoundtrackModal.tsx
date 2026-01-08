@@ -43,6 +43,7 @@ interface SoundtrackModalProps {
     videoId: string
     thumbnail: string
     fromMovie: string
+    fromMovieYear?: number
   }) => void
   onUnsaveTrack?: (videoId: string) => void
   savedTracks?: Record<string, boolean>
@@ -91,8 +92,14 @@ export default function SoundtrackModal({
   const effectiveScorePlaylistId = customScorePlaylistId || scorePlaylistId || playlistId
   const effectiveMusicPlaylistId = customMusicPlaylistId || musicFromPlaylistId
 
-  // Load custom overrides from localStorage on mount
+  // Load custom overrides from localStorage on mount (reset first to avoid stale data)
   useEffect(() => {
+    // Always reset custom overrides when movie changes
+    setCustomScorePlaylistId(null)
+    setCustomMusicPlaylistId(null)
+    setCustomScoreName(null)
+    setCustomMusicName(null)
+
     if (movieTitle) {
       const storageKey = `soundtrack_overrides_${movieTitle.toLowerCase().replace(/\s+/g, '_')}`
       const stored = localStorage.getItem(storageKey)
@@ -289,6 +296,7 @@ export default function SoundtrackModal({
           videoId: track.videoId,
           thumbnail: track.thumbnail,
           fromMovie: movieTitle,
+          fromMovieYear: movieYear,
         })
         setJustSaved(prev => new Set(prev).add(track.videoId))
         setTimeout(() => {

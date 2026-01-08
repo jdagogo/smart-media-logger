@@ -19,9 +19,11 @@ interface LoggedItemModalProps {
   talentPreferences?: Record<string, 'loved' | 'not-for-me' | null>
   onTalentPreferenceChange?: (preferences: Record<string, 'loved' | 'not-for-me' | null>) => void
   // Soundtrack
-  onSaveTrack?: (track: { title: string; artist: string; videoId: string; thumbnail: string; fromMovie: string }) => void
+  onSaveTrack?: (track: { title: string; artist: string; videoId: string; thumbnail: string; fromMovie: string; fromMovieYear?: number }) => void
   onUnsaveTrack?: (videoId: string) => void
   savedTracks?: Record<string, boolean>
+  // Open soundtrack for a movie (used when clicking on movie name from music items)
+  onOpenSoundtrack?: (movie: { title: string; year?: number }) => void
 }
 
 // Helper to sanitize context text
@@ -46,6 +48,7 @@ export default function LoggedItemModal({
   onSaveTrack,
   onUnsaveTrack,
   savedTracks = {},
+  onOpenSoundtrack,
 }: LoggedItemModalProps) {
   const [analyzingItem, setAnalyzingItem] = useState(false)
   const [editingNotes, setEditingNotes] = useState(false)
@@ -61,6 +64,7 @@ export default function LoggedItemModal({
     setAwardsTooltip(null)
     setLoadingAwards(false)
     setSavedNotesLocal(null)
+    setVideoExpanded(false)
   }, [item?.id])
 
   if (!isOpen || !item) return null
@@ -385,12 +389,45 @@ export default function LoggedItemModal({
                       <span className="text-accent-blue font-bold uppercase tracking-wide text-sm">Artist</span>
                       <span className="font-bold text-ink-900 text-lg">{item.director}</span>
                     </div>
-                    {item.description && (
-                      <div className="flex justify-between items-center">
-                        <span className="text-accent-blue font-bold uppercase tracking-wide text-sm">Source</span>
-                        <span className="font-bold text-ink-900">{item.description}</span>
-                      </div>
-                    )}
+                    {(item.fromMovies?.length || item.fromMovie || item.description) && (() => {
+                      // Get all sources (fromMovies array, or fallback to legacy single source)
+                      const sources = item.fromMovies?.length
+                        ? item.fromMovies
+                        : item.fromMovie
+                          ? [{ title: item.fromMovie, year: item.fromMovieYear }]
+                          : item.description
+                            ? [{ title: item.description.replace(/^From the\s+/, '').replace(/\s+soundtrack$/, ''), year: undefined }]
+                            : []
+
+                      if (sources.length === 0) return null
+
+                      return (
+                        <div className="flex justify-between items-start">
+                          <span className="text-accent-blue font-bold uppercase tracking-wide text-sm">
+                            {sources.length > 1 ? 'Sources' : 'Source'}
+                          </span>
+                          <div className={sources.length > 1 ? 'text-right space-y-1' : 'text-right'}>
+                            {sources.map((source) => (
+                              <div key={source.title}>
+                                <span className="text-ink-500">From the </span>
+                                <button
+                                  onClick={() => {
+                                    if (onOpenSoundtrack) {
+                                      onClose()
+                                      onOpenSoundtrack({ title: source.title, year: source.year })
+                                    }
+                                  }}
+                                  className="text-accent-blue font-bold italic hover:underline"
+                                >
+                                  {source.title}
+                                </button>
+                                <span className="text-ink-500"> soundtrack</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )
+                    })()}
                     {item.dateConsumed && (
                       <div className="flex justify-between items-center">
                         <span className="text-accent-blue font-bold uppercase tracking-wide text-sm">Added</span>

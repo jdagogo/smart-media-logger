@@ -337,8 +337,8 @@
             <h2>Quick Start</h2>
 
             <div class="alert warning">
-                <strong>v1.9.1-alpha - Rating Colors & UI Polish</strong><br>
-                January 7, 2026. Metacritic-style rating colors, fresh score scraping, UI improvements. Dev server works fine.
+                <strong>v1.9.2-alpha - Music Sorting & UX Polish</strong><br>
+                January 8, 2026. Music sort options, multiple soundtrack sources, improved hover states, RT URL fixes. Dev server works fine.
             </div>
 
             <div style="margin-bottom: 20px;">
@@ -773,10 +773,10 @@
                 </div>
             </div>
 
-            <!-- v1.9.1-alpha - Rating Colors & UI Polish -->
+            <!-- v1.9.2-alpha - Music Sorting & UX Polish -->
             <div class="version-card" style="border: 3px solid #f59e0b;">
                 <div class="version-header">
-                    <div class="version-title">v1.9.1-alpha</div>
+                    <div class="version-title">v1.9.2-alpha</div>
                     <div class="status development">CURRENT</div>
                 </div>
 
@@ -902,6 +902,27 @@
                         User notes should be automatically analyzed to extract entities (people, themes, places, emotions) and feed into My Media Model. Currently notes are just stored as plain text with no AI processing.
                     </span>
                 </div>
+
+                <div style="background: #FEF9C3; padding: 15px; border-radius: 8px; margin-top: 15px; border: 1px solid #CA8A04;">
+                    <strong style="color: #CA8A04;">YouTube & Playlist Caching:</strong><br>
+                    <span style="color: #666; font-size: 0.9em;">
+                        Currently every soundtrack search hits the YouTube API fresh. Need to: (1) Cache playlist search results and track listings, (2) Persist manually-edited playlist overrides properly, (3) Reduce API calls to avoid rate limits. Reference the caching system in YouTube Analysis app (port 3002) for implementation patterns.
+                    </span>
+                </div>
+
+                <div style="background: #ECFDF5; padding: 15px; border-radius: 8px; margin-top: 15px; border: 1px solid #059669;">
+                    <strong style="color: #059669;">Clickable Talent Discovery:</strong><br>
+                    <span style="color: #666; font-size: 0.9em;">
+                        Make artist/director/talent names clickable to discover more of their work. For music: click "Johnny Greenwood" or "Elton John" to see a list of their songs you can heart and add. For movies: click director name to browse their filmography. Eventually extend to all talent (actors, composers, etc.). Requires API integration to fetch filmographies/discographies.
+                    </span>
+                </div>
+
+                <div style="background: #FDF4FF; padding: 15px; border-radius: 8px; margin-top: 15px; border: 1px solid #A855F7;">
+                    <strong style="color: #A855F7;">My Media Model Redesign:</strong><br>
+                    <span style="color: #666; font-size: 0.9em;">
+                        Completely redesign My Media Model to be more visual, comprehensive, and useful. Current version is basic text-based analysis. Needs: visual data representations (charts, graphs, word clouds), deeper pattern recognition, better entity relationships, timeline views, taste evolution tracking, and actionable insights. Should feel like a personalized media dashboard.
+                    </span>
+                </div>
             </div>
 
             <!-- Phase 3 Planned -->
@@ -987,7 +1008,19 @@
         <div class="ecosystem-section">
             <h2>Changelog</h2>
             <div style="background: #F5F1E8; padding: 20px; border-radius: 8px;">
-                <h3 style="margin-bottom: 10px;">v1.9.1-alpha - January 7, 2026</h3>
+                <h3 style="margin-bottom: 10px;">v1.9.2-alpha - January 8, 2026</h3>
+                <ul style="line-height: 1.8; color: #666; margin-left: 20px;">
+                    <li><strong>NEW:</strong> Music-specific sort options (Date Added, Source A-Z, Song Name A-Z)</li>
+                    <li><strong>NEW:</strong> Name A-Z sort option for movies and all media</li>
+                    <li><strong>NEW:</strong> Multiple soundtrack sources per song (e.g., song appears in multiple movies)</li>
+                    <li><strong>NEW:</strong> Clickable soundtrack links open Soundtrack Modal from My Stuff and item modal</li>
+                    <li><strong>IMPROVED:</strong> Item hover states more prominent (blue border, tint, shadow)</li>
+                    <li><strong>IMPROVED:</strong> Content type filter hover states (blue tint + text)</li>
+                    <li><strong>FIXED:</strong> Video expansion state now resets when switching between items</li>
+                    <li><strong>FIXED:</strong> Rotten Tomatoes URLs for titles starting with "The/A/An" (now tries without article)</li>
+                </ul>
+
+                <h3 style="margin-top: 20px; margin-bottom: 10px;">v1.9.1-alpha - January 7, 2026</h3>
                 <ul style="line-height: 1.8; color: #666; margin-left: 20px;">
                     <li><strong>NEW:</strong> Metacritic-style rating color scheme (red 0-39, yellow 40-64, green 65-100)</li>
                     <li><strong>NEW:</strong> Gradient color bleeding - worst scores brightest red, best scores brightest green</li>

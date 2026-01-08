@@ -121,7 +121,7 @@ interface MediaCardProps {
   genres?: string[]
   tmdbRating?: number
   // Soundtrack
-  onSaveTrack?: (track: { title: string; artist: string; videoId: string; thumbnail: string; fromMovie: string }) => void
+  onSaveTrack?: (track: { title: string; artist: string; videoId: string; thumbnail: string; fromMovie: string; fromMovieYear?: number }) => void
   onUnsaveTrack?: (videoId: string) => void
   savedTracks?: Record<string, boolean>
   // Refresh metadata
