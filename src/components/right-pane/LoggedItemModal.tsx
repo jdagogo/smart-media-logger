@@ -50,15 +50,17 @@ export default function LoggedItemModal({
   const [analyzingItem, setAnalyzingItem] = useState(false)
   const [editingNotes, setEditingNotes] = useState(false)
   const [notesValue, setNotesValue] = useState('')
+  const [savedNotesLocal, setSavedNotesLocal] = useState<string | null>(null)
   const [videoExpanded, setVideoExpanded] = useState(false)
   const [refreshingMetadata, setRefreshingMetadata] = useState(false)
   const [awardsTooltip, setAwardsTooltip] = useState<string | null>(null)
   const [loadingAwards, setLoadingAwards] = useState(false)
 
-  // Reset awards tooltip when item changes
+  // Reset state when item changes
   useEffect(() => {
     setAwardsTooltip(null)
     setLoadingAwards(false)
+    setSavedNotesLocal(null)
   }, [item?.id])
 
   if (!isOpen || !item) return null
@@ -109,13 +111,14 @@ export default function LoggedItemModal({
 
   // Start editing notes
   const startEditingNotes = () => {
-    setNotesValue(item.notes || '')
+    setNotesValue(savedNotesLocal ?? item.notes ?? '')
     setEditingNotes(true)
   }
 
   // Save notes
   const saveNotes = () => {
     onUpdateItem?.(item.id, { notes: notesValue })
+    setSavedNotesLocal(notesValue)
     setEditingNotes(false)
   }
 
@@ -339,12 +342,11 @@ export default function LoggedItemModal({
           {/* MUSIC ITEMS */}
           {isMusic ? (
             <div className="p-6 space-y-6">
-              {/* Side by side: Video + Details */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Left: Video Player */}
-                {item.videoId && (
-                  <div>
-                    <div className="aspect-video bg-black rounded-xl overflow-hidden shadow-xl">
+              {/* Video Player - same size and style as film modal */}
+              {item.videoId && (
+                <div className="flex gap-4 items-start justify-center mx-auto">
+                  <div className={`${videoExpanded ? 'w-full' : 'w-[65%]'} flex-shrink-0 relative transition-all duration-300`}>
+                    <div className="aspect-video bg-black rounded-xl overflow-hidden shadow-2xl">
                       <iframe
                         src={`https://www.youtube.com/embed/${item.videoId}?autoplay=0&rel=0`}
                         className="w-full h-full"
@@ -352,81 +354,95 @@ export default function LoggedItemModal({
                         allowFullScreen
                       />
                     </div>
+                    {/* Expand/Collapse button */}
+                    <button
+                      onClick={() => setVideoExpanded(!videoExpanded)}
+                      className="absolute top-3 right-3 bg-black/60 hover:bg-black/80 text-white p-2 rounded-lg transition-all"
+                      title={videoExpanded ? "Collapse video" : "Expand video"}
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        {videoExpanded ? (
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 9V4.5M9 9H4.5M9 9L3.5 3.5M15 9h4.5M15 9V4.5M15 9l5.5-5.5M9 15v4.5M9 15H4.5M9 15l-5.5 5.5M15 15h4.5M15 15v4.5m0-4.5l5.5 5.5" />
+                        ) : (
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                        )}
+                      </svg>
+                    </button>
                   </div>
-                )}
+                </div>
+              )}
 
-                {/* Right: Song Details */}
-                <div className="space-y-4">
-                  <div className="bg-paper-50 rounded-xl p-5">
-                    <h3 className="font-bold text-ink-800 mb-4">Song Details</h3>
-                    <div className="space-y-3 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-ink-500">Title</span>
-                        <span className="font-medium text-ink-800">{item.title}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-ink-500">Artist</span>
-                        <span className="font-medium text-ink-800">{item.director}</span>
-                      </div>
-                      {item.description && (
-                        <div className="flex justify-between">
-                          <span className="text-ink-500">Source</span>
-                          <span className="font-medium text-ink-800">{item.description}</span>
-                        </div>
-                      )}
-                      {item.dateConsumed && (
-                        <div className="flex justify-between">
-                          <span className="text-ink-500">Added</span>
-                          <span className="font-medium text-ink-800">{item.dateConsumed}</span>
-                        </div>
-                      )}
+              {/* Song Details - below video */}
+              <div className="max-w-2xl mx-auto space-y-4">
+                <div className="bg-white rounded-xl p-6 border-2 border-accent-blue">
+                  <h3 className="font-bold text-accent-blue text-lg mb-5 uppercase tracking-wide">Song Details</h3>
+                  <div className="space-y-4">
+                    <div className="flex justify-between items-center">
+                      <span className="text-accent-blue font-bold uppercase tracking-wide text-sm">Title</span>
+                      <span className="font-bold text-ink-900 text-lg">{item.title}</span>
                     </div>
-                  </div>
-
-                  {/* Notes with Voice */}
-                  <div className="bg-paper-50 rounded-xl p-5">
-                    <div className="flex items-center justify-between mb-3">
-                      <h3 className="font-bold text-ink-800">Your Notes</h3>
-                      {!editingNotes && (
-                        <button
-                          onClick={startEditingNotes}
-                          className="text-sm px-3 py-1.5 bg-accent-blue text-white rounded-lg hover:bg-accent-navy transition-colors"
-                        >
-                          {item.notes ? '✏️ Edit' : '+ Add Notes'}
-                        </button>
-                      )}
+                    <div className="flex justify-between items-center">
+                      <span className="text-accent-blue font-bold uppercase tracking-wide text-sm">Artist</span>
+                      <span className="font-bold text-ink-900 text-lg">{item.director}</span>
                     </div>
-
-                    {editingNotes ? (
-                      <div className="space-y-3">
-                        <VoiceInput
-                          value={notesValue}
-                          onChange={setNotesValue}
-                          placeholder="Share your thoughts... (click 🎤 for voice)"
-                          multiline
-                          className="min-h-[120px]"
-                        />
-                        <div className="flex gap-2 justify-end">
-                          <button
-                            onClick={cancelEditingNotes}
-                            className="px-3 py-1.5 text-sm text-ink-600 hover:bg-paper-200 rounded-lg transition-colors"
-                          >
-                            Cancel
-                          </button>
-                          <button
-                            onClick={saveNotes}
-                            className="px-3 py-1.5 text-sm bg-accent-blue text-white rounded-lg hover:bg-accent-navy transition-colors"
-                          >
-                            Save
-                          </button>
-                        </div>
+                    {item.description && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-accent-blue font-bold uppercase tracking-wide text-sm">Source</span>
+                        <span className="font-bold text-ink-900">{item.description}</span>
                       </div>
-                    ) : item.notes ? (
-                      <p className="text-sm text-ink-600 whitespace-pre-wrap">{item.notes}</p>
-                    ) : (
-                      <p className="text-sm text-ink-400 italic">No notes yet</p>
+                    )}
+                    {item.dateConsumed && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-accent-blue font-bold uppercase tracking-wide text-sm">Added</span>
+                        <span className="font-bold text-ink-900">{item.dateConsumed}</span>
+                      </div>
                     )}
                   </div>
+                </div>
+
+                {/* Notes with Voice */}
+                <div className="bg-white rounded-xl p-6 border-2 border-accent-blue">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="font-bold text-accent-blue text-lg uppercase tracking-wide">Your Notes</h3>
+                    {!editingNotes && (
+                      <button
+                        onClick={startEditingNotes}
+                        className="text-sm px-3 py-1.5 bg-accent-blue text-white rounded-lg hover:bg-accent-navy transition-colors font-bold"
+                      >
+                        {(savedNotesLocal ?? item.notes) ? '✏️ Add/Edit Notes' : '+ Add Notes'}
+                      </button>
+                    )}
+                  </div>
+
+                  {editingNotes ? (
+                    <div className="space-y-3">
+                      <VoiceInput
+                        value={notesValue}
+                        onChange={setNotesValue}
+                        placeholder="Share your thoughts... (click 🎤 for voice)"
+                        multiline
+                        className="min-h-[120px]"
+                      />
+                      <div className="flex gap-2 justify-end">
+                        <button
+                          onClick={cancelEditingNotes}
+                          className="px-3 py-1.5 text-sm text-ink-800 hover:bg-paper-200 rounded-lg transition-colors font-bold"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={saveNotes}
+                          className="px-3 py-1.5 text-sm bg-accent-blue text-white rounded-lg hover:bg-accent-navy transition-colors font-bold"
+                        >
+                          Save
+                        </button>
+                      </div>
+                    </div>
+                  ) : (savedNotesLocal ?? item.notes) ? (
+                    <p className="text-ink-900 whitespace-pre-wrap">{savedNotesLocal ?? item.notes}</p>
+                  ) : (
+                    <p className="text-ink-800 italic">No notes yet</p>
+                  )}
                 </div>
               </div>
             </div>
@@ -663,15 +679,15 @@ export default function LoggedItemModal({
                       </button>
                     </div>
                   </div>
-                ) : item.notes ? (
-                  <p className="text-ink-700 whitespace-pre-wrap leading-relaxed">{item.notes}</p>
+                ) : (savedNotesLocal ?? item.notes) ? (
+                  <p className="text-ink-700 whitespace-pre-wrap leading-relaxed">{savedNotesLocal ?? item.notes}</p>
                 ) : (
                   <p className="text-ink-400 italic">No notes yet. Click "Add Notes" to share your thoughts about this film.</p>
                 )}
               </div>
 
               {/* AI Analysis Section */}
-              {item.notes && item.notes.trim().length >= 10 && (
+              {(savedNotesLocal ?? item.notes) && (savedNotesLocal ?? item.notes)!.trim().length >= 10 && (
                 <div className="bg-gradient-to-br from-purple-50 to-blue-50 rounded-xl p-5 border border-purple-200">
                   <div className="flex items-center justify-between mb-4">
                     <h4 className="font-bold text-purple-800 flex items-center gap-2">

@@ -3463,9 +3463,13 @@ export default function RightPaneTabs({
                           }`}>
                             {item.mediaType === 'movie' ? 'Movie' : item.mediaType === 'audiobook' ? 'Audiobook' : item.mediaType}
                           </span>
-                          <span className={`text-xl transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`}>
-                            ▼
-                          </span>
+                          <svg
+                            className={`w-8 h-8 text-ink-900 transition-transform duration-300 ${isExpanded ? 'rotate-90' : ''}`}
+                            fill="currentColor"
+                            viewBox="0 0 20 20"
+                          >
+                            <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                          </svg>
                         </div>
                       </button>
 
@@ -4085,9 +4089,13 @@ export default function RightPaneTabs({
                             {item.rating}%
                           </span>
                         )}
-                        <span className={`text-xl transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`}>
-                          ▼
-                        </span>
+                        <svg
+                          className={`w-8 h-8 text-ink-900 transition-transform duration-300 ${isExpanded ? 'rotate-90' : ''}`}
+                          fill="currentColor"
+                          viewBox="0 0 20 20"
+                        >
+                          <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                        </svg>
                       </div>
                     </button>
 
@@ -4164,9 +4172,13 @@ export default function RightPaneTabs({
                               <span className="text-sm text-ink-600">
                                 {item.description || 'Song info'}
                               </span>
-                              <span className={`text-ink-500 transition-transform ${expandedMusicInfoId === item.id ? 'rotate-180' : ''}`}>
-                                ▼
-                              </span>
+                              <svg
+                                className={`w-6 h-6 text-ink-900 transition-transform duration-300 ${expandedMusicInfoId === item.id ? 'rotate-90' : ''}`}
+                                fill="currentColor"
+                                viewBox="0 0 20 20"
+                              >
+                                <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                              </svg>
                             </button>
                             {/* Expanded info section */}
                             {expandedMusicInfoId === item.id && (
@@ -5000,9 +5012,13 @@ export default function RightPaneTabs({
                             🍅 {rec.rottenTomatoesScore}%
                           </span>
                         )}
-                        <span className={`text-xl transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`}>
-                          ▼
-                        </span>
+                        <svg
+                          className={`w-8 h-8 text-ink-900 transition-transform duration-300 ${isExpanded ? 'rotate-90' : ''}`}
+                          fill="currentColor"
+                          viewBox="0 0 20 20"
+                        >
+                          <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                        </svg>
                       </div>
                     </button>
 
