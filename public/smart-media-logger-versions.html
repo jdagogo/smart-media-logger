@@ -332,6 +332,17 @@
         <h1>Smart Media Logger</h1>
         <p class="subtitle">AI-powered media consumption tracking | Part of UnitedTribes Ecosystem | Port 3006</p>
 
+        <!-- LOCAL ARCHIVE LINK -->
+        <div style="text-align: center; margin-bottom: 20px;">
+            <a href="file:///Users/j.d.heilprin/smart-media-logger/public/smart-media-logger-versions.html"
+               style="color: white; background: #1E40AF; padding: 8px 20px; border-radius: 8px; text-decoration: none; font-weight: 600; display: inline-block;">
+                Local Archive (this file)
+            </a>
+            <span style="color: rgba(255,255,255,0.8); margin-left: 10px; font-size: 0.9em;">
+                /Users/j.d.heilprin/smart-media-logger/public/smart-media-logger-versions.html
+            </span>
+        </div>
+
         <!-- QUICK START -->
         <div class="quickstart">
             <h2>Quick Start</h2>
@@ -350,7 +361,15 @@
             </div>
 
             <div style="margin-bottom: 20px;">
-                <strong style="color: #383838;">Step 2: Install dependencies</strong>
+                <strong style="color: #383838;">Step 2: Checkout current version (v1.9.3)</strong>
+                <div class="command">
+                    git checkout v1.9.3-metadata-persistence
+                    <button class="copy-btn" onclick="copyCommand(this)">Copy</button>
+                </div>
+            </div>
+
+            <div style="margin-bottom: 20px;">
+                <strong style="color: #383838;">Step 3: Install dependencies</strong>
                 <div class="command">
                     npm install
                     <button class="copy-btn" onclick="copyCommand(this)">Copy</button>
@@ -358,7 +377,7 @@
             </div>
 
             <div style="margin-bottom: 20px;">
-                <strong style="color: #383838;">Step 3: Initialize database</strong>
+                <strong style="color: #383838;">Step 4: Initialize database</strong>
                 <div class="command">
                     npx prisma generate && npx prisma db push
                     <button class="copy-btn" onclick="copyCommand(this)">Copy</button>
@@ -366,7 +385,7 @@
             </div>
 
             <div style="margin-bottom: 20px;">
-                <strong style="color: #383838;">Step 4: Start development server</strong>
+                <strong style="color: #383838;">Step 5: Start development server</strong>
                 <div class="command">
                     npm run dev
                     <button class="copy-btn" onclick="copyCommand(this)">Copy</button>
@@ -867,7 +886,7 @@
                     </div>
                     <div class="info-row">
                         <span class="info-label">Branch:</span>
-                        <span>v1.9.2-music-sorting</span>
+                        <span><a href="https://github.com/jdagogo/smart-media-logger/tree/v1.9.3-metadata-persistence" target="_blank" style="color: #1E40AF; text-decoration: underline;">v1.9.3-metadata-persistence</a></span>
                     </div>
                     <div class="info-row">
                         <span class="info-label">Port:</span>
@@ -883,7 +902,7 @@
                     </div>
                     <div class="info-row">
                         <span class="info-label">Rollback:</span>
-                        <span style="font-family: 'Courier New', monospace; font-size: 0.9em;">git checkout 4043af3</span>
+                        <span style="font-family: 'Courier New', monospace; font-size: 0.9em;">git checkout v1.9.3-metadata-persistence</span>
                     </div>
                 </div>
 
@@ -904,10 +923,10 @@
                 <p style="margin-bottom: 15px; font-weight: 600;">Critical Documentation:</p>
                 <div style="background: #F5F1E8; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
                     <div style="margin-bottom: 10px;">
-                        <a href="https://github.com/jdagogo/smart-media-logger/blob/main/FILM_METADATA_SPEC.md" target="_blank" style="color: #1E40AF; font-weight: bold; text-decoration: underline;">FILM_METADATA_SPEC.md</a> - Complete spec of all film metadata to capture (452 lines)
+                        <a href="https://github.com/jdagogo/smart-media-logger/blob/v1.9.3-metadata-persistence/FILM_METADATA_SPEC.md" target="_blank" style="color: #1E40AF; font-weight: bold; text-decoration: underline;">FILM_METADATA_SPEC.md</a> - Complete spec of all film metadata to capture (452 lines)
                     </div>
                     <div style="margin-bottom: 10px;">
-                        <a href="https://github.com/jdagogo/smart-media-logger/blob/main/V1.9.3_SESSION_NOTES.md" target="_blank" style="color: #1E40AF; font-weight: bold; text-decoration: underline;">V1.9.3_SESSION_NOTES.md</a> - Documents all 11 problems fixed today
+                        <a href="https://github.com/jdagogo/smart-media-logger/blob/v1.9.3-metadata-persistence/V1.9.3_SESSION_NOTES.md" target="_blank" style="color: #1E40AF; font-weight: bold; text-decoration: underline;">V1.9.3_SESSION_NOTES.md</a> - Documents all 11 problems fixed today
                     </div>
                     <div>
                         <strong>Data Flow Checklist</strong> - 10-point checklist for adding new fields (in both docs)
@@ -940,10 +959,13 @@
                     <a href="http://localhost:3006" target="_blank" class="btn btn-primary">
                         Open App
                     </a>
-                    <a href="https://github.com/jdagogo/smart-media-logger/blob/main/FILM_METADATA_SPEC.md" target="_blank" class="btn btn-secondary">
+                    <a href="https://github.com/jdagogo/smart-media-logger/tree/v1.9.3-metadata-persistence" target="_blank" class="btn btn-secondary">
+                        GitHub
+                    </a>
+                    <a href="https://github.com/jdagogo/smart-media-logger/blob/v1.9.3-metadata-persistence/FILM_METADATA_SPEC.md" target="_blank" class="btn btn-secondary">
                         Metadata Spec
                     </a>
-                    <a href="https://github.com/jdagogo/smart-media-logger/blob/main/V1.9.3_SESSION_NOTES.md" target="_blank" class="btn btn-secondary">
+                    <a href="https://github.com/jdagogo/smart-media-logger/blob/v1.9.3-metadata-persistence/V1.9.3_SESSION_NOTES.md" target="_blank" class="btn btn-secondary">
                         Session Notes
                     </a>
                 </div>
