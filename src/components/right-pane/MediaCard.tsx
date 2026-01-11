@@ -84,6 +84,8 @@ interface MediaCardProps {
   starring?: string[]
   cast?: Array<{ name: string; character: string; profilePath?: string }>
   distributor?: string
+  releaseDate?: string
+  officialWebsite?: string
   runtime?: number
   rating?: number
   location?: string
@@ -226,6 +228,8 @@ export default function MediaCard({
   starring,
   cast,
   distributor,
+  releaseDate,
+  officialWebsite,
   runtime,
   rating,
   location,
@@ -386,15 +390,18 @@ export default function MediaCard({
 
   const youtubeId = trailerUrl ? getYouTubeId(trailerUrl) : null
 
+  // Use videoId (from URL paste) or youtubeId (from trailerUrl) - trailer always at top
+  const topVideoId = videoId || youtubeId
+
   return (
     <div className="paper-card rounded-2xl w-full overflow-hidden">
       {/* ═══════════════════════════════════════════════════════════════ */}
-      {/* VIDEO EMBED (for YouTube/video content) */}
+      {/* VIDEO EMBED - Always at top when available (trailer or direct video) */}
       {/* ═══════════════════════════════════════════════════════════════ */}
-      {videoId && (
+      {topVideoId && (
         <div className="bg-black">
           <iframe
-            src={`https://www.youtube.com/embed/${videoId}?enablejsapi=1`}
+            src={`https://www.youtube.com/embed/${topVideoId}?enablejsapi=1`}
             title={title}
             className="w-full aspect-video"
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
@@ -526,6 +533,44 @@ export default function MediaCard({
             </>
           )}
         </div>
+
+        {/* Release Date for upcoming films */}
+        {releaseDate && (
+          <div className="mb-4 inline-flex items-center gap-2 bg-orange-100 border border-orange-300 rounded-lg px-3 py-2">
+            <span className="text-xl">🗓️</span>
+            <div>
+              <div className="text-xs text-orange-600 font-medium">In Theaters</div>
+              <p className="text-base font-bold text-orange-700">
+                {(() => {
+                  const [yr, month, day] = releaseDate.split('-').map(Number)
+                  const date = new Date(yr, month - 1, day)
+                  return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+                })()}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Distributor & Official Website */}
+        {(distributor || officialWebsite) && (
+          <div className="mb-4 flex items-center gap-3">
+            {distributor && (
+              <span className="px-4 py-2 bg-ink-800 text-white rounded-lg text-base font-bold">
+                {distributor}
+              </span>
+            )}
+            {officialWebsite && (
+              <a
+                href={officialWebsite}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-base font-bold transition-colors flex items-center gap-2"
+              >
+                Official Site <span>↗</span>
+              </a>
+            )}
+          </div>
+        )}
 
         {/* Key Contributors with Pills */}
         {(isMovie || isTV) && (
@@ -840,31 +885,7 @@ export default function MediaCard({
           </div>
         )}
 
-        {/* Trailer Button */}
-        {youtubeId && (
-          <div className="mb-6">
-            <button
-              onClick={() => setShowTrailer(!showTrailer)}
-              className="flex items-center gap-2 px-5 py-3 bg-accent-blue text-white rounded-lg hover:bg-blue-700 transition-colors font-bold"
-            >
-              <span>{showTrailer ? '✕ Close' : '▶ Watch Trailer'}</span>
-            </button>
-          </div>
-        )}
-
-        {/* Trailer Embed */}
-        {showTrailer && youtubeId && (
-          <div className="mb-6 rounded-xl overflow-hidden border-2 border-accent-blue aspect-video">
-            <iframe
-              key={`trailer-${showTrailer}`}
-              src={`https://www.youtube.com/embed/${youtubeId}?autoplay=1&rel=0&enablejsapi=1`}
-              title="Official Trailer"
-              className="w-full h-full"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-              allowFullScreen
-            />
-          </div>
-        )}
+        {/* Trailer is now always shown at top of card - no separate button needed */}
 
         {/* Where to Watch */}
         {streamingOptions && streamingOptions.length > 0 && (

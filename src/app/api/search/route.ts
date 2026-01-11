@@ -35,6 +35,90 @@ function cleanSearchQuery(query: string): string {
     .trim()
 }
 
+// Hardcoded movies for films not yet in TMDB (upcoming releases, etc.)
+// These are checked FIRST before TMDB search to ensure we have correct metadata
+const HARDCODED_MOVIES = [
+  {
+    id: 99990001,
+    title: 'The Moment',
+    year: 2026,
+    overview: 'A flashy, tongue-in-cheek hyper-pop mockumentary following a rising pop star as she navigates the complexities of fame and industry pressure while preparing for her arena tour debut.',
+    posterUrl: 'https://m.media-amazon.com/images/M/MV5BZjUzMzU3NzgtMWVkYi00NzM2LTk0OTctMDFmMGY2YWRiNmE3XkEyXkFqcGc@._V1_.jpg',
+    director: 'Aidan Zamiri',
+    writers: ['Aidan Zamiri', 'Bertie Brandes'],
+    composer: 'A.G. Cook',
+    starring: ['Charli xcx', 'Alexander Skarsgård', 'Rachel Sennott', 'Rosanna Arquette', 'Kate Berlant', 'Jamie Demetriou', 'Arielle Dombasle', 'Hailey Benton Gates', 'Kylie Jenner', 'Trew Mullen', 'Mel Ottenberg', 'Isaac Powell', 'Rish Shah', 'Michael Workéyè', 'Shygirl', 'A. G. Cook'],
+    genres: ['Documentary', 'Drama', 'Thriller'],
+    distributor: 'A24',
+    runtime: 103,
+    rated: 'R',
+    trailerUrl: 'https://www.youtube.com/watch?v=Pxqhi7Sgvu8',
+    trailerVideoId: 'Pxqhi7Sgvu8',
+    releaseDate: '2026-01-30',
+    imdbId: 'tt35524793',
+    imdbUrl: 'https://www.imdb.com/title/tt35524793/',
+    officialWebsite: 'https://a24films.com/films/the-moment',
+    metacriticScore: null,
+    rottenTomatoesScore: null,
+    type: 'movie',
+    mediaType: 'movie',
+    // Additional videos from YouTube
+    videos: [
+      { key: 'Pxqhi7Sgvu8', name: 'Official Trailer', type: 'Trailer' },
+      { key: 'dread-video-id', name: 'Dread - A.G. Cook (From The Moment Soundtrack)', type: 'Soundtrack' }
+    ],
+    // Scene images from IMDB
+    images: [
+      'https://m.media-amazon.com/images/M/MV5BZjUzMzU3NzgtMWVkYi00NzM2LTk0OTctMDFmMGY2YWRiNmE3XkEyXkFqcGc@._V1_.jpg'
+    ]
+  },
+  {
+    id: 99990002,
+    title: 'Undertone',
+    year: 2026,
+    overview: "The host of an 'all-things-creepy' podcast moves into her dying mother's house to be her primary caregiver. When her podcast is sent 10 audio recordings of a young pregnant couple experiencing paranormal noises, she realizes the woman's story is a mirror of her own and each new recording scratches at her sanity, drawing her into a fate she cannot escape.",
+    posterUrl: 'https://m.media-amazon.com/images/M/MV5BYWU3YWE3ZWQtODZjNS00ZTdmLWFjNzUtOTUxNjY0MTNhNjhlXkEyXkFqcGc@._V1_.jpg',
+    director: 'Ian Tuason',
+    writers: ['Ian Tuason'],
+    starring: ['Nina Kiri', 'Kris Holden-Ried', 'Michèle Duquet', 'Keana Lyn Bastidas'],
+    genres: ['Horror', 'Sci-Fi', 'Thriller'],
+    distributor: 'A24',
+    runtime: null,
+    rated: null,
+    trailerUrl: 'https://www.youtube.com/watch?v=j6uDeBYDHu4',
+    trailerVideoId: 'j6uDeBYDHu4',
+    releaseDate: '2026-03-13',
+    imdbId: 'tt35892608',
+    imdbUrl: 'https://www.imdb.com/title/tt35892608/',
+    officialWebsite: 'https://a24films.com/films/undertone',
+    metacriticScore: null,
+    rottenTomatoesScore: null,
+    type: 'movie',
+    mediaType: 'movie',
+    videos: [
+      { key: 'j6uDeBYDHu4', name: 'Official Trailer', type: 'Trailer' },
+      { key: 'iJ2tUNSGL7Y', name: 'Teaser', type: 'Teaser' }
+    ],
+    images: [
+      'https://m.media-amazon.com/images/M/MV5BYWU3YWE3ZWQtODZjNS00ZTdmLWFjNzUtOTUxNjY0MTNhNjhlXkEyXkFqcGc@._V1_.jpg'
+    ]
+  }
+]
+
+// Check hardcoded movies first for exact/close matches
+function getHardcodedMatches(query: string): any[] {
+  const q = query.toLowerCase()
+  return HARDCODED_MOVIES.filter(movie => {
+    const titleLower = movie.title.toLowerCase()
+    // Exact match or query is substantial part of title
+    return titleLower === q ||
+           titleLower.includes(q) ||
+           q.includes(titleLower) ||
+           // Check if all significant words match
+           q.split(/\s+/).filter(w => w.length > 2).every(word => titleLower.includes(word))
+  })
+}
+
 // Normalize accented characters (â → a, é → e, etc.) for fallback search
 function normalizeAccents(str: string): string {
   return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
@@ -174,11 +258,24 @@ export async function GET(request: NextRequest) {
       })
     )
 
-    return NextResponse.json({ results, mock: false })
+    // Check for hardcoded matches (for films not in TMDB like upcoming releases)
+    const hardcodedMatches = getHardcodedMatches(query)
+
+    // Filter out TMDB results that might conflict with hardcoded data
+    // (e.g., wrong movie with similar name)
+    const hardcodedTitles = new Set(hardcodedMatches.map(m => m.title.toLowerCase()))
+    const filteredTmdbResults = results.filter(r =>
+      !hardcodedTitles.has(r.title.toLowerCase())
+    )
+
+    // Prepend hardcoded matches to TMDB results
+    const combinedResults = [...hardcodedMatches, ...filteredTmdbResults]
+
+    return NextResponse.json({ results: combinedResults, mock: false })
   } catch (error) {
     console.error('TMDB search error:', error)
     return NextResponse.json({
-      results: getMockResults(query, type),
+      results: getMockResults(query, requestedType),
       mock: true,
       error: 'Failed to fetch from TMDB, using mock data'
     })
@@ -355,8 +452,9 @@ function getMockResults(query: string, type: string) {
     return tvShows.filter(show => fuzzyMatch(show.title, q))
   }
 
-  // Movies with rich metadata
+  // Movies with rich metadata - include hardcoded movies at the top
   const movies = [
+    ...HARDCODED_MOVIES,  // Include upcoming films not yet in TMDB
     {
       id: 30144839,
       title: 'One Battle After Another',

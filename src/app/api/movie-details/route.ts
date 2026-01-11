@@ -3,6 +3,68 @@ import { NextRequest, NextResponse } from 'next/server'
 const TMDB_API_KEY = process.env.TMDB_API_KEY || '2dca580c2a14b55200e784d157207b4d'
 const OMDB_API_KEY = process.env.OMDB_API_KEY || 'a053b065'
 
+// Hardcoded movie data for films not in TMDB
+const HARDCODED_MOVIE_DETAILS: Record<number, any> = {
+  99990001: {
+    id: 99990001,
+    title: 'The Moment',
+    year: 2026,
+    overview: 'A flashy, tongue-in-cheek hyper-pop mockumentary following a rising pop star as she navigates the complexities of fame and industry pressure while preparing for her arena tour debut.',
+    poster: 'https://m.media-amazon.com/images/M/MV5BZjUzMzU3NzgtMWVkYi00NzM2LTk0OTctMDFmMGY2YWRiNmE3XkEyXkFqcGc@._V1_.jpg',
+    director: 'Aidan Zamiri',
+    writers: ['Aidan Zamiri', 'Bertie Brandes'],
+    composer: 'A.G. Cook',
+    starring: ['Charli xcx', 'Alexander Skarsgård', 'Rachel Sennott', 'Rosanna Arquette', 'Kate Berlant', 'Jamie Demetriou', 'Arielle Dombasle', 'Hailey Benton Gates', 'Kylie Jenner', 'Trew Mullen', 'Mel Ottenberg', 'Isaac Powell', 'Rish Shah', 'Michael Workéyè', 'Shygirl', 'A. G. Cook'],
+    genres: ['Documentary', 'Drama', 'Thriller'],
+    distributor: 'A24',
+    runtime: 103,
+    rated: 'R',
+    trailerUrl: 'https://www.youtube.com/watch?v=Pxqhi7Sgvu8',
+    trailerVideoId: 'Pxqhi7Sgvu8',
+    releaseDate: '2026-01-30',
+    imdbId: 'tt35524793',
+    imdbUrl: 'https://www.imdb.com/title/tt35524793/',
+    officialWebsite: 'https://a24films.com/films/the-moment',
+    type: 'movie',
+    mediaType: 'movie',
+    videos: [
+      { key: 'Pxqhi7Sgvu8', name: 'Official Trailer', type: 'Trailer' }
+    ],
+    images: [
+      'https://m.media-amazon.com/images/M/MV5BZjUzMzU3NzgtMWVkYi00NzM2LTk0OTctMDFmMGY2YWRiNmE3XkEyXkFqcGc@._V1_.jpg'
+    ]
+  },
+  99990002: {
+    id: 99990002,
+    title: 'Undertone',
+    year: 2026,
+    overview: "The host of an 'all-things-creepy' podcast moves into her dying mother's house to be her primary caregiver. When her podcast is sent 10 audio recordings of a young pregnant couple experiencing paranormal noises, she realizes the woman's story is a mirror of her own and each new recording scratches at her sanity, drawing her into a fate she cannot escape.",
+    poster: 'https://m.media-amazon.com/images/M/MV5BYWU3YWE3ZWQtODZjNS00ZTdmLWFjNzUtOTUxNjY0MTNhNjhlXkEyXkFqcGc@._V1_.jpg',
+    director: 'Ian Tuason',
+    writers: ['Ian Tuason'],
+    starring: ['Nina Kiri', 'Kris Holden-Ried', 'Michèle Duquet', 'Keana Lyn Bastidas'],
+    genres: ['Horror', 'Sci-Fi', 'Thriller'],
+    distributor: 'A24',
+    runtime: null,
+    rated: null,
+    trailerUrl: 'https://www.youtube.com/watch?v=j6uDeBYDHu4',
+    trailerVideoId: 'j6uDeBYDHu4',
+    releaseDate: '2026-03-13',
+    imdbId: 'tt35892608',
+    imdbUrl: 'https://www.imdb.com/title/tt35892608/',
+    officialWebsite: 'https://a24films.com/films/undertone',
+    type: 'movie',
+    mediaType: 'movie',
+    videos: [
+      { key: 'j6uDeBYDHu4', name: 'Official Trailer', type: 'Trailer' },
+      { key: 'iJ2tUNSGL7Y', name: 'Teaser', type: 'Teaser' }
+    ],
+    images: [
+      'https://m.media-amazon.com/images/M/MV5BYWU3YWE3ZWQtODZjNS00ZTdmLWFjNzUtOTUxNjY0MTNhNjhlXkEyXkFqcGc@._V1_.jpg'
+    ]
+  }
+}
+
 export async function GET(request: NextRequest) {
   const tmdbId = request.nextUrl.searchParams.get('tmdbId')
   const title = request.nextUrl.searchParams.get('title')
@@ -14,6 +76,14 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    // Check for hardcoded movies first (IDs starting with 9999)
+    if (tmdbId && parseInt(tmdbId) >= 99990000) {
+      const hardcodedMovie = HARDCODED_MOVIE_DETAILS[parseInt(tmdbId)]
+      if (hardcodedMovie) {
+        return NextResponse.json(hardcodedMovie)
+      }
+    }
+
     let tmdbData: any = null
 
     // If we have a TMDB ID, fetch directly
@@ -35,16 +105,17 @@ export async function GET(request: NextRequest) {
     // Now fetch OMDB data for Metacritic, RT, IMDB scores
     const omdbData = await fetchOMDBData(tmdbData.title, tmdbData.year, tmdbData.imdbId)
 
-    // Fallback: Fetch IMDB directly if OMDB didn't have the rating
-    let imdbRating = omdbData?.imdbRating
-    let imdbVotes = omdbData?.imdbVotes
-    if (!imdbRating && tmdbData.imdbId) {
-      const imdbData = await fetchIMDBData(tmdbData.imdbId)
-      if (imdbData) {
-        imdbRating = imdbData.imdbRating
-        imdbVotes = imdbData.imdbVotes
-      }
+    // Fetch full IMDB data (rating, box office with domestic/worldwide, awards)
+    let imdbData: any = null
+    if (tmdbData.imdbId) {
+      imdbData = await fetchFullIMDBData(tmdbData.imdbId)
     }
+
+    // Use IMDB data if available, fallback to OMDB
+    const imdbRating = imdbData?.imdbRating || omdbData?.imdbRating
+    const imdbVotes = imdbData?.voteCount?.toLocaleString() || omdbData?.imdbVotes
+    const boxOffice = imdbData?.boxOffice || omdbData?.boxOffice
+    const awards = imdbData?.awards || omdbData?.awards
 
     // Merge all the data
     const fullMetadata = {
@@ -54,10 +125,14 @@ export async function GET(request: NextRequest) {
       rottenTomatoesScore: omdbData?.rottenTomatoesScore,
       imdbRating,
       imdbVotes,
+      // Use IMDB data for box office and awards (has domestic + worldwide)
+      boxOffice,
+      boxOfficeDetails: imdbData?.boxOfficeDetails,
+      budget: imdbData?.budget,
+      awards,
+      awardsDetails: imdbData?.awardsDetails,
       // OMDB rich metadata
       rated: omdbData?.rated,
-      awards: omdbData?.awards,
-      boxOffice: omdbData?.boxOffice,
       production: omdbData?.production,
       country: omdbData?.country,
       language: omdbData?.language,
@@ -327,6 +402,123 @@ async function fetchIMDBData(imdbId: string): Promise<{
     return null
   } catch (error) {
     console.error('IMDB fetch error:', error)
+    return null
+  }
+}
+
+// Fetch full IMDB data including box office (domestic + worldwide) and awards
+async function fetchFullIMDBData(imdbId: string): Promise<{
+  imdbRating?: string
+  voteCount?: number
+  budget?: string
+  boxOffice?: string
+  boxOfficeDetails?: {
+    domestic?: number
+    worldwide?: number
+    openingWeekend?: number
+  }
+  awards?: string
+  awardsDetails?: {
+    wins: number
+    nominations: number
+  }
+} | null> {
+  if (!imdbId) return null
+
+  try {
+    const imdbUrl = `https://www.imdb.com/title/${imdbId}/`
+    console.log('Fetching full IMDB data:', imdbUrl)
+
+    const response = await fetch(imdbUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5',
+      },
+    })
+
+    if (!response.ok) {
+      console.log('IMDB fetch failed:', response.status)
+      return null
+    }
+
+    const html = await response.text()
+
+    // Extract __NEXT_DATA__ JSON
+    const nextDataMatch = html.match(/__NEXT_DATA__[^{]*({[\s\S]*?})\s*<\/script>/)
+    if (!nextDataMatch) {
+      console.log('Could not find IMDB __NEXT_DATA__')
+      return null
+    }
+
+    let nextData
+    try {
+      nextData = JSON.parse(nextDataMatch[1])
+    } catch (e) {
+      console.log('Failed to parse IMDB JSON data')
+      return null
+    }
+
+    const props = nextData?.props?.pageProps || {}
+    const mainData = props.mainColumnData || {}
+    const aboveData = props.aboveTheFoldData || {}
+
+    // Extract rating
+    const ratingData = mainData.ratingsSummary || aboveData.ratingsSummary || {}
+    const imdbRating = ratingData.aggregateRating
+    const voteCount = ratingData.voteCount
+
+    // Extract box office
+    const budget = mainData.productionBudget?.budget?.amount
+    const lifetimeGross = mainData.lifetimeGross?.total?.amount // US & Canada
+    const worldwideGross = mainData.worldwideGross?.total?.amount
+    const openingWeekend = mainData.openingWeekendGross?.gross?.total?.amount
+
+    // Extract awards count
+    const wins = mainData.wins?.total || 0
+    const nominations = mainData.nominationsExcludeWins?.total || 0
+
+    // Format box office as string with both domestic and worldwide
+    let boxOfficeStr = ''
+    if (lifetimeGross && worldwideGross) {
+      boxOfficeStr = `$${lifetimeGross.toLocaleString()} (US & Canada) / $${worldwideGross.toLocaleString()} (Worldwide)`
+    } else if (worldwideGross) {
+      boxOfficeStr = `$${worldwideGross.toLocaleString()} (Worldwide)`
+    } else if (lifetimeGross) {
+      boxOfficeStr = `$${lifetimeGross.toLocaleString()} (US & Canada)`
+    }
+
+    // Format awards string
+    let awardsStr = ''
+    if (wins > 0 && nominations > 0) {
+      awardsStr = `${wins} wins & ${nominations} nominations`
+    } else if (wins > 0) {
+      awardsStr = `${wins} wins`
+    } else if (nominations > 0) {
+      awardsStr = `${nominations} nominations`
+    }
+
+    const result = {
+      imdbRating: imdbRating ? Number(imdbRating).toFixed(1) : undefined,
+      voteCount,
+      budget: budget ? `$${budget.toLocaleString()}` : undefined,
+      boxOffice: boxOfficeStr || undefined,
+      boxOfficeDetails: {
+        domestic: lifetimeGross,
+        worldwide: worldwideGross,
+        openingWeekend,
+      },
+      awards: awardsStr || undefined,
+      awardsDetails: {
+        wins,
+        nominations,
+      },
+    }
+
+    console.log('Full IMDB data fetched:', result)
+    return result
+  } catch (error) {
+    console.error('Full IMDB fetch error:', error)
     return null
   }
 }

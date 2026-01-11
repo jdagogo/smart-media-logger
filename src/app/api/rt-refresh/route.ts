@@ -1,11 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
 
+// Unreleased films - don't fetch scores (they don't exist yet or would be wrong)
+const UNRELEASED_FILMS = ['the moment', 'undertone']
+
 export async function GET(request: NextRequest) {
   const title = request.nextUrl.searchParams.get('title')
   const year = request.nextUrl.searchParams.get('year')
 
   if (!title) {
     return NextResponse.json({ error: 'Title is required' }, { status: 400 })
+  }
+
+  // Skip unreleased films - they don't have real scores yet
+  if (UNRELEASED_FILMS.includes(title.toLowerCase())) {
+    console.log('Skipping Rotten Tomatoes for unreleased film:', title)
+    return NextResponse.json({ rottenTomatoesScore: null, url: null })
   }
 
   try {

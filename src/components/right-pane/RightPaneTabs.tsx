@@ -2051,6 +2051,11 @@ interface QueueItem {
     consensus?: string
     url: string
   }
+  // Release info for upcoming/unreleased films
+  releaseDate?: string
+  distributor?: string
+  officialWebsite?: string
+  imdbId?: string
 }
 
 // Data structure for "Already seen it" modal - matches MediaCard props
@@ -2274,6 +2279,11 @@ interface RightPaneTabsProps {
       consensus?: string
       url: string
     }
+    // Release info for upcoming films
+    releaseDate?: string
+    distributor?: string
+    officialWebsite?: string
+    imdbId?: string
   }
   // Talent preference handling for queue preview
   onQueueTalentPreferenceChange?: (name: string, preference: 'loved' | 'not-for-me' | null) => void
@@ -2995,6 +3005,45 @@ export default function RightPaneTabs({
                           {queuePreview.title || 'Untitled'}
                         </h2>
 
+                        {/* Release Date for upcoming films */}
+                        {queuePreview.releaseDate && (
+                          <div className="mb-3 inline-flex items-center gap-2 bg-orange-100 border border-orange-300 rounded-lg px-3 py-2">
+                            <span className="text-xl">🗓️</span>
+                            <div>
+                              <p className="text-xs text-orange-600 font-medium uppercase tracking-wide">Coming Soon</p>
+                              <p className="text-base font-bold text-orange-700">
+                                {(() => {
+                                  // Parse as local date to avoid timezone shift
+                                  const [year, month, day] = queuePreview.releaseDate.split('-').map(Number)
+                                  const date = new Date(year, month - 1, day)
+                                  return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+                                })()}
+                              </p>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Distributor & Official Website */}
+                        {(queuePreview.distributor || queuePreview.officialWebsite) && (
+                          <div className="mb-4 flex items-center gap-3">
+                            {queuePreview.distributor && (
+                              <span className="px-4 py-2 bg-ink-800 text-white rounded-lg text-base font-bold">
+                                {queuePreview.distributor}
+                              </span>
+                            )}
+                            {queuePreview.officialWebsite && (
+                              <a
+                                href={queuePreview.officialWebsite}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-base font-bold transition-colors flex items-center gap-2"
+                              >
+                                Official Site <span>↗</span>
+                              </a>
+                            )}
+                          </div>
+                        )}
+
                         {/* Author/Channel - clickable link */}
                         {queuePreview.author && (
                           <p className="text-ink-600 mb-2">
@@ -3014,20 +3063,22 @@ export default function RightPaneTabs({
                           </p>
                         )}
 
-                        {/* Video Stats Row */}
-                        {(queuePreview.duration || queuePreview.viewCount || queuePreview.publishDate) && (
+                        {/* Video Stats Row - hide YouTube stats for movie trailers */}
+                        {(queuePreview.duration || (!queuePreview.isTrailer && (queuePreview.viewCount || queuePreview.publishDate))) && (
                           <div className="flex flex-wrap items-center gap-3 text-sm text-ink-500 mb-3">
                             {queuePreview.duration && (
                               <span className="flex items-center gap-1">
                                 <span>⏱</span> {queuePreview.duration}
                               </span>
                             )}
-                            {queuePreview.viewCount && (
+                            {/* Only show view count for non-trailer videos */}
+                            {queuePreview.viewCount && !queuePreview.isTrailer && (
                               <span className="flex items-center gap-1">
                                 <span>👁</span> {parseInt(queuePreview.viewCount).toLocaleString()} views
                               </span>
                             )}
-                            {queuePreview.publishDate && (
+                            {/* Only show publish date for non-trailer videos */}
+                            {queuePreview.publishDate && !queuePreview.isTrailer && (
                               <span className="flex items-center gap-1">
                                 <span>📅</span> {new Date(queuePreview.publishDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                               </span>
@@ -3037,23 +3088,34 @@ export default function RightPaneTabs({
 
                         {/* Media Type Badge */}
                         {queuePreview.mediaType && (
-                          <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold uppercase mb-3 ${
-                            queuePreview.mediaType === 'video' ? 'bg-red-100 text-red-700' :
-                            queuePreview.mediaType === 'music' ? 'bg-pink-100 text-pink-700' :
-                            queuePreview.mediaType === 'book' ? 'bg-amber-100 text-amber-700' :
-                            'bg-paper-300 text-ink-600'
+                          <span className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-bold mb-3 border-2 ${
+                            queuePreview.mediaType === 'movie' ? 'bg-blue-600 text-white border-blue-600' :
+                            queuePreview.mediaType === 'tv' ? 'bg-purple-600 text-white border-purple-600' :
+                            queuePreview.mediaType === 'video' ? 'bg-red-600 text-white border-red-600' :
+                            queuePreview.mediaType === 'music' ? 'bg-pink-600 text-white border-pink-600' :
+                            queuePreview.mediaType === 'book' ? 'bg-emerald-600 text-white border-emerald-600' :
+                            queuePreview.mediaType === 'audiobook' ? 'bg-teal-600 text-white border-teal-600' :
+                            queuePreview.mediaType === 'podcast' ? 'bg-indigo-600 text-white border-indigo-600' :
+                            'bg-ink-600 text-white border-ink-600'
                           }`}>
-                            {queuePreview.mediaType}
+                            {queuePreview.mediaType === 'movie' ? '🎬' :
+                             queuePreview.mediaType === 'tv' ? '📺' :
+                             queuePreview.mediaType === 'video' ? '▶️' :
+                             queuePreview.mediaType === 'music' ? '🎵' :
+                             queuePreview.mediaType === 'book' ? '📖' :
+                             queuePreview.mediaType === 'audiobook' ? '🎧' :
+                             queuePreview.mediaType === 'podcast' ? '🎙️' : '📝'}
+                            {' '}{queuePreview.mediaType.charAt(0).toUpperCase() + queuePreview.mediaType.slice(1)}
                           </span>
                         )}
 
                         {/* Genres */}
                         {queuePreview.genres && queuePreview.genres.length > 0 && (
-                          <div className="flex flex-wrap gap-2 mb-3">
+                          <div className="flex flex-wrap gap-2 mb-4">
                             {queuePreview.genres.map((genre: string) => (
                               <span
                                 key={genre}
-                                className="px-2 py-1 bg-paper-200 text-ink-600 rounded-full text-xs"
+                                className="px-3 py-1.5 bg-orange-100 text-orange-700 border border-orange-300 rounded-lg text-sm font-medium"
                               >
                                 {genre}
                               </span>
@@ -3088,9 +3150,9 @@ export default function RightPaneTabs({
                         )}
 
                         {/* Critics Scores - Expandable panels matching MediaCard */}
-                        {(queuePreview.metacriticScore || queuePreview.rottenTomatoesScore) && (
+                        {(queuePreview.metacriticScore || queuePreview.rottenTomatoesScore || queuePreview.metacriticUrl || queuePreview.rottenTomatoesUrl) && (
                           <div className="space-y-3 mb-6">
-                            {/* Metacritic - matching MediaCard exactly */}
+                            {/* Metacritic - with score */}
                             {queuePreview.metacriticScore && (
                               <div className="border-2 border-accent-blue rounded-xl overflow-hidden">
                                 <div className="flex items-center justify-between p-4 bg-white">
@@ -3136,8 +3198,24 @@ export default function RightPaneTabs({
                                 )}
                               </div>
                             )}
+                            {/* Metacritic - URL only, no score yet */}
+                            {!queuePreview.metacriticScore && queuePreview.metacriticUrl && (
+                              <div className="border-2 border-accent-blue rounded-xl overflow-hidden">
+                                <div className="flex items-center justify-between p-4 bg-white">
+                                  <span className="text-accent-blue font-bold">Metacritic</span>
+                                  <a
+                                    href={queuePreview.metacriticUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex items-center gap-1 text-accent-blue hover:underline font-medium text-sm"
+                                  >
+                                    View Page <span>↗</span>
+                                  </a>
+                                </div>
+                              </div>
+                            )}
 
-                            {/* Rotten Tomatoes - matching MediaCard exactly */}
+                            {/* Rotten Tomatoes - with score */}
                             {queuePreview.rottenTomatoesScore && (
                               <div className="border-2 border-accent-blue rounded-xl overflow-hidden">
                                 <div className="flex items-center justify-between p-4 bg-white">
@@ -3189,6 +3267,22 @@ export default function RightPaneTabs({
                                     )}
                                   </div>
                                 )}
+                              </div>
+                            )}
+                            {/* Rotten Tomatoes - URL only, no score yet */}
+                            {!queuePreview.rottenTomatoesScore && queuePreview.rottenTomatoesUrl && (
+                              <div className="border-2 border-accent-blue rounded-xl overflow-hidden">
+                                <div className="flex items-center justify-between p-4 bg-white">
+                                  <span className="text-accent-blue font-bold">Rotten Tomatoes</span>
+                                  <a
+                                    href={queuePreview.rottenTomatoesUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex items-center gap-1 text-accent-blue hover:underline font-medium text-sm"
+                                  >
+                                    View Page <span>↗</span>
+                                  </a>
+                                </div>
                               </div>
                             )}
                           </div>
@@ -3357,6 +3451,7 @@ export default function RightPaneTabs({
                           </div>
                         )}
 
+
                       </>
                     )}
                   </div>
@@ -3405,6 +3500,8 @@ export default function RightPaneTabs({
                   language={currentEntry.language}
                   genres={currentEntry.genres}
                   tmdbRating={currentEntry.tmdbRating}
+                  releaseDate={currentEntry.releaseDate}
+                  officialWebsite={currentEntry.officialWebsite}
                   isBuilding={true}
                   onEdit={onEdit}
                   onTalentPreferenceChange={onTalentPreferenceChange}
@@ -3542,6 +3639,45 @@ export default function RightPaneTabs({
                           )}
 
                           <div className="p-5 bg-gradient-to-b from-orange-50 to-white space-y-4">
+                            {/* Release Date for upcoming films */}
+                            {item.releaseDate && (
+                              <div className="inline-flex items-center gap-2 bg-orange-100 border border-orange-300 rounded-lg px-3 py-2">
+                                <span className="text-xl">🗓️</span>
+                                <div>
+                                  <div className="text-xs text-orange-600 font-medium">In Theaters</div>
+                                  <p className="text-base font-bold text-orange-700">
+                                    {(() => {
+                                      const [year, month, day] = item.releaseDate.split('-').map(Number)
+                                      const date = new Date(year, month - 1, day)
+                                      return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+                                    })()}
+                                  </p>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Distributor & Official Website */}
+                            {(item.distributor || item.officialWebsite) && (
+                              <div className="flex items-center gap-3">
+                                {item.distributor && (
+                                  <span className="px-4 py-2 bg-ink-800 text-white rounded-lg text-base font-bold">
+                                    {item.distributor}
+                                  </span>
+                                )}
+                                {item.officialWebsite && (
+                                  <a
+                                    href={item.officialWebsite}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-base font-bold transition-colors flex items-center gap-2"
+                                  >
+                                    Official Site <span>↗</span>
+                                  </a>
+                                )}
+                              </div>
+                            )}
+
                             {/* Genres */}
                             {item.genres && item.genres.length > 0 && (
                               <div className="flex flex-wrap gap-2">
@@ -3580,9 +3716,9 @@ export default function RightPaneTabs({
                             )}
 
                             {/* Critics Scores - Expandable Panels (matching MediaCard exactly) */}
-                            {(item.metacriticScore || item.rottenTomatoesScore) && (
+                            {(item.metacriticScore || item.rottenTomatoesScore || item.metacriticUrl || item.rottenTomatoesUrl) && (
                               <div className="space-y-3 mb-6">
-                                {/* Metacritic */}
+                                {/* Metacritic - with score */}
                                 {item.metacriticScore && (
                                   <div className="border-2 border-accent-blue rounded-xl overflow-hidden">
                                     <div className="flex items-center justify-between p-4 bg-white">
@@ -3691,6 +3827,40 @@ export default function RightPaneTabs({
                                         )}
                                       </div>
                                     )}
+                                  </div>
+                                )}
+                                {/* Metacritic - URL only, no score yet */}
+                                {!item.metacriticScore && item.metacriticUrl && (
+                                  <div className="border-2 border-accent-blue rounded-xl overflow-hidden">
+                                    <div className="flex items-center justify-between p-4 bg-white">
+                                      <span className="text-accent-blue font-bold">Metacritic</span>
+                                      <a
+                                        href={item.metacriticUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        onClick={(e) => e.stopPropagation()}
+                                        className="flex items-center gap-1 text-accent-blue hover:underline font-medium text-sm"
+                                      >
+                                        View Page <span>↗</span>
+                                      </a>
+                                    </div>
+                                  </div>
+                                )}
+                                {/* Rotten Tomatoes - URL only, no score yet */}
+                                {!item.rottenTomatoesScore && item.rottenTomatoesUrl && (
+                                  <div className="border-2 border-accent-blue rounded-xl overflow-hidden">
+                                    <div className="flex items-center justify-between p-4 bg-white">
+                                      <span className="text-accent-blue font-bold">Rotten Tomatoes</span>
+                                      <a
+                                        href={item.rottenTomatoesUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        onClick={(e) => e.stopPropagation()}
+                                        className="flex items-center gap-1 text-accent-blue hover:underline font-medium text-sm"
+                                      >
+                                        View Page <span>↗</span>
+                                      </a>
+                                    </div>
                                   </div>
                                 )}
                               </div>
@@ -4421,6 +4591,10 @@ export default function RightPaneTabs({
                               language={item.language}
                               genres={item.genres}
                               tmdbRating={item.tmdbRating}
+                              // Release info for upcoming films
+                              releaseDate={item.releaseDate}
+                              distributor={item.distributor}
+                              officialWebsite={item.officialWebsite}
                               // Experience
                               location={item.location}
                               locationDetail={item.locationDetail}

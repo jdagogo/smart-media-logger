@@ -3,12 +3,68 @@ import { NextRequest, NextResponse } from 'next/server'
 const TMDB_API_KEY = process.env.TMDB_API_KEY || '2dca580c2a14b55200e784d157207b4d'
 const TMDB_BASE_URL = 'https://api.themoviedb.org/3'
 
+// Hardcoded images/videos for films not in TMDB
+const HARDCODED_MOVIE_IMAGES: Record<string, any> = {
+  '99990001': {
+    movieId: 99990001,
+    images: {
+      scenes: [
+        { url: 'https://m.media-amazon.com/images/M/MV5BZjUzMzU3NzgtMWVkYi00NzM2LTk0OTctMDFmMGY2YWRiNmE3XkEyXkFqcGc@._V1_.jpg', aspectRatio: 0.675 }
+      ],
+      cast: [
+        { name: 'Charli xcx', character: 'Herself', profileUrl: null },
+        { name: 'Alexander Skarsgård', character: '', profileUrl: null },
+        { name: 'Rachel Sennott', character: '', profileUrl: null },
+        { name: 'Rosanna Arquette', character: '', profileUrl: null },
+        { name: 'Kate Berlant', character: '', profileUrl: null },
+        { name: 'Jamie Demetriou', character: '', profileUrl: null },
+        { name: 'Kylie Jenner', character: '', profileUrl: null }
+      ],
+      videos: [
+        { key: 'Pxqhi7Sgvu8', name: 'Official Trailer', type: 'Trailer', thumbnailUrl: 'https://img.youtube.com/vi/Pxqhi7Sgvu8/mqdefault.jpg' }
+      ]
+    },
+    totalScenes: 1,
+    totalCast: 16,
+    totalVideos: 1
+  },
+  '99990002': {
+    movieId: 99990002,
+    images: {
+      scenes: [
+        { url: 'https://m.media-amazon.com/images/M/MV5BYWU3YWE3ZWQtODZjNS00ZTdmLWFjNzUtOTUxNjY0MTNhNjhlXkEyXkFqcGc@._V1_.jpg', aspectRatio: 0.675 }
+      ],
+      cast: [
+        { name: 'Nina Kiri', character: 'Evy', profileUrl: null },
+        { name: 'Kris Holden-Ried', character: '', profileUrl: null },
+        { name: 'Michèle Duquet', character: '', profileUrl: null },
+        { name: 'Keana Lyn Bastidas', character: '', profileUrl: null }
+      ],
+      videos: [
+        { key: 'j6uDeBYDHu4', name: 'Official Trailer', type: 'Trailer', thumbnailUrl: 'https://img.youtube.com/vi/j6uDeBYDHu4/mqdefault.jpg' },
+        { key: 'iJ2tUNSGL7Y', name: 'Teaser', type: 'Teaser', thumbnailUrl: 'https://img.youtube.com/vi/iJ2tUNSGL7Y/mqdefault.jpg' }
+      ]
+    },
+    totalScenes: 1,
+    totalCast: 4,
+    totalVideos: 2
+  }
+}
+
 export async function GET(request: NextRequest) {
   const movieId = request.nextUrl.searchParams.get('movieId')
   const movieTitle = request.nextUrl.searchParams.get('title')
   const year = request.nextUrl.searchParams.get('year')
 
   try {
+    // Check for hardcoded movies first (IDs starting with 9999)
+    if (movieId && parseInt(movieId) >= 99990000) {
+      const hardcodedImages = HARDCODED_MOVIE_IMAGES[movieId]
+      if (hardcodedImages) {
+        return NextResponse.json(hardcodedImages)
+      }
+    }
+
     let tmdbId = movieId
 
     // If no movie ID, search by title

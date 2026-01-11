@@ -54,7 +54,7 @@ export async function GET(request: NextRequest) {
     // Pattern 2: Look for award names in h3 > span structure (only if Pattern 1 didn't find any)
     // Format: <h3 class="ipc-title__text"><span id="ev...">Award Name</span>
     if (awardEvents.length === 0) {
-      const h3SpanMatches = html.matchAll(/<h3[^>]*class="[^"]*ipc-title__text[^"]*"[^>]*><span[^>]*id="ev[^"]*"[^>]*>([^<]+)<\/span>/gi)
+      const h3SpanMatches = Array.from(html.matchAll(/<h3[^>]*class="[^"]*ipc-title__text[^"]*"[^>]*><span[^>]*id="ev[^"]*"[^>]*>([^<]+)<\/span>/gi))
       for (const match of h3SpanMatches) {
         const name = match[1].trim()
         if (name && name.length > 3 && !awardEvents.includes(name)) {
@@ -64,7 +64,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Pattern 3: Look for award event names in links to /event/ pages
-    const eventLinkMatches = html.matchAll(/<a[^>]*href="\/event\/ev\d+\/[^"]*"[^>]*>([^<]+)<\/a>/gi)
+    const eventLinkMatches = Array.from(html.matchAll(/<a[^>]*href="\/event\/ev\d+\/[^"]*"[^>]*>([^<]+)<\/a>/gi))
     for (const match of eventLinkMatches) {
       const name = match[1].trim()
       if (name &&

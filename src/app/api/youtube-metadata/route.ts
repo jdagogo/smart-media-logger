@@ -3,6 +3,101 @@ import { NextRequest, NextResponse } from 'next/server'
 const TMDB_API_KEY = process.env.TMDB_API_KEY || '2dca580c2a14b55200e784d157207b4d'
 const OMDB_API_KEY = process.env.OMDB_API_KEY || 'a053b065'
 
+// Hardcoded movies for films not yet in TMDB - use this data instead of TMDB lookup
+// These are upcoming/unreleased films that would get wrong data from TMDB/OMDB
+const HARDCODED_MOVIES: Record<string, {
+  id: number
+  title: string
+  year: number
+  overview: string
+  poster: string
+  director: string
+  writers: string[]
+  composer?: string
+  cast: Array<{ name: string; character: string }>
+  genres: string[]
+  distributor: string
+  runtime: number | null
+  rated: string | null
+  releaseDate: string
+  imdbId: string
+  imdbUrl: string
+  officialWebsite: string
+  mediaType: 'movie' | 'tv'
+}> = {
+  'the moment': {
+    id: 99990001,
+    title: 'The Moment',
+    year: 2026,
+    overview: 'A flashy, tongue-in-cheek hyper-pop mockumentary following a rising pop star as she navigates the complexities of fame and industry pressure while preparing for her arena tour debut.',
+    poster: 'https://m.media-amazon.com/images/M/MV5BZjUzMzU3NzgtMWVkYi00NzM2LTk0OTctMDFmMGY2YWRiNmE3XkEyXkFqcGc@._V1_.jpg',
+    director: 'Aidan Zamiri',
+    writers: ['Aidan Zamiri', 'Bertie Brandes'],
+    composer: 'A.G. Cook',
+    cast: [
+      { name: 'Charli xcx', character: 'Herself' },
+      { name: 'Alexander Skarsgård', character: '' },
+      { name: 'Rachel Sennott', character: '' },
+      { name: 'Rosanna Arquette', character: '' },
+      { name: 'Kate Berlant', character: '' },
+      { name: 'Jamie Demetriou', character: '' },
+      { name: 'Kylie Jenner', character: '' },
+    ],
+    genres: ['Documentary', 'Drama', 'Thriller'],
+    distributor: 'A24',
+    runtime: 103,
+    rated: 'R',
+    releaseDate: '2026-01-30',
+    imdbId: 'tt35524793',
+    imdbUrl: 'https://www.imdb.com/title/tt35524793/',
+    officialWebsite: 'https://a24films.com/films/the-moment',
+    mediaType: 'movie',
+  },
+  'undertone': {
+    id: 99990002,
+    title: 'Undertone',
+    year: 2026,
+    overview: "The host of an 'all-things-creepy' podcast moves into her dying mother's house to be her primary caregiver. When her podcast is sent 10 audio recordings of a young pregnant couple experiencing paranormal noises, she realizes the woman's story is a mirror of her own and each new recording scratches at her sanity, drawing her into a fate she cannot escape.",
+    poster: 'https://m.media-amazon.com/images/M/MV5BYWU3YWE3ZWQtODZjNS00ZTdmLWFjNzUtOTUxNjY0MTNhNjhlXkEyXkFqcGc@._V1_.jpg',
+    director: 'Ian Tuason',
+    writers: ['Ian Tuason'],
+    cast: [
+      { name: 'Nina Kiri', character: 'Evy' },
+      { name: 'Kris Holden-Ried', character: '' },
+      { name: 'Michèle Duquet', character: '' },
+      { name: 'Keana Lyn Bastidas', character: '' },
+    ],
+    genres: ['Horror', 'Sci-Fi', 'Thriller'],
+    distributor: 'A24',
+    runtime: null,
+    rated: null,
+    releaseDate: '2026-03-13',
+    imdbId: 'tt35892608',
+    imdbUrl: 'https://www.imdb.com/title/tt35892608/',
+    officialWebsite: 'https://a24films.com/films/undertone',
+    mediaType: 'movie',
+  },
+}
+
+// Check if a title matches a hardcoded unreleased film
+function getHardcodedMovie(title: string): typeof HARDCODED_MOVIES[string] | null {
+  const titleLower = title.toLowerCase().trim()
+
+  // Direct match
+  if (HARDCODED_MOVIES[titleLower]) {
+    return HARDCODED_MOVIES[titleLower]
+  }
+
+  // Partial match - check if title contains or is contained by hardcoded title
+  for (const [key, movie] of Object.entries(HARDCODED_MOVIES)) {
+    if (titleLower.includes(key) || key.includes(titleLower)) {
+      return movie
+    }
+  }
+
+  return null
+}
+
 export async function GET(request: NextRequest) {
   const url = request.nextUrl.searchParams.get('url')
 
@@ -51,67 +146,113 @@ export async function GET(request: NextRequest) {
     }
 
     if ((trailerInfo.isTrailer || trailerInfo.isDocumentary || trailerInfo.isFilm) && trailerInfo.mediaTitle) {
-      const tmdbData = await fetchTMDBData(trailerInfo.mediaTitle, trailerInfo.year)
-      if (tmdbData) {
-        // Enhance metadata with TMDB data
+      // CHECK FOR HARDCODED UNRELEASED FILMS FIRST
+      // These films aren't in TMDB yet, so TMDB/OMDB would return wrong data
+      const hardcodedMovie = getHardcodedMovie(trailerInfo.mediaTitle)
+
+      if (hardcodedMovie) {
+        // Use hardcoded data for unreleased films - no TMDB/OMDB lookup
+        console.log('Using hardcoded data for unreleased film:', hardcodedMovie.title)
         metadata.isTrailer = true
-        metadata.detectedMediaType = tmdbData.mediaType
-        metadata.tmdbId = tmdbData.id
-        metadata.mediaTitle = tmdbData.title
-        metadata.mediaYear = tmdbData.year
-        metadata.director = tmdbData.director
-        metadata.directors = tmdbData.directors
-        metadata.cinematographer = tmdbData.cinematographer
-        metadata.composer = tmdbData.composer
-        metadata.writers = tmdbData.writers
-        metadata.producers = tmdbData.producers
-        metadata.editor = tmdbData.editor
-        metadata.cast = tmdbData.cast
-        metadata.genres = tmdbData.genres
-        metadata.overview = tmdbData.overview
-        metadata.poster = tmdbData.poster
-        metadata.backdrop = tmdbData.backdrop
-        metadata.runtime = tmdbData.runtime
-        metadata.trailerVideoId = videoId  // Keep the YouTube trailer from user input
-        // TMDB videos and images
-        metadata.videos = tmdbData.videos
-        metadata.images = tmdbData.images
-        // If TMDB has a trailer and user didn't provide one, use TMDB's trailer
-        if (tmdbData.trailerKey && !videoId) {
-          metadata.trailerVideoId = tmdbData.trailerKey
+        metadata.detectedMediaType = hardcodedMovie.mediaType
+        metadata.tmdbId = hardcodedMovie.id
+        metadata.mediaTitle = hardcodedMovie.title
+        metadata.mediaYear = hardcodedMovie.year
+        metadata.director = hardcodedMovie.director
+        metadata.directors = [hardcodedMovie.director]
+        metadata.composer = hardcodedMovie.composer
+        metadata.writers = hardcodedMovie.writers
+        metadata.cast = hardcodedMovie.cast
+        metadata.genres = hardcodedMovie.genres
+        metadata.overview = hardcodedMovie.overview
+        metadata.poster = hardcodedMovie.poster
+        metadata.runtime = hardcodedMovie.runtime || undefined
+        metadata.rated = hardcodedMovie.rated || undefined
+        metadata.trailerVideoId = videoId
+        metadata.imdbUrl = hardcodedMovie.imdbUrl
+        // Release info for upcoming films
+        ;(metadata as any).releaseDate = hardcodedMovie.releaseDate
+        ;(metadata as any).distributor = hardcodedMovie.distributor
+        ;(metadata as any).officialWebsite = hardcodedMovie.officialWebsite
+        ;(metadata as any).imdbId = hardcodedMovie.imdbId
+        // Critic site URLs - keep these so users can click through even without scores
+        const titleSlug = hardcodedMovie.title.toLowerCase().replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-')
+        const rtSlug = hardcodedMovie.title.toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, '_')
+        metadata.metacriticUrl = `https://www.metacritic.com/movie/${titleSlug}`
+        metadata.rottenTomatoesUrl = `https://www.rottentomatoes.com/m/${rtSlug}`
+        // No scores yet for unreleased films
+        metadata.metacriticScore = undefined
+        metadata.rottenTomatoesScore = undefined
+        metadata.imdbRating = undefined
+        // Update detection info to show no confirmation needed
+        metadata.detectionInfo = {
+          ...metadata.detectionInfo!,
+          needsConfirmation: false,
+          confidence: 'high',
         }
-        // TMDB rating
-        metadata.tmdbRating = tmdbData.tmdbRating
-        metadata.tmdbVoteCount = tmdbData.tmdbVoteCount
-        // External review site links
-        metadata.metacriticUrl = tmdbData.metacriticUrl
-        metadata.rottenTomatoesUrl = tmdbData.rottenTomatoesUrl
-        metadata.imdbUrl = tmdbData.imdbUrl
-
-        // Fetch critic scores from OMDB (most reliable source) - use IMDB ID when available
-        const omdbData = await fetchOMDBData(tmdbData.title, tmdbData.year, tmdbData.imdbId)
-
-        if (omdbData) {
-          if (omdbData.metacriticScore) {
-            metadata.metacriticScore = omdbData.metacriticScore
-            metadata.metacriticData = {
-              score: omdbData.metacriticScore,
-              url: tmdbData.metacriticUrl || `https://www.metacritic.com/movie/${tmdbData.title.toLowerCase().replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-')}`,
-            }
+      } else {
+        // Normal flow - fetch from TMDB
+        const tmdbData = await fetchTMDBData(trailerInfo.mediaTitle, trailerInfo.year)
+        if (tmdbData) {
+          // Enhance metadata with TMDB data
+          metadata.isTrailer = true
+          metadata.detectedMediaType = tmdbData.mediaType
+          metadata.tmdbId = tmdbData.id
+          metadata.mediaTitle = tmdbData.title
+          metadata.mediaYear = tmdbData.year
+          metadata.director = tmdbData.director
+          metadata.directors = tmdbData.directors
+          metadata.cinematographer = tmdbData.cinematographer
+          metadata.composer = tmdbData.composer
+          metadata.writers = tmdbData.writers
+          metadata.producers = tmdbData.producers
+          metadata.editor = tmdbData.editor
+          metadata.cast = tmdbData.cast
+          metadata.genres = tmdbData.genres
+          metadata.overview = tmdbData.overview
+          metadata.poster = tmdbData.poster
+          metadata.backdrop = tmdbData.backdrop
+          metadata.runtime = tmdbData.runtime
+          metadata.trailerVideoId = videoId  // Keep the YouTube trailer from user input
+          // TMDB videos and images
+          metadata.videos = tmdbData.videos
+          metadata.images = tmdbData.images
+          // If TMDB has a trailer and user didn't provide one, use TMDB's trailer
+          if (tmdbData.trailerKey && !videoId) {
+            metadata.trailerVideoId = tmdbData.trailerKey
           }
-          if (omdbData.rottenTomatoesScore) {
-            metadata.rottenTomatoesScore = omdbData.rottenTomatoesScore
-            metadata.rottenTomatoesData = {
-              tomatometer: omdbData.rottenTomatoesScore,
-              url: tmdbData.rottenTomatoesUrl || `https://www.rottentomatoes.com/m/${tmdbData.title.toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, '_')}`,
+          // TMDB rating
+          metadata.tmdbRating = tmdbData.tmdbRating
+          metadata.tmdbVoteCount = tmdbData.tmdbVoteCount
+          // External review site links
+          metadata.metacriticUrl = tmdbData.metacriticUrl
+          metadata.rottenTomatoesUrl = tmdbData.rottenTomatoesUrl
+          metadata.imdbUrl = tmdbData.imdbUrl
+
+          // Fetch critic scores from OMDB (most reliable source) - use IMDB ID when available
+          const omdbData = await fetchOMDBData(tmdbData.title, tmdbData.year, tmdbData.imdbId)
+
+          if (omdbData) {
+            if (omdbData.metacriticScore) {
+              metadata.metacriticScore = omdbData.metacriticScore
+              metadata.metacriticData = {
+                score: omdbData.metacriticScore,
+                url: tmdbData.metacriticUrl || `https://www.metacritic.com/movie/${tmdbData.title.toLowerCase().replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-')}`,
+              }
             }
-          }
-          // IMDB data
-          if (omdbData.imdbRating) metadata.imdbRating = omdbData.imdbRating
-          if (omdbData.imdbVotes) metadata.imdbVotes = omdbData.imdbVotes
-          // Rich OMDB metadata
-          if (omdbData.rated) metadata.rated = omdbData.rated
-          if (omdbData.plot) metadata.plot = omdbData.plot
+            if (omdbData.rottenTomatoesScore) {
+              metadata.rottenTomatoesScore = omdbData.rottenTomatoesScore
+              metadata.rottenTomatoesData = {
+                tomatometer: omdbData.rottenTomatoesScore,
+                url: tmdbData.rottenTomatoesUrl || `https://www.rottentomatoes.com/m/${tmdbData.title.toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, '_')}`,
+              }
+            }
+            // IMDB data
+            if (omdbData.imdbRating) metadata.imdbRating = omdbData.imdbRating
+            if (omdbData.imdbVotes) metadata.imdbVotes = omdbData.imdbVotes
+            // Rich OMDB metadata
+            if (omdbData.rated) metadata.rated = omdbData.rated
+            if (omdbData.plot) metadata.plot = omdbData.plot
           if (omdbData.awards) metadata.awards = omdbData.awards
           if (omdbData.boxOffice) metadata.boxOffice = omdbData.boxOffice
           if (omdbData.production) metadata.production = omdbData.production
@@ -141,14 +282,52 @@ export async function GET(request: NextRequest) {
           }
         }
 
-        // Fallback: Fetch IMDB directly if OMDB didn't have the rating
-        if (!metadata.imdbRating && tmdbData.imdbId) {
-          const imdbData = await fetchIMDBData(tmdbData.imdbId)
-          if (imdbData) {
-            if (imdbData.imdbRating) metadata.imdbRating = imdbData.imdbRating
-            if (imdbData.imdbVotes) metadata.imdbVotes = imdbData.imdbVotes
+        // Fetch full IMDB data for box office (domestic + worldwide) and awards
+        if (tmdbData.imdbId) {
+          const fullImdbData = await fetchFullIMDBData(tmdbData.imdbId)
+          if (fullImdbData) {
+            if (fullImdbData.imdbRating) metadata.imdbRating = fullImdbData.imdbRating
+            if (fullImdbData.voteCount) metadata.imdbVotes = fullImdbData.voteCount.toLocaleString()
+            if (fullImdbData.boxOffice) metadata.boxOffice = fullImdbData.boxOffice
+            if (fullImdbData.boxOfficeDetails) metadata.boxOfficeDetails = fullImdbData.boxOfficeDetails
+            if (fullImdbData.budget) metadata.budget = fullImdbData.budget
+            if (fullImdbData.awards) metadata.awards = fullImdbData.awards
+            if (fullImdbData.awardsDetails) metadata.awardsDetails = fullImdbData.awardsDetails
           }
         }
+
+        // Set distributor from TMDB if detected
+        if (tmdbData.distributor) {
+          metadata.distributor = tmdbData.distributor
+        }
+
+        // Detect A24 from multiple sources:
+        // 1. TMDB production companies
+        // 2. OMDB production field
+        // 3. YouTube video title (e.g., "Lady Bird | Official Trailer HD | A24")
+        // 4. YouTube channel name
+        const isA24 =
+          tmdbData.distributor === 'A24' ||
+          metadata.production === 'A24' ||
+          (metadata.title && /\|\s*A24\s*$/i.test(metadata.title)) ||
+          (metadata.author && metadata.author === 'A24')
+
+        console.log('A24 Detection:', {
+          tmdbDistributor: tmdbData.distributor,
+          omdbProduction: metadata.production,
+          youtubeTitle: metadata.title,
+          youtubeChannel: metadata.author,
+          isA24
+        })
+
+        if (isA24) {
+          const titleSlug = tmdbData.title.toLowerCase().replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-')
+          const a24Url = `https://a24films.com/films/${titleSlug}`
+          console.log('Setting A24 official website:', a24Url)
+          metadata.officialWebsite = a24Url
+          metadata.distributor = 'A24'
+        }
+      }
       }
     }
 
@@ -297,13 +476,15 @@ function detectMediaContent(title: string, description: string): {
     mediaTitle = title
       .replace(/\s*[\|\-–:]\s*(exclusive\s+)?(first\s+)?(look|preview|clip|sneak\s+peek).*$/i, '')
       .replace(/\s*[\|\-–:]\s*(world\s+)?(film\s+)?(premiere).*$/i, '')
-      .replace(/\s*[\|\-–]\s*(Official\s+)?(Movie\s+)?(Final\s+)?(New\s+)?(Teaser\s+)?Trailer.*$/i, '')
-      .replace(/\s*Official\s+Trailer.*$/i, '')
+      // Handle "| Official US Trailer", "| Official Trailer", "| Trailer", etc.
+      .replace(/\s*[\|\-–][^|\-–]*Trailer.*$/i, '')
+      .replace(/\s*Official\s+.*Trailer.*$/i, '')
       .replace(/\s*Trailer\s*\d*.*$/i, '')
       .replace(/\s*\(Official\).*$/i, '')
       .replace(/\s*[\|\-–]\s*Documentary.*$/i, '')
       .replace(/\s*HD\s*$/i, '')
       .replace(/\s*4K\s*$/i, '')
+      .replace(/\s*\(\d{4}\)\s*$/i, '') // Remove trailing year like (2018)
       .replace(/\s*[\|\-–:]\s*$/, '') // Remove trailing separators
       .trim()
   }
@@ -379,6 +560,8 @@ async function fetchTMDBData(title: string, year?: number): Promise<{
   rottenTomatoesUrl?: string
   imdbUrl?: string
   imdbId?: string
+  distributor?: string
+  productionCompanies?: string[]
 } | null> {
   try {
     // Clean up title - remove brackets, extra info, quotes, punctuation
@@ -604,6 +787,21 @@ async function fetchTMDBData(title: string, year?: number): Promise<{
       (v: any) => v.type === 'Trailer' && v.site === 'YouTube'
     )
 
+    // Extract production companies and detect distributor
+    const productionCompanies = details.production_companies?.map((c: any) => c.name) || []
+    console.log('TMDB production companies:', productionCompanies)
+    // Check for major distributors/studios
+    let distributor: string | undefined
+    if (productionCompanies.some((c: string) => c === 'A24')) {
+      distributor = 'A24'
+    } else if (productionCompanies.some((c: string) => c.includes('Searchlight'))) {
+      distributor = 'Searchlight Pictures'
+    } else if (productionCompanies.some((c: string) => c.includes('Focus Features'))) {
+      distributor = 'Focus Features'
+    } else if (productionCompanies.some((c: string) => c.includes('NEON'))) {
+      distributor = 'NEON'
+    }
+
     return {
       id: tmdbId,
       title: mediaType === 'movie' ? details.title : details.name,
@@ -637,6 +835,9 @@ async function fetchTMDBData(title: string, year?: number): Promise<{
       imdbUrl: details.imdb_id ? `https://www.imdb.com/title/${details.imdb_id}` : undefined,
       // IMDB ID for reliable OMDB lookups
       imdbId: details.imdb_id,
+      // Production companies and distributor
+      distributor,
+      productionCompanies,
     }
   } catch (error) {
     console.error('TMDB fetch error:', error)
@@ -801,6 +1002,123 @@ async function fetchIMDBData(imdbId: string): Promise<{
     return null
   } catch (error) {
     console.error('IMDB fetch error:', error)
+    return null
+  }
+}
+
+// Fetch full IMDB data including box office (domestic + worldwide) and awards
+async function fetchFullIMDBData(imdbId: string): Promise<{
+  imdbRating?: string
+  voteCount?: number
+  budget?: string
+  boxOffice?: string
+  boxOfficeDetails?: {
+    domestic?: number
+    worldwide?: number
+    openingWeekend?: number
+  }
+  awards?: string
+  awardsDetails?: {
+    wins: number
+    nominations: number
+  }
+} | null> {
+  if (!imdbId) return null
+
+  try {
+    const imdbUrl = `https://www.imdb.com/title/${imdbId}/`
+    console.log('Fetching full IMDB data:', imdbUrl)
+
+    const response = await fetch(imdbUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5',
+      },
+    })
+
+    if (!response.ok) {
+      console.log('IMDB fetch failed:', response.status)
+      return null
+    }
+
+    const html = await response.text()
+
+    // Extract __NEXT_DATA__ JSON
+    const nextDataMatch = html.match(/__NEXT_DATA__[^{]*({[\s\S]*?})\s*<\/script>/)
+    if (!nextDataMatch) {
+      console.log('Could not find IMDB __NEXT_DATA__')
+      return null
+    }
+
+    let nextData
+    try {
+      nextData = JSON.parse(nextDataMatch[1])
+    } catch (e) {
+      console.log('Failed to parse IMDB JSON data')
+      return null
+    }
+
+    const props = nextData?.props?.pageProps || {}
+    const mainData = props.mainColumnData || {}
+    const aboveData = props.aboveTheFoldData || {}
+
+    // Extract rating
+    const ratingData = mainData.ratingsSummary || aboveData.ratingsSummary || {}
+    const imdbRating = ratingData.aggregateRating
+    const voteCount = ratingData.voteCount
+
+    // Extract box office
+    const budget = mainData.productionBudget?.budget?.amount
+    const lifetimeGross = mainData.lifetimeGross?.total?.amount // US & Canada
+    const worldwideGross = mainData.worldwideGross?.total?.amount
+    const openingWeekend = mainData.openingWeekendGross?.gross?.total?.amount
+
+    // Extract awards count
+    const wins = mainData.wins?.total || 0
+    const nominations = mainData.nominationsExcludeWins?.total || 0
+
+    // Format box office as string with both domestic and worldwide
+    let boxOfficeStr = ''
+    if (lifetimeGross && worldwideGross) {
+      boxOfficeStr = `$${lifetimeGross.toLocaleString()} (US & Canada) / $${worldwideGross.toLocaleString()} (Worldwide)`
+    } else if (worldwideGross) {
+      boxOfficeStr = `$${worldwideGross.toLocaleString()} (Worldwide)`
+    } else if (lifetimeGross) {
+      boxOfficeStr = `$${lifetimeGross.toLocaleString()} (US & Canada)`
+    }
+
+    // Format awards string
+    let awardsStr = ''
+    if (wins > 0 && nominations > 0) {
+      awardsStr = `${wins} wins & ${nominations} nominations`
+    } else if (wins > 0) {
+      awardsStr = `${wins} wins`
+    } else if (nominations > 0) {
+      awardsStr = `${nominations} nominations`
+    }
+
+    const result = {
+      imdbRating: imdbRating ? Number(imdbRating).toFixed(1) : undefined,
+      voteCount,
+      budget: budget ? `$${budget.toLocaleString()}` : undefined,
+      boxOffice: boxOfficeStr || undefined,
+      boxOfficeDetails: {
+        domestic: lifetimeGross,
+        worldwide: worldwideGross,
+        openingWeekend,
+      },
+      awards: awardsStr || undefined,
+      awardsDetails: {
+        wins,
+        nominations,
+      },
+    }
+
+    console.log('Full IMDB data fetched:', result)
+    return result
+  } catch (error) {
+    console.error('Full IMDB fetch error:', error)
     return null
   }
 }

@@ -337,8 +337,8 @@
             <h2>Quick Start</h2>
 
             <div class="alert warning">
-                <strong>v1.9.2-alpha - Music Sorting & UX Polish</strong><br>
-                January 8, 2026. Music sort options, multiple soundtrack sources, improved hover states, RT URL fixes. Dev server works fine.
+                <strong>v1.9.3-alpha - Metadata Persistence & Distributor Detection</strong><br>
+                January 11, 2026. Fixed 11 data persistence bugs. A24 detection, box office domestic+worldwide, distributor badges. See FILM_METADATA_SPEC.md and V1.9.3_SESSION_NOTES.md for full documentation.
             </div>
 
             <div style="margin-bottom: 20px;">
@@ -773,11 +773,11 @@
                 </div>
             </div>
 
-            <!-- v1.9.2-alpha - Music Sorting & UX Polish -->
-            <div class="version-card" style="border: 3px solid #f59e0b;">
+            <!-- v1.9.2-alpha - Music Sorting & UX Polish (SAFE ROLLBACK) -->
+            <div class="version-card" style="border: 3px solid #22c55e;">
                 <div class="version-header">
                     <div class="version-title">v1.9.2-alpha</div>
-                    <div class="status development">CURRENT</div>
+                    <div class="status stable">SAFE ROLLBACK</div>
                 </div>
 
                 <div class="info-section">
@@ -853,6 +853,102 @@
                 </div>
             </div>
 
+            <!-- v1.9.3-alpha - Metadata Persistence & A24 Detection -->
+            <div class="version-card" style="border: 3px solid #f59e0b;">
+                <div class="version-header">
+                    <div class="version-title">v1.9.3-alpha</div>
+                    <div class="status development">CURRENT</div>
+                </div>
+
+                <div class="info-section">
+                    <div class="info-row">
+                        <span class="info-label">Commit:</span>
+                        <span><a href="https://github.com/jdagogo/smart-media-logger/commit/8a90a97" target="_blank" style="color: #1E40AF; text-decoration: underline;">8a90a97</a></span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Branch:</span>
+                        <span>v1.9.2-music-sorting</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Port:</span>
+                        <span>3006</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Date:</span>
+                        <span>January 11, 2026</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Focus:</span>
+                        <span>Metadata Persistence & Distributor Detection</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Rollback:</span>
+                        <span style="font-family: 'Courier New', monospace; font-size: 0.9em;">git checkout 8a90a97</span>
+                    </div>
+                </div>
+
+                <p style="margin-bottom: 15px; font-weight: 600; color: #166534;">New in this version:</p>
+                <div class="features">
+                    <div class="feature-tag done">Hardcoded unreleased films (Undertone, The Moment)</div>
+                    <div class="feature-tag done">A24 detection from YouTube title/channel</div>
+                    <div class="feature-tag done">Box office domestic + worldwide (from IMDB)</div>
+                    <div class="feature-tag done">Data persistence fixes (queue + Log It)</div>
+                    <div class="feature-tag done">Distributor badge + Official Site button</div>
+                    <div class="feature-tag done">Hide YouTube stats for trailers</div>
+                    <div class="feature-tag done">Show movie release date (not YT publish)</div>
+                    <div class="feature-tag done">Title extraction fix for foreign films</div>
+                    <div class="feature-tag done">Critic URLs shown even without scores</div>
+                    <div class="feature-tag done">Comprehensive Film Metadata Spec (452 lines)</div>
+                </div>
+
+                <p style="margin-bottom: 15px; font-weight: 600;">Critical Documentation:</p>
+                <div style="background: #F5F1E8; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                    <div style="margin-bottom: 10px;">
+                        <a href="https://github.com/jdagogo/smart-media-logger/blob/main/FILM_METADATA_SPEC.md" target="_blank" style="color: #1E40AF; font-weight: bold; text-decoration: underline;">FILM_METADATA_SPEC.md</a> - Complete spec of all film metadata to capture (452 lines)
+                    </div>
+                    <div style="margin-bottom: 10px;">
+                        <a href="https://github.com/jdagogo/smart-media-logger/blob/main/V1.9.3_SESSION_NOTES.md" target="_blank" style="color: #1E40AF; font-weight: bold; text-decoration: underline;">V1.9.3_SESSION_NOTES.md</a> - Documents all 11 problems fixed today
+                    </div>
+                    <div>
+                        <strong>Data Flow Checklist</strong> - 10-point checklist for adding new fields (in both docs)
+                    </div>
+                </div>
+
+                <p style="margin-bottom: 15px; font-weight: 600; color: #1E40AF;">Data Flow Points Fixed:</p>
+                <div style="background: #EFF6FF; padding: 15px; border-radius: 8px; margin-bottom: 15px; font-size: 0.9em;">
+                    <ol style="margin-left: 20px; line-height: 1.8;">
+                        <li>API response → urlMetadata state</li>
+                        <li>setUrlMetadata copying new fields</li>
+                        <li>addToQueue newItem object</li>
+                        <li>addToQueue previewData object</li>
+                        <li>newLoggedItem (BOTH instances)</li>
+                        <li>logData → currentEntry</li>
+                        <li>currentEntry → MediaCard props</li>
+                        <li>QueueItem/LoggedItem interfaces</li>
+                    </ol>
+                </div>
+
+                <p style="margin-bottom: 15px; font-weight: 600; color: #991B1B;">Still broken (from earlier versions):</p>
+                <div class="features">
+                    <div class="feature-tag broken">Entity recognition weak</div>
+                    <div class="feature-tag broken">No Claude API integration</div>
+                    <div class="feature-tag broken">TypeScript build fails</div>
+                    <div class="feature-tag broken">page.tsx is 3800+ lines</div>
+                </div>
+
+                <div class="action-buttons">
+                    <a href="http://localhost:3006" target="_blank" class="btn btn-primary">
+                        Open App
+                    </a>
+                    <a href="https://github.com/jdagogo/smart-media-logger/blob/main/FILM_METADATA_SPEC.md" target="_blank" class="btn btn-secondary">
+                        Metadata Spec
+                    </a>
+                    <a href="https://github.com/jdagogo/smart-media-logger/blob/main/V1.9.3_SESSION_NOTES.md" target="_blank" class="btn btn-secondary">
+                        Session Notes
+                    </a>
+                </div>
+            </div>
+
             <!-- Phase 2 Planned -->
             <div class="version-card">
                 <div class="version-header">
@@ -921,6 +1017,20 @@
                     <strong style="color: #A855F7;">My Media Model Redesign:</strong><br>
                     <span style="color: #666; font-size: 0.9em;">
                         Completely redesign My Media Model to be more visual, comprehensive, and useful. Current version is basic text-based analysis. Needs: visual data representations (charts, graphs, word clouds), deeper pattern recognition, better entity relationships, timeline views, taste evolution tracking, and actionable insights. Should feel like a personalized media dashboard.
+                    </span>
+                </div>
+
+                <div style="background: #FFF7ED; padding: 15px; border-radius: 8px; margin-top: 15px; border: 1px solid #EA580C;">
+                    <strong style="color: #EA580C;">Upcoming Film Reminders:</strong><br>
+                    <span style="color: #666; font-size: 0.9em;">
+                        For films added to queue that aren't released yet, capture the release date and notify user when it's approaching. Show "Coming Soon" badge on queued items with release dates. Send reminder notifications (email, push, or in-app) a week before and on release day. Essential for tracking anticipated films discovered via trailers.
+                    </span>
+                </div>
+
+                <div style="background: #F0FDFA; padding: 15px; border-radius: 8px; margin-top: 15px; border: 1px solid #0D9488;">
+                    <strong style="color: #0D9488;">Browser Extension for Smart Capture:</strong><br>
+                    <span style="color: #666; font-size: 0.9em;">
+                        Chrome/Safari extension that captures movie data from any page (A24, IMDb, Letterboxd, RT). Extracts title, cast, crew, trailer, release date - even for films not yet in TMDB. Sends directly to Smart Media Logger queue. Solves the "upcoming film" problem where TMDB doesn't have the movie yet but distributor sites do.
                     </span>
                 </div>
             </div>
@@ -1008,7 +1118,25 @@
         <div class="ecosystem-section">
             <h2>Changelog</h2>
             <div style="background: #F5F1E8; padding: 20px; border-radius: 8px;">
-                <h3 style="margin-bottom: 10px;">v1.9.2-alpha - January 8, 2026</h3>
+                <h3 style="margin-bottom: 10px;">v1.9.3-alpha - January 11, 2026</h3>
+                <ul style="line-height: 1.8; color: #666; margin-left: 20px;">
+                    <li><strong>NEW:</strong> Hardcoded unreleased film support (Undertone, The Moment A24 films)</li>
+                    <li><strong>NEW:</strong> A24 detection from YouTube title ("| A24") and channel name</li>
+                    <li><strong>NEW:</strong> Box office now shows domestic + worldwide (scraped from IMDB)</li>
+                    <li><strong>NEW:</strong> Distributor badge (black) + Official Site button (orange)</li>
+                    <li><strong>NEW:</strong> Critic URLs shown even without scores (for unreleased films)</li>
+                    <li><strong>NEW:</strong> FILM_METADATA_SPEC.md - comprehensive 452-line metadata specification</li>
+                    <li><strong>NEW:</strong> V1.9.3_SESSION_NOTES.md - documents all 11 problems fixed</li>
+                    <li><strong>FIXED:</strong> Data persistence - officialWebsite, distributor, releaseDate, imdbId now persist to queue</li>
+                    <li><strong>FIXED:</strong> Log It flow now preserves all metadata (both newLoggedItem instances)</li>
+                    <li><strong>FIXED:</strong> currentEntry → MediaCard props now include releaseDate, officialWebsite</li>
+                    <li><strong>FIXED:</strong> Hide YouTube stats (views, publish date) for movie trailers</li>
+                    <li><strong>FIXED:</strong> Title extraction for foreign films ("Capernaum | Official US Trailer" → "Capernaum")</li>
+                    <li><strong>FIXED:</strong> TMDB distributor detection from production_companies</li>
+                    <li><strong>DOCS:</strong> 10-point data flow checklist for adding new metadata fields</li>
+                </ul>
+
+                <h3 style="margin-top: 20px; margin-bottom: 10px;">v1.9.2-alpha - January 8, 2026</h3>
                 <ul style="line-height: 1.8; color: #666; margin-left: 20px;">
                     <li><strong>NEW:</strong> Music-specific sort options (Date Added, Source A-Z, Song Name A-Z)</li>
                     <li><strong>NEW:</strong> Name A-Z sort option for movies and all media</li>

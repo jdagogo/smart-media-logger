@@ -61,10 +61,15 @@ interface MediaResult {
   cinematographer?: string
   composer?: string
   starring?: string[]
+  writers?: string[]
+  genres?: string[]
   distributor?: string
   runtime?: number
   overview?: string
   trailerUrl?: string
+  trailerVideoId?: string
+  releaseDate?: string  // Full release date for upcoming films
+  officialWebsite?: string
   metacriticScore?: number
   rottenTomatoesScore?: number
   metacriticUrl?: string
@@ -72,8 +77,9 @@ interface MediaResult {
   metacriticData?: MetacriticData
   rottenTomatoesData?: RottenTomatoesData
   streamingOptions?: StreamingOption[]
-  // OMDB data
+  // OMDB/IMDb data
   imdbId?: string
+  imdbUrl?: string
   imdbRating?: string
   imdbVotes?: string
   rated?: string
@@ -88,6 +94,7 @@ interface LogData {
   mediaType: string
   title: string
   year?: number
+  releaseDate?: string  // Full release date (e.g., "2026-01-30") for upcoming films
   tmdbId?: number
   // Crew
   director?: string
@@ -134,6 +141,8 @@ interface LogData {
   duration?: string
   sourceUrl?: string
   streamingOptions?: StreamingOption[]
+  officialWebsite?: string
+  imdbId?: string
   // Logging
   consumptionDate?: string
   location?: string
@@ -904,6 +913,11 @@ export default function Home() {
       description: logData.description,
       duration: logData.duration,
       sourceUrl: logData.sourceUrl || (isUrl(searchQuery) ? searchQuery : undefined),
+      // Release info for upcoming/unreleased films
+      releaseDate: logData.releaseDate || urlMetadata?.releaseDate,
+      distributor: logData.distributor || urlMetadata?.distributor,
+      officialWebsite: logData.officialWebsite || urlMetadata?.officialWebsite,
+      imdbId: logData.imdbId || urlMetadata?.imdbId,
       // Logging data
       rating: logData.overallRating,
       dateConsumed: logData.consumptionDate || new Date().toISOString().split('T')[0],
@@ -1173,6 +1187,11 @@ export default function Home() {
       metacriticData: source?.metacriticData as any,
       rottenTomatoesScore: source?.rottenTomatoesScore || metadata.rottenTomatoesScore,
       rottenTomatoesData: source?.rottenTomatoesData as any,
+      // Release info for upcoming/unreleased films
+      releaseDate: source?.releaseDate,
+      distributor: source?.distributor,
+      officialWebsite: source?.officialWebsite,
+      imdbId: source?.imdbId,
     }
     console.log('Adding to queue with data:', newItem)
     setUpNextQueue(prev => [newItem, ...prev])
@@ -1220,6 +1239,11 @@ export default function Home() {
       metacriticData: urlMetadata?.metacriticData as any,
       rottenTomatoesScore: urlMetadata?.rottenTomatoesScore,
       rottenTomatoesData: urlMetadata?.rottenTomatoesData as any,
+      // Release info for upcoming/unreleased films
+      releaseDate: urlMetadata?.releaseDate,
+      distributor: urlMetadata?.distributor,
+      officialWebsite: urlMetadata?.officialWebsite,
+      imdbId: urlMetadata?.imdbId,
     }
     setPersistedQueuePreview(previewData)
 
@@ -1410,6 +1434,11 @@ export default function Home() {
               production: data.production,
               country: data.country,
               language: data.language,
+              // Release info for upcoming/unreleased films
+              releaseDate: data.releaseDate,
+              distributor: data.distributor,
+              officialWebsite: data.officialWebsite,
+              imdbId: data.imdbId,
             })
             // Auto-fill title with movie name
             const titleInput = document.getElementById('url-title-input') as HTMLInputElement
@@ -2002,6 +2031,11 @@ export default function Home() {
         description: logData.description,
         duration: logData.duration,
         sourceUrl: logData.sourceUrl || (isUrl(searchQuery) ? searchQuery : undefined),
+        // Release info for upcoming/unreleased films
+        releaseDate: logData.releaseDate || urlMetadata?.releaseDate,
+        distributor: logData.distributor || urlMetadata?.distributor,
+        officialWebsite: logData.officialWebsite || urlMetadata?.officialWebsite,
+        imdbId: logData.imdbId || urlMetadata?.imdbId,
         // Logging data
         rating: logData.overallRating,
         dateConsumed: logData.consumptionDate || new Date().toISOString().split('T')[0],
@@ -2153,48 +2187,43 @@ export default function Home() {
       )
       const data = await response.json()
 
-      const results: MediaResult[] = data.results.map((item: {
-        id: number
-        title: string
-        year: number
-        type: string
-        posterUrl: string | null
-        director: string | null
-        cinematographer: string | null
-        composer: string | null
-        starring: string[]
-        distributor: string | null
-        runtime: number | null
-        overview: string
-        trailerUrl: string | null
-        metacriticScore: number | null
-        rottenTomatoesScore: number | null
-        metacriticUrl: string | null
-        rottenTomatoesUrl: string | null
-        metacriticData?: MetacriticData
-        rottenTomatoesData?: RottenTomatoesData
-        streamingOptions?: { service: string; url: string; type: string }[]
-      }) => ({
+      const results: MediaResult[] = data.results.map((item: any) => ({
         id: item.id,
         title: item.title,
         year: item.year,
-        mediaType: item.type,
+        mediaType: item.type || item.mediaType,
         posterPath: item.posterUrl,
+        posterUrl: item.posterUrl,
         director: item.director,
         cinematographer: item.cinematographer,
         composer: item.composer,
         starring: item.starring,
+        writers: item.writers,
+        genres: item.genres,
         distributor: item.distributor,
         runtime: item.runtime,
         overview: item.overview,
         streamingOptions: item.streamingOptions as StreamingOption[] | undefined,
         trailerUrl: item.trailerUrl,
+        trailerVideoId: item.trailerVideoId,
+        releaseDate: item.releaseDate,
+        officialWebsite: item.officialWebsite,
         metacriticScore: item.metacriticScore,
         rottenTomatoesScore: item.rottenTomatoesScore,
         metacriticUrl: item.metacriticUrl,
         rottenTomatoesUrl: item.rottenTomatoesUrl,
         metacriticData: item.metacriticData as MetacriticData | undefined,
         rottenTomatoesData: item.rottenTomatoesData as RottenTomatoesData | undefined,
+        imdbId: item.imdbId,
+        imdbUrl: item.imdbUrl,
+        imdbRating: item.imdbRating,
+        imdbVotes: item.imdbVotes,
+        rated: item.rated,
+        awards: item.awards,
+        boxOffice: item.boxOffice,
+        plot: item.plot,
+        country: item.country,
+        language: item.language,
       }))
 
       if (results.length === 1) {
@@ -2308,18 +2337,45 @@ export default function Home() {
           plot: fullData.plot,
           country: fullData.country,
           language: fullData.language,
+          // Release info for upcoming films
+          releaseDate: fullData.releaseDate,
+          distributor: fullData.distributor,
+          officialWebsite: fullData.officialWebsite,
+          imdbId: fullData.imdbId,
         })
       } else {
-        // Fallback to basic data if full fetch fails
-        console.log('Full metadata fetch failed, using basic data')
-        setLogData({
-          // Start fresh
+        // Fallback to using all data from search result (for hardcoded/non-TMDB movies)
+        console.log('Full metadata fetch failed, using search result data')
+        console.log('Media object:', JSON.stringify(media, null, 2))
+        console.log('media.starring:', media.starring)
+        console.log('media.releaseDate:', media.releaseDate)
+        console.log('media.trailerVideoId:', media.trailerVideoId)
+        const newLogData = {
           mediaType: media.mediaType,
           title: media.title,
           year: media.year,
+          releaseDate: media.releaseDate,
           tmdbId: media.id,
+          // Use all available data from search result
           director: media.director,
+          cinematographer: media.cinematographer,
+          composer: media.composer,
+          writers: media.writers,
+          starring: media.starring,
+          distributor: media.distributor,
           poster: media.posterPath || media.posterUrl,
+          overview: media.overview,
+          runtime: media.runtime,
+          genres: media.genres,
+          trailerUrl: media.trailerUrl,
+          trailerVideoId: media.trailerVideoId,
+          imdbId: media.imdbId,
+          imdbUrl: media.imdbUrl,
+          officialWebsite: media.officialWebsite,
+          metacriticScore: media.metacriticScore,
+          rottenTomatoesScore: media.rottenTomatoesScore,
+          metacriticUrl: media.metacriticUrl,
+          rottenTomatoesUrl: media.rottenTomatoesUrl,
           // Reset experience fields
           consumptionDate: undefined,
           location: undefined,
@@ -2329,18 +2385,39 @@ export default function Home() {
           companionNames: undefined,
           overallRating: undefined,
           notes: undefined,
-        })
+        }
+        console.log('Setting logData to:', JSON.stringify(newLogData, null, 2))
+        setLogData(newLogData)
       }
     } catch (error) {
       console.error('Error fetching full metadata:', error)
-      // Fallback to basic data
+      // Fallback to using all data from search result
       setLogData({
-        // Start fresh
         mediaType: media.mediaType,
         title: media.title,
         year: media.year,
+        releaseDate: media.releaseDate,
         tmdbId: media.id,
+        // Use all available data from search result
         director: media.director,
+        cinematographer: media.cinematographer,
+        composer: media.composer,
+        writers: media.writers,
+        starring: media.starring,
+        distributor: media.distributor,
+        poster: media.posterPath || media.posterUrl,
+        overview: media.overview,
+        runtime: media.runtime,
+        genres: media.genres,
+        trailerUrl: media.trailerUrl,
+        trailerVideoId: media.trailerVideoId,
+        imdbId: media.imdbId,
+        imdbUrl: media.imdbUrl,
+        officialWebsite: media.officialWebsite,
+        metacriticScore: media.metacriticScore,
+        rottenTomatoesScore: media.rottenTomatoesScore,
+        metacriticUrl: media.metacriticUrl,
+        rottenTomatoesUrl: media.rottenTomatoesUrl,
         // Reset experience fields
         consumptionDate: undefined,
         location: undefined,
@@ -2353,8 +2430,15 @@ export default function Home() {
       })
     }
 
-    setStep('date')
-    setQuestionIndex(1)
+    // In queue mode, show preview instead of starting logging flow
+    console.log('searchMode:', searchMode)
+    if (searchMode === 'queue') {
+      console.log('Setting step to queue-preview')
+      setStep('queue-preview')
+    } else {
+      setStep('date')
+      setQuestionIndex(1)
+    }
   }
 
   // Update log data helper
@@ -2910,16 +2994,10 @@ export default function Home() {
                       {searchMode === 'queue' ? (
                         <>
                           <button
-                            onClick={() => addToQueueSmart(searchResults[0])}
+                            onClick={() => handleSelectMedia(searchResults[0])}
                             className="flex-1 px-4 py-3 bg-orange-500 text-white rounded-lg font-bold hover:bg-orange-600 transition-colors"
                           >
-                            📋 Add to Queue
-                          </button>
-                          <button
-                            onClick={() => handleSelectMedia(searchResults[0])}
-                            className="px-4 py-3 bg-paper-300 text-ink-700 rounded-lg font-bold hover:bg-paper-400 transition-colors"
-                          >
-                            Log It Instead
+                            👁️ Preview & Add to Queue
                           </button>
                         </>
                       ) : (
@@ -3011,16 +3089,10 @@ export default function Home() {
                             {searchMode === 'queue' ? (
                               <>
                                 <button
-                                  onClick={() => addToQueueSmart(result)}
+                                  onClick={() => handleSelectMedia(result)}
                                   className="flex-1 px-4 py-2 bg-orange-500 text-white rounded-lg font-bold text-sm hover:bg-orange-600 transition-colors"
                                 >
-                                  📋 Add to Queue
-                                </button>
-                                <button
-                                  onClick={() => handleSelectMedia(result)}
-                                  className="px-4 py-2 bg-paper-300 text-ink-700 rounded-lg font-bold text-sm hover:bg-paper-400 transition-colors"
-                                >
-                                  Log It
+                                  👁️ Preview
                                 </button>
                               </>
                             ) : (
@@ -3066,6 +3138,116 @@ export default function Home() {
                 <p className="animate-fade-in" style={{ animationDelay: '0.6s' }}>
                   ✓ Identifying notable elements
                 </p>
+              </div>
+            </div>
+          )}
+
+          {/* QUEUE PREVIEW STEP */}
+          {step === 'queue-preview' && (
+            <div className="animate-fade-in">
+              <button
+                onClick={() => {
+                  setStep('search')
+                  setLogData({} as LogData)
+                  setSelectedMedia(null)
+                }}
+                className="flex items-center gap-1 text-ink-500 hover:text-ink-800 mb-4 text-sm"
+              >
+                ← Back to Search
+              </button>
+
+              <div className="bg-orange-50 border-2 border-orange-300 rounded-xl p-5 mb-4">
+                <h2 className="text-lg font-bold text-orange-600 mb-3">Preview: Add to Queue?</h2>
+                {console.log('RENDER queue-preview, logData:', logData)}
+                {console.log('logData.starring:', logData.starring)}
+                {console.log('logData.releaseDate:', logData.releaseDate)}
+
+                <div className="bg-white rounded-lg p-4 border border-orange-200">
+                  <h3 className="text-xl font-bold text-ink-800">{logData.title}</h3>
+                  {logData.year && <p className="text-ink-600">{logData.year}</p>}
+                  {logData.releaseDate && (
+                    <p className="text-orange-600 font-medium mt-1">
+                      🗓️ Releases: {new Date(logData.releaseDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+                    </p>
+                  )}
+
+                  {logData.director && (
+                    <p className="text-ink-600 mt-2">
+                      <span className="font-medium">Director:</span> {logData.director}
+                    </p>
+                  )}
+
+                  {logData.starring && logData.starring.length > 0 && (
+                    <p className="text-ink-600 mt-1">
+                      <span className="font-medium">Cast:</span> {logData.starring.slice(0, 5).join(', ')}{logData.starring.length > 5 ? '...' : ''}
+                    </p>
+                  )}
+
+                  {logData.distributor && (
+                    <p className="text-ink-600 mt-1">
+                      <span className="font-medium">Distributor:</span> {logData.distributor}
+                    </p>
+                  )}
+
+                  {logData.overview && (
+                    <p className="text-ink-500 mt-3 text-sm italic">
+                      {logData.overview}
+                    </p>
+                  )}
+
+                  {logData.trailerVideoId && (
+                    <div className="mt-4">
+                      <div className="aspect-video rounded-lg overflow-hidden">
+                        <iframe
+                          src={`https://www.youtube.com/embed/${logData.trailerVideoId}`}
+                          className="w-full h-full"
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                          allowFullScreen
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex gap-3 mt-4">
+                  <button
+                    onClick={() => {
+                      addToQueueSmart({
+                        id: logData.tmdbId || 0,
+                        title: logData.title,
+                        year: logData.year || new Date().getFullYear(),
+                        mediaType: logData.mediaType,
+                        director: logData.director,
+                        overview: logData.overview,
+                        runtime: logData.runtime,
+                        posterPath: logData.poster,
+                        releaseDate: logData.releaseDate,
+                        trailerVideoId: logData.trailerVideoId,
+                        starring: logData.starring,
+                        distributor: logData.distributor,
+                        imdbId: logData.imdbId,
+                        imdbUrl: logData.imdbUrl,
+                      } as any)
+                      setStep('search')
+                      setLogData({} as LogData)
+                      setSelectedMedia(null)
+                      setSearchQuery('')
+                    }}
+                    className="flex-1 py-3 bg-orange-500 text-white rounded-lg font-bold hover:bg-orange-600 transition-colors"
+                  >
+                    ✓ Add to Queue
+                  </button>
+                  <button
+                    onClick={() => {
+                      setStep('search')
+                      setLogData({} as LogData)
+                      setSelectedMedia(null)
+                    }}
+                    className="px-6 py-3 bg-paper-300 text-ink-700 rounded-lg font-bold hover:bg-paper-400 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
               </div>
             </div>
           )}
@@ -3569,6 +3751,9 @@ export default function Home() {
             language: logData.language,
             genres: logData.genres,
             tmdbRating: logData.tmdbRating,
+            // Release info for upcoming films
+            releaseDate: logData.releaseDate,
+            officialWebsite: logData.officialWebsite,
           }}
           isLogging={step !== 'complete'}
           onEdit={(changes) => {
@@ -3690,6 +3875,39 @@ export default function Home() {
               production: urlMetadata?.production,
               country: urlMetadata?.country,
               language: urlMetadata?.language,
+              // Release info for upcoming films (from hardcoded data)
+              releaseDate: (urlMetadata as any)?.releaseDate,
+              distributor: (urlMetadata as any)?.distributor,
+              officialWebsite: (urlMetadata as any)?.officialWebsite,
+              imdbId: (urlMetadata as any)?.imdbId,
+            } : (step === 'queue-preview' && logData.title) ? {
+              // Search result selected - use logData
+              title: logData.title,
+              mediaType: logData.mediaType,
+              videoId: logData.trailerVideoId,
+              thumbnail: logData.poster,
+              director: logData.director,
+              cinematographer: logData.cinematographer,
+              composer: logData.composer,
+              writers: logData.writers,
+              cast: logData.starring?.map(name => ({ name, character: '' })),
+              genres: logData.genres,
+              poster: logData.poster,
+              trailerVideoId: logData.trailerVideoId,
+              overview: logData.overview,
+              description: logData.overview, // Description display uses this field
+              runtime: logData.runtime,
+              distributor: logData.distributor,
+              releaseDate: logData.releaseDate,
+              imdbUrl: logData.imdbUrl,
+              imdbId: logData.imdbId,
+              officialWebsite: logData.officialWebsite,
+              metacriticScore: logData.metacriticScore,
+              rottenTomatoesScore: logData.rottenTomatoesScore,
+              metacriticUrl: logData.metacriticUrl,
+              rottenTomatoesUrl: logData.rottenTomatoesUrl,
+              rated: logData.rated,
+              isLoading: false,
             } : undefined
           }
           onQueueTalentPreferenceChange={(name, pref) => {

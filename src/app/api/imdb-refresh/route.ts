@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
     const html = await response.text()
 
     // Extract __NEXT_DATA__ JSON
-    const nextDataMatch = html.match(/__NEXT_DATA__[^{]*({.*?})\s*<\/script>/s)
+    const nextDataMatch = html.match(/__NEXT_DATA__[^{]*({[\s\S]*?})\s*<\/script>/)
     if (!nextDataMatch) {
       return NextResponse.json({ error: 'Could not parse IMDB page' }, { status: 500 })
     }
