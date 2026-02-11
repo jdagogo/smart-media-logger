@@ -22,12 +22,12 @@ export default function RootLayout({
                 SMART MEDIA LOGGER
               </span>
               <a
-                href="/smart-media-logger-versions.html"
+                href="https://github.com/jdagogo/smart-media-logger/commit/938eb6d"
                 target="_blank"
                 className="ml-2 text-xs font-mono px-2 py-0.5 bg-blue-900/20 text-blue-900 rounded hover:bg-blue-900/30 transition-colors"
-                title="View version info and known issues"
+                title="View commit on GitHub"
               >
-                v1.9.3-alpha
+                v1.9.4-alpha
               </a>
             </div>
           </div>
