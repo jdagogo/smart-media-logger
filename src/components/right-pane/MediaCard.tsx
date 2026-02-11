@@ -133,6 +133,9 @@ interface MediaCardProps {
   awardsTooltip?: string | null
   loadingAwards?: boolean
   onAwardsHover?: () => void
+  // Video pause coordination
+  showTrailerOverlay?: boolean
+  onTrailerClick?: () => void
 }
 
 // Talent preference types
@@ -272,6 +275,8 @@ export default function MediaCard({
   awardsTooltip,
   loadingAwards,
   onAwardsHover,
+  showTrailerOverlay,
+  onTrailerClick,
 }: MediaCardProps) {
   const [showTrailer, setShowTrailer] = useState(false)
   const [showSoundtrack, setShowSoundtrack] = useState(false)
@@ -399,14 +404,22 @@ export default function MediaCard({
       {/* VIDEO EMBED - Always at top when available (trailer or direct video) */}
       {/* ═══════════════════════════════════════════════════════════════ */}
       {topVideoId && (
-        <div className="bg-black">
+        <div className="bg-black relative">
           <iframe
+            id="trailer-player"
             src={`https://www.youtube.com/embed/${topVideoId}?enablejsapi=1`}
             title={title}
             className="w-full aspect-video"
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
             allowFullScreen
           />
+          {/* Click-capture overlay: intercepts first click to pause other players */}
+          {showTrailerOverlay && onTrailerClick && (
+            <div
+              className="absolute inset-0 z-[1] cursor-pointer"
+              onClick={onTrailerClick}
+            />
+          )}
         </div>
       )}
 
@@ -715,7 +728,7 @@ export default function MediaCard({
 
                     {/* Top Reviews */}
                     <div className="space-y-3 mb-4">
-                      {metacriticData.topReviews.map((review, idx) => (
+                      {(metacriticData.topReviews || []).map((review, idx) => (
                         <div key={idx} className="bg-white p-3 rounded-lg border border-accent-blue/30">
                           <p className="text-ink-800 mb-2">"{review.quote}"</p>
                           <div className="flex justify-between text-sm">

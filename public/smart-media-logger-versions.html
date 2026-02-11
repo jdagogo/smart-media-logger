@@ -353,8 +353,8 @@
             <h2>Quick Start</h2>
 
             <div class="alert warning">
-                <strong>v1.9.3-alpha - Metadata Persistence & Distributor Detection</strong><br>
-                January 11, 2026. Fixed 11 data persistence bugs. A24 detection, box office domestic+worldwide, distributor badges. See FILM_METADATA_SPEC.md and V1.9.3_SESSION_NOTES.md for full documentation.
+                <strong>v1.9.4-alpha - Video Carousel & Single-Play Enforcement</strong><br>
+                February 10, 2026. Hero video carousel with TMDB clips, pin-to-front stars, single-video-at-a-time playback, adaptive 2/3-section layouts, Metacritic crash fix. TV Episodic Metadata Spec & TV Soundtrack API.
             </div>
 
             <div style="margin-bottom: 20px;">
@@ -366,9 +366,9 @@
             </div>
 
             <div style="margin-bottom: 20px;">
-                <strong style="color: #383838;">Step 2: Checkout current version (v1.9.3)</strong>
+                <strong style="color: #383838;">Step 2: Checkout current version (v1.9.4)</strong>
                 <div class="command">
-                    git checkout v1.9.3-metadata-persistence
+                    git checkout v1.9.4-video-carousel
                     <button class="copy-btn" onclick="copyCommand(this)">Copy</button>
                 </div>
             </div>
@@ -878,10 +878,10 @@
             </div>
 
             <!-- v1.9.3-alpha - Metadata Persistence & A24 Detection -->
-            <div class="version-card" style="border: 3px solid #f59e0b;">
+            <div class="version-card">
                 <div class="version-header">
                     <div class="version-title">v1.9.3-alpha</div>
-                    <div class="status development">CURRENT</div>
+                    <div class="status stable">STABLE</div>
                 </div>
 
                 <div class="info-section">
@@ -976,6 +976,97 @@
                 </div>
             </div>
 
+            <!-- v1.9.4-alpha - Video Carousel & Single-Play Enforcement -->
+            <div class="version-card" style="border: 3px solid #f59e0b;">
+                <div class="version-header">
+                    <div class="version-title">v1.9.4-alpha</div>
+                    <div class="status development">CURRENT</div>
+                </div>
+
+                <div class="info-section">
+                    <div class="info-row">
+                        <span class="info-label">Commit:</span>
+                        <span><a href="https://github.com/jdagogo/smart-media-logger/commit/793157a" target="_blank" style="color: #1E40AF; text-decoration: underline;">793157a</a></span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Branch:</span>
+                        <span><a href="https://github.com/jdagogo/smart-media-logger/tree/v1.9.4-video-carousel" target="_blank" style="color: #1E40AF; text-decoration: underline;">v1.9.4-video-carousel</a></span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Port:</span>
+                        <span>3006</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Date:</span>
+                        <span>February 10, 2026</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Focus:</span>
+                        <span>Video Carousel & Single-Play Enforcement</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Rollback:</span>
+                        <span style="font-family: 'Courier New', monospace; font-size: 0.9em;">git checkout v1.9.4-video-carousel</span>
+                    </div>
+                </div>
+
+                <p style="margin-bottom: 15px; font-weight: 600; color: #166534;">New in this version:</p>
+                <div class="features">
+                    <div class="feature-tag done">Hero video carousel (TMDB clips + featurettes)</div>
+                    <div class="feature-tag done">Pin/star videos to front of carousel</div>
+                    <div class="feature-tag done">Single-video-at-a-time playback (click-capture overlays)</div>
+                    <div class="feature-tag done">Adaptive layout: 3-section (clips) or 2-section (no clips)</div>
+                    <div class="feature-tag done">Carousel arrows + counter + video name on hover</div>
+                    <div class="feature-tag done">Expand/collapse button on hero carousel</div>
+                    <div class="feature-tag done">Metacritic panel crash fix (topReviews undefined)</div>
+                    <div class="feature-tag done">TV Episodic Metadata Spec (2630 lines)</div>
+                    <div class="feature-tag done">TV Soundtrack API (Soundtracki.com scraper)</div>
+                </div>
+
+                <p style="margin-bottom: 15px; font-weight: 600;">Key Documentation:</p>
+                <div style="background: #F5F1E8; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                    <div style="margin-bottom: 10px;">
+                        <a href="https://github.com/jdagogo/smart-media-logger/blob/v1.9.4-video-carousel/TV_EPISODIC_METADATA_SPEC.md" target="_blank" style="color: #1E40AF; font-weight: bold; text-decoration: underline;">TV_EPISODIC_METADATA_SPEC.md</a> - Comprehensive TV/episodic metadata specification (2630 lines)
+                    </div>
+                    <div>
+                        <a href="https://github.com/jdagogo/smart-media-logger/blob/v1.9.4-video-carousel/README.md" target="_blank" style="color: #1E40AF; font-weight: bold; text-decoration: underline;">README.md</a> - Project README
+                    </div>
+                </div>
+
+                <p style="margin-bottom: 15px; font-weight: 600; color: #1E40AF;">How it works:</p>
+                <div style="background: #EFF6FF; padding: 15px; border-radius: 8px; margin-bottom: 15px; font-size: 0.9em;">
+                    <ul style="margin-left: 20px; line-height: 1.8;">
+                        <li><strong>Hero carousel:</strong> Fetches TMDB videos, orders clips first then trailers/teasers</li>
+                        <li><strong>Pin to front:</strong> Star icon on CharacterGallery video thumbnails, saves to localStorage</li>
+                        <li><strong>Single-play:</strong> Click-capture overlays on iframes pause all others via YouTube postMessage API</li>
+                        <li><strong>Adaptive layout:</strong> 3-section (carousel + poster, metadata, trailer) when TMDB videos exist; 2-section (video + poster) when no TMDB videos</li>
+                    </ul>
+                </div>
+
+                <p style="margin-bottom: 15px; font-weight: 600; color: #991B1B;">Still broken (from earlier versions):</p>
+                <div class="features">
+                    <div class="feature-tag broken">Entity recognition weak</div>
+                    <div class="feature-tag broken">No Claude API integration</div>
+                    <div class="feature-tag broken">TypeScript build fails</div>
+                    <div class="feature-tag broken">page.tsx is 3800+ lines</div>
+                </div>
+
+                <div class="action-buttons">
+                    <a href="http://localhost:3006" target="_blank" class="btn btn-primary">
+                        Open App
+                    </a>
+                    <a href="https://github.com/jdagogo/smart-media-logger/tree/v1.9.4-video-carousel" target="_blank" class="btn btn-secondary">
+                        GitHub
+                    </a>
+                    <a href="https://github.com/jdagogo/smart-media-logger/blob/v1.9.4-video-carousel/README.md" target="_blank" class="btn btn-secondary">
+                        README
+                    </a>
+                    <a href="https://github.com/jdagogo/smart-media-logger/blob/v1.9.4-video-carousel/TV_EPISODIC_METADATA_SPEC.md" target="_blank" class="btn btn-secondary">
+                        TV Metadata Spec
+                    </a>
+                </div>
+            </div>
+
             <!-- Phase 2 Planned -->
             <div class="version-card">
                 <div class="version-header">
@@ -1003,12 +1094,21 @@
                     <div class="feature-tag" style="background: #DC2626; color: white;">YouTube Data API integration</div>
                     <div class="feature-tag" style="background: #7C3AED; color: white;">UnitedTribes video search (port 3002)</div>
                     <div class="feature-tag" style="background: #0891b2; color: white;">TV/Streaming workflow (Pluribus)</div>
+                    <div class="feature-tag" style="background: #059669; color: white;">TV Episode Soundtrack API (Soundtracki)</div>
+                    <div class="feature-tag" style="background: #EA580C; color: white;">Episodic programming module</div>
                 </div>
 
                 <div style="background: #F0F9FF; padding: 15px; border-radius: 8px; margin-top: 15px; border: 1px solid #0891b2;">
-                    <strong style="color: #0891b2;">TV/Streaming Note (Pluribus):</strong><br>
+                    <strong style="color: #0891b2;">TV/Streaming Module (Pluribus):</strong><br>
                     <span style="color: #666; font-size: 0.9em;">
-                        TV and streaming media will need a different logging workflow than movies. Consider: episode vs season vs series logging, binge sessions, "currently watching" status, progress tracking, and streaming platform integration.
+                        TV and streaming media will need a different logging workflow than movies. Consider: episode vs season vs series logging, binge sessions, "currently watching" status, progress tracking, and streaming platform integration. Will require new data models for Series → Season → Episode hierarchy.
+                    </span>
+                </div>
+
+                <div style="background: #ECFDF5; padding: 15px; border-radius: 8px; margin-top: 15px; border: 1px solid #059669;">
+                    <strong style="color: #059669;">TV Episode Soundtrack API (POC Built):</strong><br>
+                    <span style="color: #666; font-size: 0.9em;">
+                        Prototype API at <code>/api/tv-soundtrack</code> scrapes Soundtracki.com for episode-level soundtrack data. Returns: song title, artist, timestamp, scene description, YouTube search URL. Tested with Succession S4E10 - successfully retrieved Leonard Cohen, Nicholas Britell score cues with scene context. Needs: cleaner HTML parsing, episode boundary detection, result caching, UI for show → season → episode selection.
                     </span>
                 </div>
 
@@ -1145,7 +1245,22 @@
         <div class="ecosystem-section">
             <h2>Changelog</h2>
             <div style="background: #F5F1E8; padding: 20px; border-radius: 8px;">
-                <h3 style="margin-bottom: 10px;">v1.9.3-alpha - January 11, 2026</h3>
+                <h3 style="margin-bottom: 10px;">v1.9.4-alpha - February 10, 2026</h3>
+                <ul style="line-height: 1.8; color: #666; margin-left: 20px;">
+                    <li><strong>NEW:</strong> Hero video carousel in LoggedItemModal - cycles through TMDB clips, featurettes, behind the scenes</li>
+                    <li><strong>NEW:</strong> Pin/star button on CharacterGallery video thumbnails - pinned video moves to front of carousel</li>
+                    <li><strong>NEW:</strong> Single-video-at-a-time playback via click-capture overlays + YouTube postMessage API</li>
+                    <li><strong>NEW:</strong> Adaptive layout - 3-section (carousel + poster, metadata, large trailer) when TMDB videos exist; 2-section (video + poster) when not</li>
+                    <li><strong>NEW:</strong> Carousel navigation arrows (pill-shaped, semi-transparent) with counter + video name on hover</li>
+                    <li><strong>NEW:</strong> Expand/collapse button preserved on hero carousel</li>
+                    <li><strong>NEW:</strong> TV Episodic Metadata Spec (TV_EPISODIC_METADATA_SPEC.md, 2630 lines)</li>
+                    <li><strong>NEW:</strong> TV Soundtrack API (<code>/api/tv-soundtrack</code>) - Soundtracki.com scraper</li>
+                    <li><strong>FIXED:</strong> Metacritic panel crash - topReviews undefined guard (MediaCard.tsx)</li>
+                    <li><strong>FIXED:</strong> Pin/star persistence via localStorage + pinnedVideoKey state</li>
+                    <li><strong>FIXED:</strong> Official trailer restored in MediaCard when hero shows carousel (was removed by videoId={undefined})</li>
+                </ul>
+
+                <h3 style="margin-top: 20px; margin-bottom: 10px;">v1.9.3-alpha - January 11, 2026</h3>
                 <ul style="line-height: 1.8; color: #666; margin-left: 20px;">
                     <li><strong>NEW:</strong> Hardcoded unreleased film support (Undertone, The Moment A24 films)</li>
                     <li><strong>NEW:</strong> A24 detection from YouTube title ("| A24") and channel name</li>

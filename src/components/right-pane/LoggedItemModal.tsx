@@ -59,12 +59,92 @@ export default function LoggedItemModal({
   const [awardsTooltip, setAwardsTooltip] = useState<string | null>(null)
   const [loadingAwards, setLoadingAwards] = useState(false)
 
+  // Hero carousel state
+  const [heroVideos, setHeroVideos] = useState<Array<{ key: string; name: string; videoType: string; thumbnailUrl: string }>>([])
+  const [heroIndex, setHeroIndex] = useState(0)
+  const [heroLoading, setHeroLoading] = useState(false)
+
+  // Tracks which player is active (overlay hidden) so only one plays at a time
+  const [activePlayer, setActivePlayer] = useState<'hero' | 'trailer' | 'gallery' | null>(null)
+
+  // Pause all YouTube iframes on the page
+  const pauseAllYouTubeIframes = () => {
+    document.querySelectorAll('iframe[src*="youtube.com"]').forEach(iframe => {
+      try {
+        (iframe as HTMLIFrameElement).contentWindow?.postMessage(
+          '{"event":"command","func":"pauseVideo","args":""}', '*'
+        )
+      } catch (e) { /* cross-origin errors are ok */ }
+    })
+  }
+
+  // Activate a player: pause all iframes, then play the target one
+  const activatePlayer = (player: 'hero' | 'trailer' | 'gallery', iframeId?: string) => {
+    pauseAllYouTubeIframes()
+    setActivePlayer(player)
+    if (iframeId) {
+      setTimeout(() => {
+        const iframe = document.getElementById(iframeId) as HTMLIFrameElement
+        iframe?.contentWindow?.postMessage(
+          '{"event":"command","func":"playVideo","args":""}', '*'
+        )
+      }, 150)
+    }
+  }
+
+  // Fetch TMDB videos for hero carousel
+  useEffect(() => {
+    if (!isOpen || !item || item.mediaType === 'music') return
+    const fetchHeroVideos = async () => {
+      setHeroLoading(true)
+      try {
+        const params = new URLSearchParams()
+        if (item.tmdbId) {
+          params.set('movieId', item.tmdbId.toString())
+        } else {
+          params.set('title', item.title)
+          if (item.year) params.set('year', item.year.toString())
+        }
+        const response = await fetch(`/api/movie-images?${params}`)
+        if (response.ok) {
+          const data = await response.json()
+          const allVideos = (data.images?.videos || []) as Array<{ key: string; name: string; videoType: string; thumbnailUrl: string }>
+          // Default order: non-trailers first, then trailers/teasers
+          const clips = allVideos.filter((v: any) => v.videoType !== 'Trailer' && v.videoType !== 'Teaser')
+          const trailers = allVideos.filter((v: any) => v.videoType === 'Trailer' || v.videoType === 'Teaser')
+          let orderedVideos = [...clips, ...trailers]
+
+          // Check localStorage for pinned video — move it to front
+          const storageKey = `hero_pinned_${item.title.toLowerCase().replace(/\s+/g, '_')}`
+          const pinnedKey = localStorage.getItem(storageKey)
+          if (pinnedKey) {
+            const pinnedIdx = orderedVideos.findIndex((v: any) => v.key === pinnedKey)
+            if (pinnedIdx > 0) {
+              const [pinned] = orderedVideos.splice(pinnedIdx, 1)
+              orderedVideos.unshift(pinned)
+            }
+          }
+
+          setHeroVideos(orderedVideos)
+          setHeroIndex(0)
+        }
+      } catch (err) {
+        console.error('Failed to fetch hero videos:', err)
+      }
+      setHeroLoading(false)
+    }
+    fetchHeroVideos()
+  }, [isOpen, item?.id, item?.title, item?.year, item?.tmdbId])
+
   // Reset state when item changes
   useEffect(() => {
     setAwardsTooltip(null)
     setLoadingAwards(false)
     setSavedNotesLocal(null)
     setVideoExpanded(false)
+    setHeroIndex(0)
+    setHeroVideos([])
+    setActivePlayer(null)
   }, [item?.id])
 
   if (!isOpen || !item) return null
@@ -352,7 +432,7 @@ export default function LoggedItemModal({
                   <div className={`${videoExpanded ? 'w-full' : 'w-[65%]'} flex-shrink-0 relative transition-all duration-300`}>
                     <div className="aspect-video bg-black rounded-xl overflow-hidden shadow-2xl">
                       <iframe
-                        src={`https://www.youtube.com/embed/${item.videoId}?autoplay=0&rel=0`}
+                        src={`https://www.youtube.com/embed/${item.videoId}?autoplay=0&rel=0&enablejsapi=1`}
                         className="w-full h-full"
                         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                         allowFullScreen
@@ -486,35 +566,95 @@ export default function LoggedItemModal({
           ) : (
             /* MOVIE/TV ITEMS */
             <div className="p-6 space-y-6">
-              {/* Hero Section: Video | Poster (top row) - video expands in place */}
+              {/* Hero Section: Video Carousel | Poster (top row) */}
               <div className="flex gap-4 items-start justify-center mx-auto">
-                {/* Video - expands to full width when expanded */}
-                {(item.videoId || item.trailerVideoId) && (
-                  <div className={`${videoExpanded ? 'w-full' : 'w-[65%]'} flex-shrink-0 relative transition-all duration-300`}>
-                    <div className="aspect-video bg-black rounded-xl overflow-hidden shadow-2xl">
-                      <iframe
-                        src={`https://www.youtube.com/embed/${item.videoId || item.trailerVideoId}?autoplay=0&rel=0`}
-                        className="w-full h-full"
-                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                        allowFullScreen
-                      />
-                    </div>
-                    {/* Expand/Collapse button */}
-                    <button
-                      onClick={() => setVideoExpanded(!videoExpanded)}
-                      className="absolute top-3 right-3 bg-black/60 hover:bg-black/80 text-white p-2 rounded-lg transition-all"
-                      title={videoExpanded ? "Collapse video" : "Expand video"}
-                    >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        {videoExpanded ? (
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 9V4.5M9 9H4.5M9 9L3.5 3.5M15 9h4.5M15 9V4.5M15 9l5.5-5.5M9 15v4.5M9 15H4.5M9 15l-5.5 5.5M15 15h4.5M15 15v4.5m0-4.5l5.5 5.5" />
-                        ) : (
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                {/* Video - carousel of clips when available, fallback to trailer */}
+                {(() => {
+                  const hasClips = heroVideos.length > 0
+                  const currentClip = hasClips ? heroVideos[heroIndex] : null
+                  const fallbackVideoId = item.videoId || item.trailerVideoId
+                  const showVideo = hasClips || fallbackVideoId
+
+                  if (!showVideo) return null
+
+                  return (
+                    <div className={`${videoExpanded ? 'w-full' : 'w-[65%]'} flex-shrink-0 relative transition-all duration-300 group/carousel`}>
+                      <div className="aspect-video bg-black rounded-xl overflow-hidden shadow-2xl relative">
+                        <iframe
+                          id="hero-player"
+                          key={hasClips ? currentClip!.key : fallbackVideoId}
+                          src={`https://www.youtube.com/embed/${hasClips ? currentClip!.key : fallbackVideoId}?autoplay=0&rel=0&enablejsapi=1`}
+                          className="w-full h-full"
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                          allowFullScreen
+                        />
+                        {/* Click-capture overlay: intercepts first click to pause other players */}
+                        {activePlayer !== 'hero' && (
+                          <div
+                            className="absolute inset-0 z-[1] cursor-pointer"
+                            onClick={() => activatePlayer('hero', 'hero-player')}
+                          />
                         )}
-                      </svg>
-                    </button>
-                  </div>
-                )}
+                      </div>
+
+                      {/* Carousel controls - only when clips available */}
+                      {hasClips && (
+                        <>
+                          {/* Left arrow */}
+                          <button
+                            onClick={() => { pauseAllYouTubeIframes(); setActivePlayer(null); setHeroIndex(Math.max(0, heroIndex - 1)); }}
+                            disabled={heroIndex === 0}
+                            className={`absolute -left-2 top-1/2 -translate-y-1/2 w-10 h-16 rounded-lg flex items-center justify-center text-3xl font-bold transition-all opacity-0 group-hover/carousel:opacity-100 ${
+                              heroIndex === 0
+                                ? 'bg-black/20 text-white/30 cursor-not-allowed'
+                                : 'bg-black/50 text-white hover:bg-black/70'
+                            }`}
+                          >
+                            ‹
+                          </button>
+
+                          {/* Right arrow */}
+                          <button
+                            onClick={() => { pauseAllYouTubeIframes(); setActivePlayer(null); setHeroIndex(Math.min(heroVideos.length - 1, heroIndex + 1)); }}
+                            disabled={heroIndex === heroVideos.length - 1}
+                            className={`absolute -right-2 top-1/2 -translate-y-1/2 w-10 h-16 rounded-lg flex items-center justify-center text-3xl font-bold transition-all opacity-0 group-hover/carousel:opacity-100 ${
+                              heroIndex === heroVideos.length - 1
+                                ? 'bg-black/20 text-white/30 cursor-not-allowed'
+                                : 'bg-black/50 text-white hover:bg-black/70'
+                            }`}
+                          >
+                            ›
+                          </button>
+
+                          {/* Counter + video name */}
+                          <div className="absolute bottom-2 left-2 flex items-center gap-2 opacity-0 group-hover/carousel:opacity-100 transition-all">
+                            <span className="bg-black/70 text-white text-xs px-2 py-1 rounded-full font-medium">
+                              {heroIndex + 1} / {heroVideos.length}
+                            </span>
+                            <span className="bg-black/70 text-white text-xs px-2 py-1 rounded max-w-[250px] truncate">
+                              {currentClip!.name}
+                            </span>
+                          </div>
+                        </>
+                      )}
+
+                      {/* Expand/Collapse button */}
+                      <button
+                        onClick={() => setVideoExpanded(!videoExpanded)}
+                        className="absolute top-3 right-3 bg-black/60 hover:bg-black/80 text-white p-2 rounded-lg transition-all"
+                        title={videoExpanded ? "Collapse video" : "Expand video"}
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          {videoExpanded ? (
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 9V4.5M9 9H4.5M9 9L3.5 3.5M15 9h4.5M15 9V4.5M15 9l5.5-5.5M9 15v4.5M9 15H4.5M9 15l-5.5 5.5M15 15h4.5M15 15v4.5m0-4.5l5.5 5.5" />
+                          ) : (
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                          )}
+                        </svg>
+                      </button>
+                    </div>
+                  )
+                })()}
 
                 {/* Poster - hidden when video is expanded */}
                 {item.poster && !videoExpanded && (
@@ -621,10 +761,12 @@ export default function LoggedItemModal({
                 rottenTomatoesData={item.rottenTomatoesData}
                 imdbRating={item.imdbRating}
                 imdbUrl={item.imdbUrl}
-                // Rich metadata - but hide video since we show it above
+                // Show trailer in MediaCard only when hero has clips (avoids duplication)
                 poster={item.poster}
-                videoId={undefined} // Don't show video in MediaCard - we show it above
-                trailerUrl={item.trailerUrl}
+                videoId={heroVideos.length > 0
+                  ? (item.trailerVideoId || heroVideos.find(v => v.videoType === 'Trailer')?.key || heroVideos.find(v => v.videoType === 'Teaser')?.key)
+                  : undefined}
+                trailerUrl={heroVideos.length > 0 ? item.trailerUrl : undefined}
                 sourceUrl={item.sourceUrl}
                 rated={item.rated}
                 awards={item.awards}
@@ -656,6 +798,9 @@ export default function LoggedItemModal({
                 awardsTooltip={awardsTooltip}
                 loadingAwards={loadingAwards}
                 onAwardsHover={fetchAwardsDetails}
+                // Video pause coordination
+                showTrailerOverlay={activePlayer !== 'trailer'}
+                onTrailerClick={() => activatePlayer('trailer', 'trailer-player')}
                 // Edit handler
                 onEdit={(changes) => {
                   const translatedChanges = { ...changes }
@@ -673,6 +818,7 @@ export default function LoggedItemModal({
                   movieTitle={item.title}
                   movieYear={item.year}
                   movieId={item.tmdbId?.toString()}
+                  onVideoPlay={() => setActivePlayer('gallery')}
                 />
               )}
 

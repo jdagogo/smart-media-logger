@@ -64,6 +64,7 @@ interface CharacterGalleryProps {
   movieYear?: number
   movieId?: string
   onNoteAdded?: (note: CharacterSceneNote) => void
+  onVideoPlay?: () => void
 }
 
 export default function CharacterGallery({
@@ -71,6 +72,7 @@ export default function CharacterGallery({
   movieYear,
   movieId,
   onNoteAdded,
+  onVideoPlay,
 }: CharacterGalleryProps) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -83,6 +85,15 @@ export default function CharacterGallery({
   const [recognition, setRecognition] = useState<any>(null)
   const [activeTab, setActiveTab] = useState<'cast' | 'scenes' | 'videos'>('cast')
   const [savedToast, setSavedToast] = useState<string | null>(null)
+  const [pinnedVideoKey, setPinnedVideoKey] = useState<string | null>(null)
+
+  // Load pinned video from localStorage
+  useEffect(() => {
+    if (movieTitle) {
+      const key = `hero_pinned_${movieTitle.toLowerCase().replace(/\s+/g, '_')}`
+      setPinnedVideoKey(localStorage.getItem(key))
+    }
+  }, [movieTitle])
 
   // Get current list and selected item based on mode
   const currentList = activeTab === 'cast' ? cast : activeTab === 'scenes' ? scenes : videos
@@ -169,7 +180,23 @@ export default function CharacterGallery({
     }
   }
 
+  // Pause all YouTube iframes on the page
+  const pauseAllYouTubeIframes = () => {
+    document.querySelectorAll('iframe[src*="youtube.com"]').forEach(iframe => {
+      try {
+        (iframe as HTMLIFrameElement).contentWindow?.postMessage(
+          '{"event":"command","func":"pauseVideo","args":""}', '*'
+        )
+      } catch (e) { /* cross-origin errors are ok */ }
+    })
+  }
+
   const handleImageClick = (index: number) => {
+    // If clicking a video, pause all other players first
+    if (activeTab === 'videos') {
+      pauseAllYouTubeIframes()
+      onVideoPlay?.()
+    }
     setSelectedIndex(index)
     setNoteText('')
   }
@@ -377,35 +404,65 @@ export default function CharacterGallery({
       {/* Videos Grid - 2 columns for larger thumbnails */}
       {activeTab === 'videos' && (
         <div className="grid grid-cols-2 gap-4">
-          {videos.map((video, idx) => (
-            <button
-              key={video.id}
-              onClick={() => handleImageClick(idx)}
-              className="group relative overflow-hidden rounded-lg aspect-video bg-paper-200 hover:ring-2 hover:ring-accent-blue transition-all hover:scale-[1.02]"
-            >
-              <img
-                src={video.thumbnailUrl}
-                alt={video.name}
-                className="w-full h-full object-cover"
-              />
-              {/* Play button overlay */}
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div className="w-16 h-16 rounded-full bg-black/60 flex items-center justify-center group-hover:bg-red-600 transition-colors">
-                  <span className="text-white text-2xl ml-1">▶</span>
-                </div>
+          {videos.map((video, idx) => {
+            // Check if this video is pinned for the hero carousel
+            const isPinned = pinnedVideoKey === video.key
+
+            return (
+              <div key={video.id} className="relative">
+                <button
+                  onClick={() => handleImageClick(idx)}
+                  className="group relative overflow-hidden rounded-lg aspect-video bg-paper-200 hover:ring-2 hover:ring-accent-blue transition-all hover:scale-[1.02] w-full"
+                >
+                  <img
+                    src={video.thumbnailUrl}
+                    alt={video.name}
+                    className="w-full h-full object-cover"
+                  />
+                  {/* Play button overlay */}
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="w-16 h-16 rounded-full bg-black/60 flex items-center justify-center group-hover:bg-red-600 transition-colors">
+                      <span className="text-white text-2xl ml-1">▶</span>
+                    </div>
+                  </div>
+                  {/* Video type badge */}
+                  <div className="absolute top-3 left-3 bg-black/70 text-white text-sm px-2 py-1 rounded font-medium">
+                    {video.videoType}
+                  </div>
+                  {/* Video name */}
+                  <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent p-3">
+                    <p className="text-white text-sm font-medium line-clamp-2">
+                      {video.name}
+                    </p>
+                  </div>
+                </button>
+                {/* Pin/star button - pin this video as first in hero carousel */}
+                {(
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      const storageKey = `hero_pinned_${movieTitle.toLowerCase().replace(/\s+/g, '_')}`
+                      if (isPinned) {
+                        localStorage.removeItem(storageKey)
+                        setPinnedVideoKey(null)
+                      } else {
+                        localStorage.setItem(storageKey, video.key)
+                        setPinnedVideoKey(video.key)
+                      }
+                    }}
+                    className={`absolute top-3 right-3 z-10 w-8 h-8 rounded-full flex items-center justify-center transition-all ${
+                      isPinned
+                        ? 'bg-amber-500 text-white shadow-lg'
+                        : 'bg-black/50 text-white/70 hover:bg-amber-500 hover:text-white'
+                    }`}
+                    title={isPinned ? 'Unpin from hero carousel' : 'Pin as first in hero carousel'}
+                  >
+                    ★
+                  </button>
+                )}
               </div>
-              {/* Video type badge */}
-              <div className="absolute top-3 left-3 bg-black/70 text-white text-sm px-2 py-1 rounded font-medium">
-                {video.videoType}
-              </div>
-              {/* Video name */}
-              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent p-3">
-                <p className="text-white text-sm font-medium line-clamp-2">
-                  {video.name}
-                </p>
-              </div>
-            </button>
-          ))}
+            )
+          })}
         </div>
       )}
 
@@ -455,7 +512,7 @@ export default function CharacterGallery({
               {selectedItem.type === 'video' && (
                 <div className="relative bg-black">
                   <iframe
-                    src={`${(selectedItem as VideoClip).embedUrl}?autoplay=1`}
+                    src={`${(selectedItem as VideoClip).embedUrl}?autoplay=1&enablejsapi=1`}
                     className="w-full aspect-video"
                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                     allowFullScreen
