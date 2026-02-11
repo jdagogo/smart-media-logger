@@ -2,8 +2,8 @@
 
 A personal media consumption tracker. Part of the UnitedTribes ecosystem.
 
-**Current Version:** v1.7.0-alpha (Development)
-**Date:** December 30, 2024
+**Current Version:** [v1.9.4-alpha](https://github.com/jdagogo/smart-media-logger/commit/938eb6d) (Development)
+**Date:** February 10, 2026
 
 ---
 
