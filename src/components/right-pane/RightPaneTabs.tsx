@@ -2961,7 +2961,7 @@ export default function RightPaneTabs({
         {activeTab === 'logging' && (
           <div>
             {/* Show Queue Preview Card in BOTH modes when there's preview data and not yet logging */}
-            {queuePreview && (queuePreview.title || queuePreview.isLoading || queuePreview.sourceUrl) && (searchMode === 'queue' || !(currentEntry && currentEntry.title)) ? (
+            {queuePreview && (queuePreview.title || queuePreview.isLoading || queuePreview.sourceUrl) ? (
                 <div className={`bg-gradient-to-br ${searchMode === 'queue' ? 'from-orange-50 to-amber-50 border-orange-300' : 'from-blue-50 to-indigo-50 border-accent-blue'} border-2 rounded-2xl overflow-hidden shadow-lg`}>
                   {/* Header */}
                   <div className={`bg-gradient-to-r ${searchMode === 'queue' ? 'from-orange-400 to-amber-500' : 'from-accent-blue to-indigo-500'} px-5 py-3`}>
@@ -3331,18 +3331,31 @@ export default function RightPaneTabs({
                           </div>
                         )}
 
-                        {/* Cast */}
+                        {/* Cast with Photos */}
                         {queuePreview.cast && queuePreview.cast.length > 0 && (
                           <div className="mt-3 pt-3 border-t border-orange-200">
                             <div className="text-xs text-ink-400 uppercase tracking-wide mb-2">Cast</div>
-                            <div className="flex flex-wrap gap-2">
-                              {queuePreview.cast.slice(0, 8).map((actor: { name: string; character: string }) => (
-                                <TalentPill
-                                  key={actor.name}
-                                  name={actor.name}
-                                  preference={queueTalentPreferences[actor.name]}
-                                  onPreferenceChange={onQueueTalentPreferenceChange}
-                                />
+                            <div className="grid grid-cols-2 gap-2">
+                              {queuePreview.cast.slice(0, 10).map((actor: { name: string; character: string; profilePath?: string }) => (
+                                <div key={actor.name} className="flex items-center gap-2 bg-white rounded-lg p-2 border border-orange-100">
+                                  {actor.profilePath ? (
+                                    <img
+                                      src={actor.profilePath}
+                                      alt={actor.name}
+                                      className="w-10 h-10 rounded-full object-cover flex-shrink-0"
+                                    />
+                                  ) : (
+                                    <div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center flex-shrink-0 text-orange-400 text-sm font-bold">
+                                      {actor.name.charAt(0)}
+                                    </div>
+                                  )}
+                                  <div className="min-w-0">
+                                    <div className="text-sm font-medium text-ink-800 truncate">{actor.name}</div>
+                                    {actor.character && (
+                                      <div className="text-xs text-ink-400 truncate">{actor.character}</div>
+                                    )}
+                                  </div>
+                                </div>
                               ))}
                             </div>
                           </div>
@@ -3451,6 +3464,49 @@ export default function RightPaneTabs({
                           </div>
                         )}
 
+                        {/* Film Stills & Backdrops */}
+                        {queuePreview.images && (queuePreview.images.backdrops?.length > 0 || queuePreview.images.stills?.length > 0) && (
+                          <div className="mt-4 pt-3 border-t border-orange-200">
+                            <div className="text-xs text-ink-400 uppercase tracking-wide mb-2">Scenes & Images</div>
+                            <div className="grid grid-cols-2 gap-2">
+                              {[...(queuePreview.images.backdrops || []), ...(queuePreview.images.stills || [])].slice(0, 6).map((img: { path: string }, i: number) => (
+                                <div key={i} className="rounded-lg overflow-hidden bg-black">
+                                  <img
+                                    src={img.path}
+                                    alt={`Scene ${i + 1}`}
+                                    className="w-full aspect-video object-cover hover:scale-105 transition-transform"
+                                  />
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Videos (Clips, Featurettes, Behind the Scenes) */}
+                        {queuePreview.videos && queuePreview.videos.length > 0 && (
+                          <div className="mt-4 pt-3 border-t border-orange-200">
+                            <div className="text-xs text-ink-400 uppercase tracking-wide mb-2">
+                              Videos ({queuePreview.videos.length})
+                            </div>
+                            <div className="space-y-2">
+                              {queuePreview.videos.slice(0, 4).map((video: { key: string; name: string; type: string }) => (
+                                <div key={video.key} className="rounded-lg overflow-hidden bg-black">
+                                  <iframe
+                                    src={`https://www.youtube.com/embed/${video.key}`}
+                                    title={video.name}
+                                    className="w-full aspect-video"
+                                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                    allowFullScreen
+                                  />
+                                  <div className="px-3 py-2 bg-ink-800">
+                                    <div className="text-white text-sm font-medium truncate">{video.name}</div>
+                                    <div className="text-ink-400 text-xs">{video.type}</div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
 
                       </>
                     )}

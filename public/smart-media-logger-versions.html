@@ -353,8 +353,8 @@
             <h2>Quick Start</h2>
 
             <div class="alert warning">
-                <a href="#v194" style="color: #92400E; text-decoration: underline; font-weight: bold;">v1.9.4-alpha - Video Carousel & Single-Play Enforcement</a><br>
-                February 10, 2026. Hero video carousel with TMDB clips, pin-to-front stars, single-video-at-a-time playback, adaptive 2/3-section layouts, Metacritic crash fix. TV Episodic Metadata Spec & TV Soundtrack API.
+                <a href="#v195" style="color: #92400E; text-decoration: underline; font-weight: bold;">v1.9.5-alpha - Unified Preview & Data Portability</a><br>
+                February 11, 2026. Unified preview flow for Log &amp; Queue modes, full critic score scraping on title search, cast photos/videos/scenes in preview, Data Manager export/import, Film Data Bible, colleague fork guide.
             </div>
 
             <div style="margin-bottom: 20px;">
@@ -977,10 +977,10 @@
             </div>
 
             <!-- v1.9.4-alpha - Video Carousel & Single-Play Enforcement -->
-            <div id="v194" class="version-card" style="border: 3px solid #f59e0b;">
+            <div id="v194" class="version-card">
                 <div class="version-header">
                     <div class="version-title">v1.9.4-alpha</div>
-                    <div class="status development">CURRENT</div>
+                    <div class="status stable">STABLE</div>
                 </div>
 
                 <div class="info-section">
@@ -1063,6 +1063,100 @@
                     </a>
                     <a href="https://github.com/jdagogo/smart-media-logger/blob/v1.9.4-video-carousel/TV_EPISODIC_METADATA_SPEC.md" target="_blank" class="btn btn-secondary">
                         TV Metadata Spec
+                    </a>
+                </div>
+            </div>
+
+            <!-- v1.9.5-alpha - Unified Preview & Data Portability -->
+            <div id="v195" class="version-card" style="border: 3px solid #f59e0b;">
+                <div class="version-header">
+                    <div class="version-title">v1.9.5-alpha</div>
+                    <div class="status development">CURRENT</div>
+                </div>
+
+                <div class="info-section">
+                    <div class="info-row">
+                        <span class="info-label">Branch:</span>
+                        <span><a href="https://github.com/jdagogo/smart-media-logger/tree/v1.9.5-unified-preview" target="_blank" style="color: #1E40AF; text-decoration: underline;">v1.9.5-unified-preview</a></span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Port:</span>
+                        <span>3006</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Date:</span>
+                        <span>February 11, 2026</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Focus:</span>
+                        <span>Unified Preview & Data Portability</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Rollback:</span>
+                        <span style="font-family: 'Courier New', monospace; font-size: 0.9em;">git checkout v1.9.5-unified-preview</span>
+                    </div>
+                </div>
+
+                <p style="margin-bottom: 15px; font-weight: 600; color: #166534;">New in this version:</p>
+                <div class="features">
+                    <div class="feature-tag done">Unified preview: Log &amp; Queue modes now show identical rich preview</div>
+                    <div class="feature-tag done">Full critic score scraping (Metacritic + RT) on title search</div>
+                    <div class="feature-tag done">Cast photos, videos, scenes &amp; images in preview pane</div>
+                    <div class="feature-tag done">Data Manager: export/import localStorage as JSON</div>
+                    <div class="feature-tag done">Queue now saves full metadata (cast, scores, videos, images)</div>
+                    <div class="feature-tag done">Back to Results preserves search results</div>
+                    <div class="feature-tag done">TMDB rating + vote count mapped in title search path</div>
+                    <div class="feature-tag done">FILM_DATA_BIBLE.md: complete data source documentation</div>
+                    <div class="feature-tag done">SML_FORK_AND_RUN_GUIDE.md: colleague setup guide</div>
+                    <div class="feature-tag done">Complete .env.example with all 4 API keys</div>
+                </div>
+
+                <p style="margin-bottom: 15px; font-weight: 600;">Key Documentation:</p>
+                <div style="background: #F5F1E8; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                    <div style="margin-bottom: 10px;">
+                        <a href="https://github.com/jdagogo/smart-media-logger/blob/v1.9.5-unified-preview/FILM_DATA_BIBLE.md" target="_blank" style="color: #1E40AF; font-weight: bold; text-decoration: underline;">FILM_DATA_BIBLE.md</a> - Complete data source &amp; API documentation
+                    </div>
+                    <div style="margin-bottom: 10px;">
+                        <a href="https://github.com/jdagogo/smart-media-logger/blob/v1.9.5-unified-preview/SML_FORK_AND_RUN_GUIDE.md" target="_blank" style="color: #1E40AF; font-weight: bold; text-decoration: underline;">SML_FORK_AND_RUN_GUIDE.md</a> - Fork &amp; run setup guide
+                    </div>
+                    <div>
+                        <a href="https://github.com/jdagogo/smart-media-logger/blob/v1.9.5-unified-preview/README.md" target="_blank" style="color: #1E40AF; font-weight: bold; text-decoration: underline;">README.md</a> - Project README
+                    </div>
+                </div>
+
+                <p style="margin-bottom: 15px; font-weight: 600; color: #1E40AF;">How it works:</p>
+                <div style="background: #EFF6FF; padding: 15px; border-radius: 8px; margin-bottom: 15px; font-size: 0.9em;">
+                    <ul style="margin-left: 20px; line-height: 1.8;">
+                        <li><strong>Unified preview:</strong> Both Log &amp; Queue modes go through preview step before action — same rich data display</li>
+                        <li><strong>Critic scraping:</strong> Title search now calls /api/critic-scores in parallel with /api/movie-details for full Metacritic &amp; RT data</li>
+                        <li><strong>Data Manager:</strong> Export/import all localStorage data as JSON via navbar button</li>
+                        <li><strong>Preview pane:</strong> Cast with photos (2-col grid), TMDB scenes/backdrops, embedded video players</li>
+                    </ul>
+                </div>
+
+                <p style="margin-bottom: 15px; font-weight: 600; color: #991B1B;">Still broken (from earlier versions):</p>
+                <div class="features">
+                    <div class="feature-tag broken">Entity recognition weak</div>
+                    <div class="feature-tag broken">No Claude API integration</div>
+                    <div class="feature-tag broken">TypeScript build fails</div>
+                    <div class="feature-tag broken">page.tsx is 3800+ lines</div>
+                </div>
+
+                <div class="action-buttons">
+                    <a href="http://localhost:3006" target="_blank" class="btn btn-primary">
+                        Open App
+                    </a>
+                    <a href="https://github.com/jdagogo/smart-media-logger/tree/v1.9.5-unified-preview" target="_blank" class="btn btn-secondary">
+                        GitHub
+                    </a>
+                    <a href="https://github.com/jdagogo/smart-media-logger/blob/v1.9.5-unified-preview/README.md" target="_blank" class="btn btn-secondary">
+                        README
+                    </a>
+                    <a href="https://github.com/jdagogo/smart-media-logger/blob/v1.9.5-unified-preview/FILM_DATA_BIBLE.md" target="_blank" class="btn btn-secondary">
+                        Film Data Bible
+                    </a>
+                    <a href="https://github.com/jdagogo/smart-media-logger/blob/v1.9.5-unified-preview/SML_FORK_AND_RUN_GUIDE.md" target="_blank" class="btn btn-secondary">
+                        Fork Guide
                     </a>
                 </div>
             </div>

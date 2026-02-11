@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import './globals.css'
+import DataManager from '@/components/DataManager'
 
 export const metadata: Metadata = {
   title: 'Smart Media Logger',
@@ -22,14 +23,15 @@ export default function RootLayout({
                 SMART MEDIA LOGGER
               </span>
               <a
-                href="https://github.com/jdagogo/smart-media-logger/commit/938eb6d"
+                href="https://github.com/jdagogo/smart-media-logger/tree/v1.9.5-unified-preview"
                 target="_blank"
                 className="ml-2 text-xs font-mono px-2 py-0.5 bg-blue-900/20 text-blue-900 rounded hover:bg-blue-900/30 transition-colors"
-                title="View commit on GitHub"
+                title="View on GitHub"
               >
-                v1.9.4-alpha
+                v1.9.5-alpha
               </a>
             </div>
+            <DataManager />
           </div>
         </nav>
         <main>
