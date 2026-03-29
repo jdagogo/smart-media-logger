@@ -1,6 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import SoundtrackModal from './SoundtrackModal'
+import NotesModal from './NotesModal'
+import DatePicker from '../DatePicker'
+import { getRatingColorClass } from '@/lib/ratingColors'
 
 interface StreamingOption {
   service: string
@@ -78,7 +82,10 @@ interface MediaCardProps {
   cinematographer?: string
   composer?: string
   starring?: string[]
+  cast?: Array<{ name: string; character: string; profilePath?: string }>
   distributor?: string
+  releaseDate?: string
+  officialWebsite?: string
   runtime?: number
   rating?: number
   location?: string
@@ -103,24 +110,49 @@ interface MediaCardProps {
   videoId?: string
   poster?: string
   sourceUrl?: string
+  // Rich metadata
+  imdbRating?: string
+  imdbUrl?: string
+  rated?: string
+  awards?: string
+  boxOffice?: string
+  plot?: string
+  overview?: string
+  country?: string
+  language?: string
+  genres?: string[]
+  tmdbRating?: number
+  // Soundtrack
+  onSaveTrack?: (track: { title: string; artist: string; videoId: string; thumbnail: string; fromMovie: string; fromMovieYear?: number }) => void
+  onUnsaveTrack?: (videoId: string) => void
+  savedTracks?: Record<string, boolean>
+  // Refresh metadata
+  onRefreshMetadata?: () => void
+  refreshingMetadata?: boolean
+  // Awards tooltip
+  awardsTooltip?: string | null
+  loadingAwards?: boolean
+  onAwardsHover?: () => void
 }
 
 // Talent preference types
 type TalentPreference = 'loved' | 'not-for-me' | null
+type TalentRole = 'director' | 'actor' | 'cinematographer' | 'composer' | 'writer' | 'producer' | 'musician' | 'band'
 
 interface TalentPillProps {
   name: string
-  onPreferenceChange?: (name: string, preference: TalentPreference) => void
+  role: TalentRole
+  onPreferenceChange?: (name: string, preference: TalentPreference, role: TalentRole) => void
   preference?: TalentPreference
 }
 
 // Interactive pill component for people/entities with preference tracking
-function TalentPill({ name, onPreferenceChange, preference }: TalentPillProps) {
+function TalentPill({ name, role, onPreferenceChange, preference }: TalentPillProps) {
   const [showMenu, setShowMenu] = useState(false)
 
   const handleSelect = (pref: TalentPreference) => {
     if (onPreferenceChange) {
-      onPreferenceChange(name, pref)
+      onPreferenceChange(name, pref, role)
     }
     setShowMenu(false)
   }
@@ -194,7 +226,10 @@ export default function MediaCard({
   cinematographer,
   composer,
   starring,
+  cast,
   distributor,
+  releaseDate,
+  officialWebsite,
   runtime,
   rating,
   location,
@@ -218,26 +253,60 @@ export default function MediaCard({
   videoId,
   poster,
   sourceUrl,
+  imdbRating,
+  imdbUrl,
+  rated,
+  awards,
+  boxOffice,
+  plot,
+  overview,
+  country,
+  language,
+  genres,
+  tmdbRating,
+  onSaveTrack,
+  onUnsaveTrack,
+  savedTracks = {},
+  onRefreshMetadata,
+  refreshingMetadata,
+  awardsTooltip,
+  loadingAwards,
+  onAwardsHover,
 }: MediaCardProps) {
   const [showTrailer, setShowTrailer] = useState(false)
+  const [showSoundtrack, setShowSoundtrack] = useState(false)
+  const [showNotesModal, setShowNotesModal] = useState(false)
   const [expandedPanel, setExpandedPanel] = useState<'metacritic' | 'rt' | null>(null)
   const [isEditing, setIsEditing] = useState(false)
   const [editData, setEditData] = useState<EditableFields>({})
-  const [talentPreferences, setTalentPreferences] = useState<Record<string, TalentPreference>>(initialTalentPreferences)
+  const [talentPreferences, setTalentPreferences] = useState<Record<string, TalentPreference | { preference: TalentPreference; role: TalentRole }>>(initialTalentPreferences)
 
-  const handleTalentPreference = (name: string, preference: TalentPreference) => {
+  // Sync talentPreferences when initialTalentPreferences prop changes
+  useEffect(() => {
+    setTalentPreferences(initialTalentPreferences)
+  }, [initialTalentPreferences])
+
+  // Helper to get just the preference value (handles both old and new format)
+  const getPreference = (name: string): TalentPreference => {
+    const entry = talentPreferences[name]
+    if (!entry) return null
+    if (typeof entry === 'object' && 'preference' in entry) return entry.preference
+    return entry as TalentPreference
+  }
+
+  const handleTalentPreference = (name: string, preference: TalentPreference, role: TalentRole) => {
     const newPreferences = {
       ...talentPreferences,
-      [name]: preference
+      [name]: preference ? { preference, role } : null
     }
     setTalentPreferences(newPreferences)
 
     // Notify parent of preference change
     if (onTalentPreferenceChange) {
-      onTalentPreferenceChange(newPreferences)
+      onTalentPreferenceChange(newPreferences as any)
     }
 
-    console.log('Talent preference updated:', { name, preference, allPreferences: newPreferences })
+    console.log('Talent preference updated:', { name, preference, role, allPreferences: newPreferences })
   }
 
   // Initialize edit data when entering edit mode
@@ -321,15 +390,18 @@ export default function MediaCard({
 
   const youtubeId = trailerUrl ? getYouTubeId(trailerUrl) : null
 
+  // Use videoId (from URL paste) or youtubeId (from trailerUrl) - trailer always at top
+  const topVideoId = videoId || youtubeId
+
   return (
     <div className="paper-card rounded-2xl w-full overflow-hidden">
       {/* ═══════════════════════════════════════════════════════════════ */}
-      {/* VIDEO EMBED (for YouTube/video content) */}
+      {/* VIDEO EMBED - Always at top when available (trailer or direct video) */}
       {/* ═══════════════════════════════════════════════════════════════ */}
-      {videoId && (
+      {topVideoId && (
         <div className="bg-black">
           <iframe
-            src={`https://www.youtube.com/embed/${videoId}`}
+            src={`https://www.youtube.com/embed/${topVideoId}?enablejsapi=1`}
             title={title}
             className="w-full aspect-video"
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
@@ -338,19 +410,7 @@ export default function MediaCard({
         </div>
       )}
 
-      {/* Source URL link */}
-      {sourceUrl && !videoId && (
-        <div className="bg-orange-50 px-8 py-3 border-b-2 border-orange-200">
-          <a
-            href={sourceUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 text-sm text-orange-600 hover:text-orange-700 font-medium"
-          >
-            🔗 Open on {new URL(sourceUrl).hostname.replace('www.', '')}
-          </a>
-        </div>
-      )}
+      {/* Source URL link - removed as redundant when video is embedded */}
 
       {/* ═══════════════════════════════════════════════════════════════ */}
       {/* FILM INFO SECTION */}
@@ -391,20 +451,53 @@ export default function MediaCard({
         </div>
 
         {/* Title - Big and bold, blue when filled */}
-        <h1 className="text-3xl font-bold mb-1">
-          {isEditing ? (
-            <input
-              type="text"
-              value={editData.title || ''}
-              onChange={(e) => setEditData({ ...editData, title: e.target.value })}
-              className="w-full text-accent-blue bg-white border-2 border-accent-blue rounded-lg px-3 py-1"
-            />
-          ) : title ? (
-            <span className="text-accent-blue">{title}</span>
-          ) : (
-            <span className="text-ink-800 italic font-normal">Waiting for title...</span>
+        <div className="flex items-start gap-3 mb-1">
+          <h1 className="text-3xl font-bold flex-1">
+            {isEditing ? (
+              <input
+                type="text"
+                value={editData.title || ''}
+                onChange={(e) => setEditData({ ...editData, title: e.target.value })}
+                className="w-full text-accent-blue bg-white border-2 border-accent-blue rounded-lg px-3 py-1"
+              />
+            ) : title ? (
+              <span className="text-accent-blue">{title}</span>
+            ) : (
+              <span className="text-ink-800 italic font-normal">Waiting for title...</span>
+            )}
+          </h1>
+
+          {/* Soundtrack Button - next to title with callout */}
+          {(mediaType === 'movie' || mediaType === 'tv') && title && (
+            <div className="relative group">
+              <button
+                onClick={() => {
+                  // Pause all YouTube iframes on the page
+                  document.querySelectorAll('iframe').forEach((iframe) => {
+                    if (iframe.src.includes('youtube.com')) {
+                      iframe.contentWindow?.postMessage('{"event":"command","func":"pauseVideo","args":""}', '*')
+                    }
+                  })
+                  setShowTrailer(false)
+                  setShowSoundtrack(true)
+                }}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-all font-bold text-sm hover:scale-105"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+                </svg>
+                Soundtrack
+              </button>
+              {/* Fun callout pointer - above the button */}
+              <div className="absolute -top-9 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                <div className="bg-gradient-to-r from-purple-500 to-pink-500 text-white text-xs px-2 py-1 rounded-full whitespace-nowrap shadow-lg">
+                  Rate the music!
+                </div>
+                <div className="w-2 h-2 bg-pink-500 rotate-45 absolute -bottom-1 left-1/2 -translate-x-1/2" />
+              </div>
+            </div>
           )}
-        </h1>
+        </div>
 
         {/* Year & Runtime */}
         <div className="flex gap-3 text-ink-800 mb-6 text-lg">
@@ -441,6 +534,44 @@ export default function MediaCard({
           )}
         </div>
 
+        {/* Release Date for upcoming films */}
+        {releaseDate && (
+          <div className="mb-4 inline-flex items-center gap-2 bg-orange-100 border border-orange-300 rounded-lg px-3 py-2">
+            <span className="text-xl">🗓️</span>
+            <div>
+              <div className="text-xs text-orange-600 font-medium">In Theaters</div>
+              <p className="text-base font-bold text-orange-700">
+                {(() => {
+                  const [yr, month, day] = releaseDate.split('-').map(Number)
+                  const date = new Date(yr, month - 1, day)
+                  return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+                })()}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Distributor & Official Website */}
+        {(distributor || officialWebsite) && (
+          <div className="mb-4 flex items-center gap-3">
+            {distributor && (
+              <span className="px-4 py-2 bg-ink-800 text-white rounded-lg text-base font-bold">
+                {distributor}
+              </span>
+            )}
+            {officialWebsite && (
+              <a
+                href={officialWebsite}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-base font-bold transition-colors flex items-center gap-2"
+              >
+                Official Site <span>↗</span>
+              </a>
+            )}
+          </div>
+        )}
+
         {/* Key Contributors with Pills */}
         {(isMovie || isTV) && (
           <div className="space-y-4 mb-6">
@@ -457,7 +588,8 @@ export default function MediaCard({
               ) : director ? (
                 <TalentPill
                   name={director}
-                  preference={talentPreferences[director]}
+                  role="director"
+                  preference={getPreference(director)}
                   onPreferenceChange={handleTalentPreference}
                 />
               ) : (
@@ -478,7 +610,8 @@ export default function MediaCard({
               ) : cinematographer ? (
                 <TalentPill
                   name={cinematographer}
-                  preference={talentPreferences[cinematographer]}
+                  role="cinematographer"
+                  preference={getPreference(cinematographer)}
                   onPreferenceChange={handleTalentPreference}
                 />
               ) : (
@@ -499,7 +632,8 @@ export default function MediaCard({
               ) : composer ? (
                 <TalentPill
                   name={composer}
-                  preference={talentPreferences[composer]}
+                  role="composer"
+                  preference={getPreference(composer)}
                   onPreferenceChange={handleTalentPreference}
                 />
               ) : (
@@ -507,32 +641,27 @@ export default function MediaCard({
               )}
             </div>
 
-            {/* Starring - Multiple pills */}
-            <div>
-              <span className="text-accent-blue font-bold mr-2">Starring:</span>
-              {isEditing ? (
-                <input
-                  type="text"
-                  value={editData.starring?.join(', ') || ''}
-                  onChange={(e) => setEditData({ ...editData, starring: e.target.value.split(',').map(s => s.trim()).filter(Boolean) })}
-                  placeholder="Comma-separated names"
-                  className="w-full bg-white border-2 border-accent-blue rounded-lg px-3 py-1 text-sm"
-                />
-              ) : starring && starring.length > 0 ? (
-                <div className="inline-flex flex-wrap gap-2 mt-1">
-                  {starring.map((actor, idx) => (
-                    <TalentPill
-                      key={idx}
-                      name={actor}
-                      preference={talentPreferences[actor]}
-                      onPreferenceChange={handleTalentPreference}
-                    />
+            {/* Cast - Full cast with character names */}
+            {cast && cast.length > 0 && (
+              <div className="mt-4 pt-4 border-t border-paper-300">
+                <span className="text-accent-blue font-bold block mb-2">Cast:</span>
+                <div className="grid grid-cols-2 gap-2">
+                  {cast.slice(0, 8).map((member, idx) => (
+                    <div key={idx} className="flex items-center gap-2 p-2 bg-paper-100 rounded-lg">
+                      <div className="flex-1 min-w-0">
+                        <TalentPill
+                          name={member.name}
+                          role="actor"
+                          preference={getPreference(member.name)}
+                          onPreferenceChange={handleTalentPreference}
+                        />
+                        <p className="text-xs text-ink-500 mt-0.5 truncate">as {member.character}</p>
+                      </div>
+                    </div>
                   ))}
                 </div>
-              ) : (
-                <span className="text-ink-800">—</span>
-              )}
-            </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -702,28 +831,61 @@ export default function MediaCard({
           </div>
         )}
 
-        {/* Trailer Button & Embed */}
-        {youtubeId && (
-          <div className="mb-6">
-            <button
-              onClick={() => setShowTrailer(!showTrailer)}
-              className="flex items-center gap-2 px-5 py-3 bg-accent-blue text-white rounded-lg hover:bg-blue-700 transition-colors font-bold"
-            >
-              <span>{showTrailer ? '✕ Close' : '▶ Watch Trailer'}</span>
-            </button>
-            {showTrailer && (
-              <div className="mt-4 rounded-xl overflow-hidden border-2 border-accent-blue aspect-video">
-                <iframe
-                  src={`https://www.youtube.com/embed/${youtubeId}?autoplay=1&rel=0`}
-                  title="Official Trailer"
-                  className="w-full h-full"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                  allowFullScreen
-                />
+        {/* Awards & Box Office */}
+        {(awards || boxOffice) && (
+          <div className="mb-2">
+            <div className="p-4 bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl border border-amber-200">
+              {awards && awards !== 'N/A' && (
+                <div className="mb-2 relative group inline-block">
+                  <a
+                    href={imdbUrl ? `${imdbUrl}/awards` : '#'}
+                    target={imdbUrl ? '_blank' : undefined}
+                    rel="noopener noreferrer"
+                    className="hover:bg-amber-100 rounded-lg px-2 py-1 -mx-2 -my-1 transition-colors cursor-pointer inline-block"
+                    onMouseEnter={onAwardsHover}
+                    onClick={(e) => !imdbUrl && e.preventDefault()}
+                  >
+                    <span className="text-amber-600 font-bold">🏆 Awards: </span>
+                    <span className="text-ink-800">{awards}</span>
+                  </a>
+                  {/* Tooltip */}
+                  <div className="absolute bottom-full left-0 mb-2 px-5 py-4 bg-ink-800 text-white text-sm rounded-xl shadow-2xl whitespace-pre-wrap min-w-[320px] max-w-md z-50 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                    {loadingAwards
+                      ? 'Loading awards...'
+                      : awardsTooltip
+                        ? awardsTooltip
+                        : imdbUrl
+                          ? 'Hover to load award details...'
+                          : 'No IMDB link available'}
+                    <div className="absolute top-full left-8 border-8 border-transparent border-t-ink-800" />
+                  </div>
+                </div>
+              )}
+              {boxOffice && boxOffice !== 'N/A' && (
+                <div>
+                  <span className="text-green-600 font-bold">💰 Box Office: </span>
+                  <span className="text-ink-800 font-bold text-lg">{boxOffice}</span>
+                </div>
+              )}
+            </div>
+            {/* Refresh Data Button - right justified below */}
+            {onRefreshMetadata && (
+              <div className="flex justify-end mt-2">
+                <button
+                  onClick={onRefreshMetadata}
+                  disabled={refreshingMetadata}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-ink-600 hover:bg-accent-blue/15 hover:text-ink-800 rounded-lg transition-all disabled:opacity-50"
+                  title="Refresh ratings, awards, and box office data"
+                >
+                  <span className={refreshingMetadata ? 'animate-spin' : ''}>🔄</span>
+                  {refreshingMetadata ? 'Refreshing...' : 'Refresh Data'}
+                </button>
               </div>
             )}
           </div>
         )}
+
+        {/* Trailer is now always shown at top of card - no separate button needed */}
 
         {/* Where to Watch */}
         {streamingOptions && streamingOptions.length > 0 && (
@@ -797,14 +959,14 @@ export default function MediaCard({
                 onChange={(e) => setEditData({ ...editData, rating: parseInt(e.target.value) })}
                 className="flex-1"
               />
-              <span className="text-2xl font-bold text-accent-blue min-w-[60px]">
+              <span className={`text-2xl font-bold min-w-[60px] ${getRatingColorClass(editData.rating || 50)}`}>
                 {editData.rating || 50}%
               </span>
             </div>
           ) : rating !== undefined ? (
             <div className="flex items-center gap-4">
-              <span className="text-4xl font-bold text-accent-blue">{rating}%</span>
-              <span className="text-3xl text-accent-blue tracking-wider">{getStars(rating)}</span>
+              <span className={`text-4xl font-bold ${getRatingColorClass(rating)}`}>{rating}%</span>
+              <span className={`text-3xl tracking-wider ${getRatingColorClass(rating)}`}>{getStars(rating)}</span>
             </div>
           ) : (
             <span className="text-ink-800 italic text-lg">Not rated yet</span>
@@ -816,11 +978,9 @@ export default function MediaCard({
           <div className="bg-white rounded-xl p-4 border-2 border-accent-blue">
             <div className="text-accent-blue font-bold mb-2">When</div>
             {isEditing ? (
-              <input
-                type="date"
+              <DatePicker
                 value={editData.dateWatched || ''}
-                onChange={(e) => setEditData({ ...editData, dateWatched: e.target.value })}
-                className="w-full bg-white border-2 border-accent-blue rounded-lg px-3 py-1"
+                onChange={(date) => setEditData({ ...editData, dateWatched: date })}
               />
             ) : dateWatched ? (
               <span className="text-ink-800 font-medium">{dateWatched}</span>
@@ -944,21 +1104,52 @@ export default function MediaCard({
 
         {/* Notes */}
         <div className="bg-white rounded-xl p-5 border-2 border-accent-blue">
-          <div className="text-accent-blue font-bold mb-2">Your Notes</div>
-          {isEditing ? (
-            <textarea
-              value={editData.notes || ''}
-              onChange={(e) => setEditData({ ...editData, notes: e.target.value })}
-              placeholder="What did you think? How did it make you feel?"
-              className="w-full bg-white border-2 border-accent-blue rounded-lg px-3 py-2 min-h-[100px] resize-none"
-            />
-          ) : (
-            <div className="text-ink-800 leading-relaxed text-lg min-h-[60px]">
-              {notes || <span className="italic">What did you think? How did it make you feel?</span>}
-            </div>
-          )}
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-accent-blue font-bold">Your Notes</div>
+            <button
+              onClick={() => setShowNotesModal(true)}
+              className="text-sm px-3 py-1 bg-accent-blue/10 text-accent-blue rounded-lg hover:bg-accent-blue hover:text-white transition-colors font-medium"
+            >
+              {notes ? 'Edit' : 'Add Notes'}
+            </button>
+          </div>
+          <div
+            className="text-ink-800 leading-relaxed text-lg min-h-[60px] cursor-pointer hover:bg-paper-50 rounded-lg p-2 -m-2 transition-colors"
+            onClick={() => setShowNotesModal(true)}
+          >
+            {notes ? (
+              <div className="whitespace-pre-wrap">{notes}</div>
+            ) : (
+              <span className="italic text-ink-400">Click to add your thoughts...</span>
+            )}
+          </div>
         </div>
       </div>
+
+      {/* Soundtrack Modal */}
+      <SoundtrackModal
+        isOpen={showSoundtrack}
+        onClose={() => setShowSoundtrack(false)}
+        movieTitle={title}
+        movieYear={year}
+        composer={composer}
+        onSaveTrack={onSaveTrack}
+        onUnsaveTrack={onUnsaveTrack}
+        savedTracks={savedTracks}
+      />
+
+      {/* Notes Modal */}
+      <NotesModal
+        isOpen={showNotesModal}
+        onClose={() => setShowNotesModal(false)}
+        onSave={(newNotes) => {
+          if (onEdit) {
+            onEdit({ notes: newNotes })
+          }
+        }}
+        movieTitle={title}
+        initialNotes={notes}
+      />
     </div>
   )
 }

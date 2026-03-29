@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useCallback } from 'react'
+import { getRatingColor } from '@/lib/ratingColors'
 
 interface RatingSliderProps {
   value: number
@@ -16,15 +17,6 @@ export default function RatingSlider({ value, onChange }: RatingSliderProps) {
   const handleSliderChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     onChange(parseInt(e.target.value, 10))
   }, [onChange])
-
-  // Dynamic color based on rating intensity
-  const getRatingColor = (rating: number) => {
-    if (rating >= 90) return '#DC2626' // red-600 - hot!
-    if (rating >= 80) return '#16A34A' // green-600 - great
-    if (rating >= 60) return '#EA580C' // orange-600 - warm
-    if (rating >= 40) return '#2B5A8A' // accent-blue - neutral
-    return '#78716C' // stone-500 - meh (brown-ish)
-  }
 
   // Get gradient for slider track
   const getSliderGradient = (rating: number) => {

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 
 interface Track {
   position: number
@@ -22,12 +23,19 @@ interface SoundtrackData {
   tracks: Track[]
 }
 
+type SoundtrackTab = 'score' | 'music'
+
 interface SoundtrackModalProps {
   isOpen: boolean
   onClose: () => void
   movieTitle: string
   movieYear?: number
   composer?: string
+  // Original score playlist (composed music for the film)
+  scorePlaylistId?: string
+  // Music from playlist (licensed songs featured in the film)
+  musicFromPlaylistId?: string
+  // Legacy support - treat as score if only this is provided
   playlistId?: string
   onSaveTrack?: (track: {
     title: string
@@ -35,9 +43,10 @@ interface SoundtrackModalProps {
     videoId: string
     thumbnail: string
     fromMovie: string
+    fromMovieYear?: number
   }) => void
   onUnsaveTrack?: (videoId: string) => void
-  savedTracks?: Set<string>
+  savedTracks?: Record<string, boolean>
 }
 
 export default function SoundtrackModal({
@@ -46,31 +55,155 @@ export default function SoundtrackModal({
   movieTitle,
   movieYear,
   composer,
-  playlistId,
+  scorePlaylistId,
+  musicFromPlaylistId,
+  playlistId, // Legacy support
   onSaveTrack,
   onUnsaveTrack,
-  savedTracks = new Set(),
+  savedTracks = {},
 }: SoundtrackModalProps) {
+  const [activeTab, setActiveTab] = useState<SoundtrackTab>('score')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [soundtrack, setSoundtrack] = useState<SoundtrackData | null>(null)
+  // Store soundtrack data for each tab separately
+  const [scoreSoundtrack, setScoreSoundtrack] = useState<SoundtrackData | null>(null)
+  const [musicSoundtrack, setMusicSoundtrack] = useState<SoundtrackData | null>(null)
   const [currentTrackIndex, setCurrentTrackIndex] = useState<number>(0)
   const [justSaved, setJustSaved] = useState<Set<string>>(new Set())
 
+  // Edit mode state
+  const [isEditing, setIsEditing] = useState(false)
+  const [editScoreUrl, setEditScoreUrl] = useState('')
+  const [editMusicUrl, setEditMusicUrl] = useState('')
+  const [editScoreName, setEditScoreName] = useState('')
+  const [editMusicName, setEditMusicName] = useState('')
+
+  // Custom playlist overrides from localStorage
+  const [customScorePlaylistId, setCustomScorePlaylistId] = useState<string | null>(null)
+  const [customMusicPlaylistId, setCustomMusicPlaylistId] = useState<string | null>(null)
+  const [customScoreName, setCustomScoreName] = useState<string | null>(null)
+  const [customMusicName, setCustomMusicName] = useState<string | null>(null)
+
+  // Get the current soundtrack based on active tab
+  const soundtrack = activeTab === 'score' ? scoreSoundtrack : musicSoundtrack
   const currentTrack = soundtrack?.tracks[currentTrackIndex] || null
+
+  // Determine effective playlist IDs (custom overrides take priority)
+  const effectiveScorePlaylistId = customScorePlaylistId || scorePlaylistId || playlistId
+  const effectiveMusicPlaylistId = customMusicPlaylistId || musicFromPlaylistId
+
+  // Load custom overrides from localStorage on mount (reset first to avoid stale data)
+  useEffect(() => {
+    // Always reset custom overrides when movie changes
+    setCustomScorePlaylistId(null)
+    setCustomMusicPlaylistId(null)
+    setCustomScoreName(null)
+    setCustomMusicName(null)
+
+    if (movieTitle) {
+      const storageKey = `soundtrack_overrides_${movieTitle.toLowerCase().replace(/\s+/g, '_')}`
+      const stored = localStorage.getItem(storageKey)
+      if (stored) {
+        try {
+          const overrides = JSON.parse(stored)
+          if (overrides.score) setCustomScorePlaylistId(overrides.score)
+          if (overrides.music) setCustomMusicPlaylistId(overrides.music)
+          if (overrides.scoreName) setCustomScoreName(overrides.scoreName)
+          if (overrides.musicName) setCustomMusicName(overrides.musicName)
+        } catch (e) {
+          console.error('Failed to parse soundtrack overrides:', e)
+        }
+      }
+    }
+  }, [movieTitle])
+
+  // Extract playlist ID from YouTube URL or return as-is if already an ID
+  const extractPlaylistId = (input: string): string | null => {
+    if (!input.trim()) return null
+    // If it's already just an ID (no URL parts)
+    if (/^PL[a-zA-Z0-9_-]+$/.test(input.trim())) {
+      return input.trim()
+    }
+    // Extract from URL
+    const match = input.match(/[?&]list=([a-zA-Z0-9_-]+)/)
+    return match ? match[1] : null
+  }
+
+  const handleSaveOverrides = () => {
+    const scoreId = extractPlaylistId(editScoreUrl)
+    const musicId = extractPlaylistId(editMusicUrl)
+    const scoreName = editScoreName.trim() || null
+    const musicName = editMusicName.trim() || null
+
+    // Save to localStorage
+    const storageKey = `soundtrack_overrides_${movieTitle.toLowerCase().replace(/\s+/g, '_')}`
+    const overrides: { score?: string; music?: string; scoreName?: string; musicName?: string } = {}
+    if (scoreId) overrides.score = scoreId
+    if (musicId) overrides.music = musicId
+    if (scoreName) overrides.scoreName = scoreName
+    if (musicName) overrides.musicName = musicName
+
+    if (Object.keys(overrides).length > 0) {
+      localStorage.setItem(storageKey, JSON.stringify(overrides))
+    } else {
+      localStorage.removeItem(storageKey)
+    }
+
+    // Update state
+    setCustomScorePlaylistId(scoreId)
+    setCustomMusicPlaylistId(musicId)
+    setCustomScoreName(scoreName)
+    setCustomMusicName(musicName)
+
+    // Clear cached soundtracks to force refetch
+    setScoreSoundtrack(null)
+    setMusicSoundtrack(null)
+
+    // Exit edit mode
+    setIsEditing(false)
+  }
+
+  const handleStartEdit = () => {
+    // Pre-fill with current playlist IDs and names if available
+    setEditScoreUrl(effectiveScorePlaylistId || '')
+    setEditMusicUrl(effectiveMusicPlaylistId || '')
+    setEditScoreName(customScoreName || '')
+    setEditMusicName(customMusicName || '')
+    setIsEditing(true)
+  }
 
   useEffect(() => {
     if (isOpen && movieTitle) {
-      fetchSoundtrack()
+      // Fetch the soundtrack for the active tab
+      fetchSoundtrack(activeTab)
     }
-  }, [isOpen, movieTitle, playlistId])
+  }, [isOpen, movieTitle, activeTab, effectiveScorePlaylistId, effectiveMusicPlaylistId])
 
-  // Reset player when modal closes
+  // Reset everything when modal closes or movie changes
   useEffect(() => {
     if (!isOpen) {
       setCurrentTrackIndex(0)
+      // Clear cached soundtracks so fresh data is fetched next time
+      setScoreSoundtrack(null)
+      setMusicSoundtrack(null)
+      setActiveTab('score')
+      setError(null)
+      setIsEditing(false)
     }
   }, [isOpen])
+
+  // Clear cached data when movie changes
+  useEffect(() => {
+    setScoreSoundtrack(null)
+    setMusicSoundtrack(null)
+    setCurrentTrackIndex(0)
+    setActiveTab('score')
+  }, [movieTitle])
+
+  // Reset track index when switching tabs
+  useEffect(() => {
+    setCurrentTrackIndex(0)
+  }, [activeTab])
 
   const playNext = () => {
     if (soundtrack && currentTrackIndex < soundtrack.tracks.length - 1) {
@@ -84,23 +217,46 @@ export default function SoundtrackModal({
     }
   }
 
-  const fetchSoundtrack = async () => {
+  const fetchSoundtrack = async (tab: SoundtrackTab) => {
+    // Check if we already have data for this tab
+    if (tab === 'score' && scoreSoundtrack) return
+    if (tab === 'music' && musicSoundtrack) return
+
     setLoading(true)
     setError(null)
 
     try {
       const params = new URLSearchParams()
-      if (playlistId) {
-        params.set('playlistId', playlistId)
+
+      if (tab === 'score') {
+        // Original Score tab - use score playlist ID or search for "[Movie] original score"
+        if (effectiveScorePlaylistId) {
+          params.set('playlistId', effectiveScorePlaylistId)
+        } else {
+          // Search for original score
+          params.set('movieTitle', movieTitle)
+          params.set('searchType', 'score')
+          if (composer) {
+            params.set('composer', composer)
+          }
+        }
       } else {
-        params.set('movieTitle', movieTitle)
+        // Music From tab - use music playlist ID or search for "[Movie] music from"
+        if (effectiveMusicPlaylistId) {
+          params.set('playlistId', effectiveMusicPlaylistId)
+        } else {
+          // Search for music from / songs from
+          params.set('movieTitle', movieTitle)
+          params.set('searchType', 'music')
+        }
       }
 
       const response = await fetch(`/api/youtube-playlist?${params}`)
 
       if (!response.ok) {
         if (response.status === 404) {
-          setError('No soundtrack playlist found for this movie')
+          const tabLabel = tab === 'score' ? 'original score' : 'music'
+          setError(`No ${tabLabel} playlist found for this movie`)
         } else {
           setError('Failed to load soundtrack')
         }
@@ -108,7 +264,13 @@ export default function SoundtrackModal({
       }
 
       const data = await response.json()
-      setSoundtrack(data)
+
+      // Store in the appropriate state
+      if (tab === 'score') {
+        setScoreSoundtrack(data)
+      } else {
+        setMusicSoundtrack(data)
+      }
     } catch (err) {
       setError('Failed to load soundtrack')
       console.error('Soundtrack fetch error:', err)
@@ -118,7 +280,7 @@ export default function SoundtrackModal({
   }
 
   const handleToggleSaveTrack = (track: Track) => {
-    const alreadySaved = savedTracks.has(track.videoId)
+    const alreadySaved = !!savedTracks[track.videoId]
 
     if (alreadySaved) {
       // Unsave the track
@@ -134,6 +296,7 @@ export default function SoundtrackModal({
           videoId: track.videoId,
           thumbnail: track.thumbnail,
           fromMovie: movieTitle,
+          fromMovieYear: movieYear,
         })
         setJustSaved(prev => new Set(prev).add(track.videoId))
         setTimeout(() => {
@@ -147,12 +310,15 @@ export default function SoundtrackModal({
     }
   }
 
-  const isTrackSaved = (videoId: string) => savedTracks.has(videoId) || justSaved.has(videoId)
+  const isTrackSaved = (videoId: string) => !!savedTracks[videoId] || justSaved.has(videoId)
 
   if (!isOpen) return null
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+  // Use portal to render to document.body, escaping any parent container constraints
+  if (typeof document === 'undefined') return null
+
+  return createPortal(
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center">
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black/80"
@@ -173,47 +339,224 @@ export default function SoundtrackModal({
       >
         {/* Header */}
         <div
-          className="flex items-center justify-between px-6 py-4"
+          className="flex flex-col"
           style={{ background: '#222', borderBottom: '1px solid #333' }}
         >
-          <div className="flex items-center gap-3">
-            <span style={{ fontSize: '20px' }}>🎵</span>
-            <h2 style={{ fontSize: '18px', fontWeight: 'bold', color: '#fff' }}>
-              {movieTitle} Soundtrack
-            </h2>
-          </div>
-          <div className="flex items-center gap-3">
-            {soundtrack && (
-              <span
+          {/* Top row: Title and controls */}
+          <div className="flex items-center justify-between px-7 py-4">
+            <div className="flex items-center gap-3">
+              <span style={{ fontSize: '26px' }}>🎵</span>
+              <h2 style={{ fontSize: '23px', fontWeight: 'bold', color: '#fff' }}>
+                {movieTitle}
+              </h2>
+            </div>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={handleStartEdit}
                 style={{
-                  background: '#3b82f6',
+                  background: isEditing ? '#6b7280' : '#8b5cf6',
                   color: 'white',
                   padding: '6px 12px',
                   borderRadius: '6px',
+                  border: 'none',
+                  cursor: 'pointer',
                   fontSize: '14px',
-                  fontWeight: '600'
+                  fontWeight: '600',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px'
                 }}
               >
-                Track {currentTrackIndex + 1} of {soundtrack.tracks.length}
-              </span>
-            )}
-            <button
-              onClick={onClose}
+                <span style={{ fontSize: '14px' }}>✏️</span> Edit
+              </button>
+              {soundtrack && !isEditing && (
+                <span
+                  style={{
+                    background: '#3b82f6',
+                    color: 'white',
+                    padding: '8px 15px',
+                    borderRadius: '7px',
+                    fontSize: '18px',
+                    fontWeight: '600'
+                  }}
+                >
+                  Track {currentTrackIndex + 1} of {soundtrack.tracks.length}
+                </span>
+              )}
+              <button
+                onClick={onClose}
+                style={{
+                  background: '#ef4444',
+                  color: 'white',
+                  padding: '8px 15px',
+                  borderRadius: '7px',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontSize: '18px',
+                  fontWeight: '600',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '5px'
+                }}
+              >
+                <span style={{ fontSize: '18px' }}>✕</span> Close
+              </button>
+            </div>
+          </div>
+
+          {/* Edit Panel */}
+          {isEditing && (
+            <div
               style={{
-                background: '#ef4444',
-                color: 'white',
-                padding: '6px 12px',
-                borderRadius: '6px',
-                border: 'none',
-                cursor: 'pointer',
-                fontSize: '14px',
-                fontWeight: '600',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '4px'
+                background: '#2d2d2d',
+                padding: '16px 28px',
+                borderBottom: '1px solid #444'
               }}
             >
-              <span style={{ fontSize: '14px' }}>✕</span> Close
+              <div className="flex flex-col gap-4">
+                {/* Score row */}
+                <div className="flex items-center gap-4">
+                  <label style={{ color: '#fff', fontSize: '16px', fontWeight: '600', minWidth: '80px' }}>
+                    🎼 Tab 1:
+                  </label>
+                  <input
+                    type="text"
+                    value={editScoreName}
+                    onChange={(e) => setEditScoreName(e.target.value)}
+                    placeholder="Tab name (e.g. Original Score)"
+                    style={{
+                      width: '200px',
+                      padding: '10px 14px',
+                      fontSize: '16px',
+                      borderRadius: '6px',
+                      border: '1px solid #555',
+                      background: '#1a1a1a',
+                      color: '#fff'
+                    }}
+                  />
+                  <input
+                    type="text"
+                    value={editScoreUrl}
+                    onChange={(e) => setEditScoreUrl(e.target.value)}
+                    placeholder="YouTube playlist URL or ID"
+                    style={{
+                      flex: 1,
+                      padding: '10px 14px',
+                      fontSize: '16px',
+                      borderRadius: '6px',
+                      border: '1px solid #555',
+                      background: '#1a1a1a',
+                      color: '#fff'
+                    }}
+                  />
+                </div>
+                {/* Music row */}
+                <div className="flex items-center gap-4">
+                  <label style={{ color: '#fff', fontSize: '16px', fontWeight: '600', minWidth: '80px' }}>
+                    🎧 Tab 2:
+                  </label>
+                  <input
+                    type="text"
+                    value={editMusicName}
+                    onChange={(e) => setEditMusicName(e.target.value)}
+                    placeholder="Tab name (e.g. Music From)"
+                    style={{
+                      width: '200px',
+                      padding: '10px 14px',
+                      fontSize: '16px',
+                      borderRadius: '6px',
+                      border: '1px solid #555',
+                      background: '#1a1a1a',
+                      color: '#fff'
+                    }}
+                  />
+                  <input
+                    type="text"
+                    value={editMusicUrl}
+                    onChange={(e) => setEditMusicUrl(e.target.value)}
+                    placeholder="YouTube playlist URL or ID"
+                    style={{
+                      flex: 1,
+                      padding: '10px 14px',
+                      fontSize: '16px',
+                      borderRadius: '6px',
+                      border: '1px solid #555',
+                      background: '#1a1a1a',
+                      color: '#fff'
+                    }}
+                  />
+                </div>
+                <div className="flex justify-end gap-3 mt-2">
+                  <button
+                    onClick={() => setIsEditing(false)}
+                    style={{
+                      padding: '10px 20px',
+                      fontSize: '16px',
+                      fontWeight: '600',
+                      borderRadius: '6px',
+                      border: 'none',
+                      background: '#555',
+                      color: '#fff',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleSaveOverrides}
+                    style={{
+                      padding: '10px 20px',
+                      fontSize: '16px',
+                      fontWeight: '600',
+                      borderRadius: '6px',
+                      border: 'none',
+                      background: '#10b981',
+                      color: '#fff',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Save & Reload
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Tabs row */}
+          <div className="flex px-7 gap-2" style={{ paddingBottom: '0' }}>
+            <button
+              onClick={() => setActiveTab('score')}
+              style={{
+                padding: '13px 26px',
+                fontSize: '19px',
+                fontWeight: '600',
+                border: 'none',
+                borderRadius: '9px 9px 0 0',
+                cursor: 'pointer',
+                background: activeTab === 'score' ? '#1a1a1a' : 'transparent',
+                color: activeTab === 'score' ? '#fff' : '#888',
+                borderBottom: activeTab === 'score' ? '3px solid #3b82f6' : '3px solid transparent',
+                transition: 'all 0.2s'
+              }}
+            >
+              🎼 {customScoreName || 'Original Score'}
+            </button>
+            <button
+              onClick={() => setActiveTab('music')}
+              style={{
+                padding: '13px 26px',
+                fontSize: '19px',
+                fontWeight: '600',
+                border: 'none',
+                borderRadius: '9px 9px 0 0',
+                cursor: 'pointer',
+                background: activeTab === 'music' ? '#1a1a1a' : 'transparent',
+                color: activeTab === 'music' ? '#fff' : '#888',
+                borderBottom: activeTab === 'music' ? '3px solid #10b981' : '3px solid transparent',
+                transition: 'all 0.2s'
+              }}
+            >
+              🎧 {customMusicName || 'Music From'}
             </button>
           </div>
         </div>
@@ -290,8 +633,8 @@ export default function SoundtrackModal({
 
                 {/* Player Controls */}
                 <div
-                  className="flex justify-center gap-4 mt-4"
-                  style={{ padding: '1rem' }}
+                  className="flex justify-center gap-5 mt-4"
+                  style={{ padding: '1.25rem' }}
                 >
                   <button
                     onClick={playPrevious}
@@ -300,10 +643,10 @@ export default function SoundtrackModal({
                       background: currentTrackIndex === 0 ? '#444' : '#555',
                       color: 'white',
                       border: 'none',
-                      borderRadius: '6px',
-                      padding: '12px 24px',
+                      borderRadius: '8px',
+                      padding: '15px 31px',
                       cursor: currentTrackIndex === 0 ? 'not-allowed' : 'pointer',
-                      fontSize: '16px',
+                      fontSize: '20px',
                       fontWeight: '600',
                       opacity: currentTrackIndex === 0 ? 0.5 : 1
                     }}
@@ -317,10 +660,10 @@ export default function SoundtrackModal({
                       background: (!soundtrack || currentTrackIndex === soundtrack.tracks.length - 1) ? '#444' : '#3b82f6',
                       color: 'white',
                       border: 'none',
-                      borderRadius: '6px',
-                      padding: '12px 24px',
+                      borderRadius: '8px',
+                      padding: '15px 31px',
                       cursor: (!soundtrack || currentTrackIndex === soundtrack.tracks.length - 1) ? 'not-allowed' : 'pointer',
-                      fontSize: '16px',
+                      fontSize: '20px',
                       fontWeight: '600',
                       opacity: (!soundtrack || currentTrackIndex === soundtrack.tracks.length - 1) ? 0.5 : 1
                     }}
@@ -482,6 +825,7 @@ export default function SoundtrackModal({
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

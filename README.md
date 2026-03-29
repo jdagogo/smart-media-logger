@@ -2,183 +2,179 @@
 
 A personal media consumption tracker. Part of the UnitedTribes ecosystem.
 
-**Current Version:** v1.5.0-alpha (Development)
-
-## Current State
-
-This is an early development build with significant limitations. The app aims to be an AI-powered media logger but currently lacks most AI features. v1.5.0 adds a soundtrack player but introduces new issues while not fixing existing ones.
+**Current Version:** v1.7.0-alpha (Development)
+**Date:** December 30, 2024
 
 ---
 
-## What Works
+## Quick Links for Next Session
 
-### Core Features
-- Two-pane layout (logging on left, library/recs/queue on right)
-- Basic movie search (using mock TMDB data)
-- Question-by-question logging flow
-- Voice input via Web Speech API
-- Rating slider (1-100 scale)
-- Lo-fi MediaCard display with poster, critic scores, trailers
+If you're continuing development after a session break, read these files to understand the current state:
 
-### New in v1.5.0-alpha
-- **Soundtrack modal** - 70/30 split layout with video player and track list
-- **YouTube playlist integration** - Fetches movie soundtracks from YouTube
-- **Heart/save songs** - Save individual tracks to My Stuff
-- **Toggleable hearts** - Can unsave songs (was broken initially)
-- **Embedded YouTube players** - Music items play directly in My Stuff
-- **Collapsible info sections** - Two-level expansion for music items
-- **Remove items** - Can delete logged items from My Stuff
+1. **This README** - Overview of features, issues, and architecture
+2. **`/src/app/page.tsx`** - Main application logic (~3000 lines). Contains all state management, logging flow
+3. **`/src/components/right-pane/RightPaneTabs.tsx`** - Right pane with My Stuff, Queue, Logging tabs. Contains music player with auto-advance
+4. **`/src/components/right-pane/MediaCard.tsx`** - Media display component with Soundtrack button
+5. **`/src/components/right-pane/SoundtrackModal.tsx`** - Soundtrack modal for movie soundtracks
 
 ---
 
-## Known Issues - CRITICAL
+## Session Summary (v1.7.0) - December 30, 2024
 
-### Metadata Flow Problems
-- **Metadata disappears between states** - Data entered in one step doesn't carry through to the final logged item
-- **Props don't flow correctly** - Complex prop drilling between page.tsx and RightPaneTabs causes data loss
-- **State resets unexpectedly** - Completing a log sometimes loses user-entered data
+This session focused on **music player improvements** and **type error cleanup**. The music auto-advance feature now works, but there are unresolved TypeScript build errors.
 
-### Entity Recognition Failure
-- **Fails to recognize most names** - Actors, directors, musicians are rarely highlighted correctly
-- **Fuzzy matching is weak** - Even with fuzzy matching, recognition rate is very low
-- **No real NER** - Uses keyword matching, not proper named entity recognition
+### What Was Built
 
-### Date Handling Bugs
-- **Wrong year displays** - Dates sometimes show incorrect year
-- **Day parsing issues** - Specific days can be wrong
-- **Inconsistent formats** - Different parts of app expect different date formats
+1. **Music auto-advance** - When a song ends, the next track plays automatically (YouTube IFrame API)
+2. **Inline music player** - Click a song in My Stuff, it expands with embedded player + prev/next controls
+3. **Duplicate track prevention** - Music tracks can't be saved twice
+4. **Blue accent buttons** - Changed from pink to accent-blue for navigation
 
-### Data Persistence
-- **All data lost on refresh** - Nothing persists to database
-- **Prisma schema exists but unused** - Database is set up but not connected
-- **localStorage partially implemented** - Some data saves, most doesn't
+### What Works
 
-### AI Integration Missing
-- **No Claude API** - Despite being "Smart Media Logger", there's no AI
-- **Hardcoded questions** - Questions are static, not generated intelligently
-- **No discovery moments** - Feature promised but not implemented
-- **No personalized recommendations** - Recs tab is placeholder
+- App runs fine on dev server (localhost:3006)
+- Music player auto-advances correctly
+- All v1.6.0 features still work (drafts, metadata preservation, etc.)
 
----
+### Known Issues - CRITICAL
 
-## Known Issues - v1.5.0-alpha Specific
+#### TypeScript Build Errors (Not Blocking Runtime)
 
-### Music/Soundtrack Problems
-- **Wrong year on saved songs** - Music saves with current year, not release year
-- **MediaCard shows "Album #0"** - Incorrect display for music items
-- **No proper music data model** - Uses "director" field for artist (hack)
-- **Artist parsing unreliable** - YouTube title parsing is hit or miss
-- **Wrong playlist sometimes** - Search can return incorrect soundtrack
+The production build (`npm run build`) fails with type errors. These do NOT affect the dev server or runtime behavior, but they need to be fixed before deploying to production.
 
-### Structural Issues
-- **savedMusicTracks separate from loggedItems** - Two separate state systems
-- **No unified media type handling** - Music bolted on as afterthought
-- **Soundtrack button hard to find** - Small, easy to miss on cards
+**Root cause:** Type mismatches between:
+- `MetacriticData` interface (has many required fields)
+- Inline type definitions (simpler, missing fields)
+- `QueueItem` and `LoggedItem` interfaces don't align with `LogData`
+
+**Workarounds applied:**
+- Several `as any` casts added to bypass type checking
+- `urlMetadata` state changed to `any` type
+- These are band-aids, not proper fixes
+
+#### Other Ongoing Issues
+
+1. **Entity recognition weak** - Fuzzy matching doesn't reliably identify actors/directors
+2. **No Claude API integration** - Despite "Smart" in name, no AI yet
+3. **page.tsx is massive** - ~3000 lines, needs refactoring
+4. **Prisma unused** - Database schema exists but data only in localStorage
+5. **Mobile not optimized** - Layout assumes desktop width
 
 ---
 
-## Known Issues - Moderate
+## Architecture Notes
 
-### Voice Input
-- **Words get dropped** - Web Speech API loses words silently
-- **Fails without warning** - Sometimes just stops working
-- **No fallback** - If speech fails, user must type
+### Music Player (v1.7.0)
 
-### UI/UX
-- **Duplicate entries** - Completing logs sometimes creates duplicates
-- **Hover states were too subtle** - Fixed but may need more work
-- **Tab state not preserved** - Switching tabs can lose context
+The music player in `RightPaneTabs.tsx` uses:
+
+```typescript
+// MusicYouTubePlayer component uses YouTube IFrame API
+// Detects video end (state 0) and calls onVideoEnd callback
+function MusicYouTubePlayer({ videoId, title, ytApiReady, onVideoEnd }) {
+  // Creates YT.Player, listens for onStateChange
+  // When event.data === 0 (ended), calls onVideoEnd()
+}
+```
+
+**Key state:**
+- `expandedLibraryId` - Which song is currently expanded/playing
+- `ytApiReady` - Whether YouTube IFrame API has loaded
+- `savedMusicTracks` - Record<string, boolean> for tracking saved songs
+
+### Type System Issues
+
+The codebase has evolved with multiple type definitions that don't align:
+
+1. **`MetacriticData`** (page.tsx) - Full interface with required fields
+2. **Inline types** (QueueItem, urlMetadata state) - Simpler versions
+3. **`LoggedItem`** (RightPaneTabs.tsx) - Extends QueueItem
+
+When passing data between components, TypeScript complains about missing fields. Current fix is `as any` casts, but proper fix would be to:
+- Define shared types in a separate file
+- Make fields optional where appropriate
+- Use type guards instead of casts
 
 ---
 
-## Tech Stack
+## File Reference
 
-- **Framework:** Next.js 14 + TypeScript
-- **Styling:** Tailwind CSS with custom lo-fi design tokens
-- **Database:** SQLite + Prisma (schema exists, not actively used)
-- **Voice:** Web Speech API (browser-native, buggy)
-- **AI:** Claude API (planned, not integrated)
-- **Movies:** TMDB API (mock data only), OMDB API (real, for critic scores)
-- **Music:** YouTube Data API v3 (real, for soundtracks)
+| File | Purpose | Lines | Key Functions |
+|------|---------|-------|---------------|
+| `src/app/page.tsx` | Main app, all state | ~3000 | `handleResumeDraft`, `saveAndExit`, `updateLogData` |
+| `src/components/right-pane/RightPaneTabs.tsx` | Right pane tabs | ~2500 | `MusicYouTubePlayer`, music auto-advance |
+| `src/components/right-pane/MediaCard.tsx` | Media display | ~800 | Soundtrack button, trailer |
+| `src/components/right-pane/SoundtrackModal.tsx` | Soundtrack player | ~500 | YouTube playlist integration |
 
 ---
 
-## Setup
+## Development Setup
 
 ```bash
-# Navigate to project
 cd /Users/j.d.heilprin/smart-media-logger
 
 # Install dependencies
 npm install
 
-# Initialize database (optional - not actively used yet)
-npx prisma generate && npx prisma db push
-
-# Start development server
+# Start development server (works despite type errors)
 npm run dev
 ```
 
 Open [http://localhost:3006](http://localhost:3006)
 
+**Note:** `npm run build` will fail due to type errors. The dev server works fine.
+
 ---
 
 ## Version History
 
-See [Version Control Page](http://localhost:3006/smart-media-logger-versions.html) for detailed changelog and roadmap.
+### v1.7.0-alpha (December 30, 2024)
+- Music player auto-advance (YouTube IFrame API)
+- Inline music player with prev/next controls
+- Duplicate music track prevention
+- Blue accent buttons (replaced pink)
+- **ISSUE:** TypeScript build errors (runtime works fine)
+- **ISSUE:** Many `as any` casts added as workarounds
 
-### v1.5.0-alpha (December 29, 2024 - Evening)
+### v1.6.0-alpha (December 30, 2024)
+- Full metadata preservation through logging flow
+- Save & Exit functionality for drafts
+- Draft management (resume/delete) in My Stuff
+- CharacterGallery component for cast/scene notes
+- Soundtrack button on MediaCard with tooltip
+- YouTube trailer pause when opening soundtrack
+
+### v1.5.0-alpha (December 29, 2024)
 - Soundtrack modal with 70/30 split layout
 - YouTube playlist API integration
 - Heart/save/unsave songs to My Stuff
-- Embedded YouTube players for music
-- Collapsible info sections
-- Remove logged items functionality
-- Improved hover effects
-- **Does NOT fix:** metadata flow, entity recognition, dates, persistence, AI
 
 ### v0.1.0-alpha (December 28-29, 2024)
 - Initial build with basic logging flow
-- Voice input with pause/resume
-- Entity recognition attempt (poor results)
-- My Stuff library with data flow issues
 
 ---
 
-## Roadmap
+## Branches
 
-### v2.0.0 (Planned) - "Actually Smart"
-- Integrate Claude API for real
-- Fix metadata flow problems
-- Add database persistence
-- Improve entity extraction
-- Fix date handling
+- `main` - Last stable release
+- `v1.6` - Previous version
+- `music-player-working` - v1.7.0 checkpoint (this release)
 
-### v2.5.0 (Planned) - Multi-Media
-- Books (Google Books API)
-- Music (Spotify API)
-- TV Shows
-- Podcasts
-
-### v3.0.0 (Planned) - Discovery
-- Full library browser
-- Queue system
-- UnitedTribes ecosystem export
-- Cross-media recommendations
+To restore this version:
+```bash
+git checkout music-player-working
+```
 
 ---
 
-## Honest Assessment
+## API Keys Required
 
-This app is currently **"dumb"** when it should be **"smart."**
-
-The v1.5.0 update adds a nice soundtrack feature but papers over fundamental problems:
-- Metadata doesn't flow correctly through the app
-- Entity recognition barely works
-- Nothing persists to database
-- There's no actual AI despite the name
-
-The core architecture needs work before adding more features.
+Create `.env.local` with:
+```
+TMDB_API_KEY=your_tmdb_key
+OMDB_API_KEY=your_omdb_key
+YOUTUBE_API_KEY=your_youtube_key
+```
 
 ---
 

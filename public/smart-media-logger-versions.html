@@ -337,8 +337,8 @@
             <h2>Quick Start</h2>
 
             <div class="alert warning">
-                <strong>v1.5.0-alpha - Unstable Development Build</strong><br>
-                December 29, 2024. Adds soundtrack player with YouTube playlist integration. Music can be saved to My Stuff. Known issues with music metadata and MediaCard display for songs.
+                <strong>v1.9.3-alpha - Metadata Persistence & Distributor Detection</strong><br>
+                January 11, 2026. Fixed 11 data persistence bugs. A24 detection, box office domestic+worldwide, distributor badges. See FILM_METADATA_SPEC.md and V1.9.3_SESSION_NOTES.md for full documentation.
             </div>
 
             <div style="margin-bottom: 20px;">
@@ -490,10 +490,10 @@
             </div>
 
             <!-- v1.5.0-alpha - Soundtrack Feature -->
-            <div class="version-card" style="border: 3px solid #f59e0b;">
+            <div class="version-card">
                 <div class="version-header">
                     <div class="version-title">v1.5.0-alpha</div>
-                    <div class="status development">DEVELOPMENT</div>
+                    <div class="status stable">PREVIOUS</div>
                 </div>
 
                 <div class="info-section">
@@ -559,11 +559,392 @@
                     <a href="http://localhost:3006" target="_blank" class="btn btn-primary">
                         Open App
                     </a>
-                    <a href="/README-v1.5.0-alpha.md" target="_blank" class="btn btn-secondary">
-                        v1.5.0 README
-                    </a>
                     <a href="https://github.com/jdagogo/smart-media-logger" target="_blank" class="btn btn-secondary">
                         GitHub
+                    </a>
+                </div>
+            </div>
+
+            <!-- v1.6.0-alpha - Metadata Preservation + Drafts -->
+            <div class="version-card">
+                <div class="version-header">
+                    <div class="version-title">v1.6.0-alpha</div>
+                    <div class="status stable">PREVIOUS</div>
+                </div>
+
+                <div class="info-section">
+                    <div class="info-row">
+                        <span class="info-label">Branch:</span>
+                        <span>v1.6</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Port:</span>
+                        <span>3006</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Date:</span>
+                        <span>December 30, 2024</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Focus:</span>
+                        <span>Metadata Preservation + Draft System</span>
+                    </div>
+                </div>
+
+                <p style="margin-bottom: 15px; font-weight: 600; color: #166534;">Fixed in this version:</p>
+                <div class="features">
+                    <div class="feature-tag done">Metadata preserved on "Confirm & Log This"</div>
+                    <div class="feature-tag done">Metadata preserved on Save & Exit</div>
+                    <div class="feature-tag done">Draft items show amber banner in My Stuff</div>
+                    <div class="feature-tag done">Resume Logging from drafts works</div>
+                    <div class="feature-tag done">Delete drafts and logged items</div>
+                    <div class="feature-tag done">Trailer pauses when opening Soundtrack</div>
+                </div>
+
+                <p style="margin-bottom: 15px; font-weight: 600;">New features:</p>
+                <div class="features">
+                    <div class="feature-tag done">Save & Exit button (saves incomplete logs)</div>
+                    <div class="feature-tag done">CharacterGallery (cast/scene notes)</div>
+                    <div class="feature-tag done">Soundtrack button on MediaCard</div>
+                    <div class="feature-tag done">Full metadata in Log mode right pane</div>
+                    <div class="feature-tag done">Alert feedback on save location</div>
+                    <div class="feature-tag done">Comprehensive README for session handoff</div>
+                </div>
+
+                <p style="margin-bottom: 15px; font-weight: 600; color: #991B1B;">Still broken (from v1.5):</p>
+                <div class="features">
+                    <div class="feature-tag broken">Entity recognition weak</div>
+                    <div class="feature-tag broken">No Claude API integration</div>
+                    <div class="feature-tag broken">Date parsing edge cases</div>
+                    <div class="feature-tag broken">Prisma database unused</div>
+                    <div class="feature-tag broken">page.tsx is 2700+ lines</div>
+                </div>
+
+                <p style="margin-bottom: 15px; font-weight: 600;">Session Handoff:</p>
+                <div style="background: #F5F1E8; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                    <strong>For next Claude session:</strong><br>
+                    <span style="color: #666; font-size: 0.9em;">
+                        1. Read README.md first (has architecture + bug patterns)<br>
+                        2. Check page.tsx lines 714 (handleResumeDraft), 785 (saveAndExit), 2490 (Confirm handler)<br>
+                        3. Check RightPaneTabs.tsx line 240 (LoggedItem), 2150 (draft banner)<br>
+                        4. Test draft flow: Save & Exit → My Stuff → Resume
+                    </span>
+                </div>
+
+                <div class="action-buttons">
+                    <a href="http://localhost:3006" target="_blank" class="btn btn-primary">
+                        Open App
+                    </a>
+                    <a href="https://github.com/jdagogo/smart-media-logger/blob/v1.6/README.md" target="_blank" class="btn btn-secondary">
+                        v1.6 README
+                    </a>
+                    <a href="https://github.com/jdagogo/smart-media-logger/tree/v1.6" target="_blank" class="btn btn-secondary">
+                        GitHub (v1.6)
+                    </a>
+                </div>
+            </div>
+
+            <!-- v1.7.0-alpha - Music Player Auto-Advance -->
+            <div class="version-card">
+                <div class="version-header">
+                    <div class="version-title">v1.7.0-alpha</div>
+                    <div class="status stable">PREVIOUS</div>
+                </div>
+
+                <div class="info-section">
+                    <div class="info-row">
+                        <span class="info-label">Branch:</span>
+                        <span>music-player-working</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Port:</span>
+                        <span>3006</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Date:</span>
+                        <span>December 30, 2024</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Focus:</span>
+                        <span>Music Player + Auto-Advance</span>
+                    </div>
+                </div>
+
+                <p style="margin-bottom: 15px; font-weight: 600; color: #166534;">Working features:</p>
+                <div class="features">
+                    <div class="feature-tag done">Music auto-advance (YouTube IFrame API)</div>
+                    <div class="feature-tag done">Inline music player with prev/next</div>
+                    <div class="feature-tag done">Duplicate track prevention</div>
+                    <div class="feature-tag done">Blue accent buttons (was pink)</div>
+                    <div class="feature-tag done">All v1.6.0 features still work</div>
+                </div>
+
+                <p style="margin-bottom: 15px; font-weight: 600; color: #991B1B;">Critical Issues:</p>
+                <div class="features">
+                    <div class="feature-tag broken">TypeScript build fails (runtime works)</div>
+                    <div class="feature-tag broken">Many 'as any' casts as workarounds</div>
+                    <div class="feature-tag broken">Type definitions don't align</div>
+                    <div class="feature-tag broken">urlMetadata changed to 'any' type</div>
+                </div>
+
+                <p style="margin-bottom: 15px; font-weight: 600;">Technical Debt:</p>
+                <div class="features">
+                    <div class="feature-tag wip">MetacriticData vs inline types mismatch</div>
+                    <div class="feature-tag wip">QueueItem/LoggedItem type confusion</div>
+                    <div class="feature-tag wip">page.tsx now ~3000 lines</div>
+                </div>
+
+                <div style="background: #FEF3C7; padding: 15px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #F59E0B;">
+                    <strong style="color: #92400E;">Dev Server vs Build:</strong><br>
+                    <span style="color: #78350F; font-size: 0.9em;">
+                        <code>npm run dev</code> works fine. <code>npm run build</code> fails with type errors.
+                        This is a TypeScript issue, not a runtime issue. The app functions correctly.
+                    </span>
+                </div>
+
+                <div class="action-buttons">
+                    <a href="http://localhost:3006" target="_blank" class="btn btn-primary">
+                        Open App
+                    </a>
+                    <a href="https://github.com/jdagogo/smart-media-logger/tree/music-player-working" target="_blank" class="btn btn-secondary">
+                        GitHub
+                    </a>
+                </div>
+            </div>
+
+            <!-- v1.8.0-alpha - Bug Fixes -->
+            <div class="version-card">
+                <div class="version-header">
+                    <div class="version-title">v1.8.0-alpha</div>
+                    <div class="status stable">PREVIOUS</div>
+                </div>
+
+                <div class="info-section">
+                    <div class="info-row">
+                        <span class="info-label">Branch:</span>
+                        <span>v1.8-bugfixes</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Port:</span>
+                        <span>3006</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Date:</span>
+                        <span>January 2, 2026</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Focus:</span>
+                        <span>Bug Fixes</span>
+                    </div>
+                </div>
+
+                <p style="margin-bottom: 15px; font-weight: 600; color: #166534;">Fixed in this version:</p>
+                <div class="features">
+                    <div class="feature-tag done">Date display bug (Jan 2nd showing as Jan 1st)</div>
+                    <div class="feature-tag done">Date picker now uses local time, not UTC</div>
+                    <div class="feature-tag done">Duplicate entries prevented (useCallback fix)</div>
+                    <div class="feature-tag done">Auto-deduplication on page load</div>
+                    <div class="feature-tag done">Date edits now persist (dateWatched/dateConsumed mismatch)</div>
+                    <div class="feature-tag done">Edit button visible during logging flow</div>
+                    <div class="feature-tag done">Custom DatePicker with portal (no more clipping)</div>
+                    <div class="feature-tag done">Theater autofill from history</div>
+                    <div class="feature-tag done">Notes modal (full-screen editor)</div>
+                    <div class="feature-tag done">Preferences grouped by role (directors, actors, etc.)</div>
+                    <div class="feature-tag done">Preferences sorted alphabetically</div>
+                    <div class="feature-tag done">Person search autocomplete (TMDB API)</div>
+                    <div class="feature-tag done">Directors ranking by highest rating</div>
+                </div>
+
+                <p style="margin-bottom: 15px; font-weight: 600; color: #991B1B;">Still broken (from earlier versions):</p>
+                <div class="features">
+                    <div class="feature-tag broken">Entity recognition weak</div>
+                    <div class="feature-tag broken">No Claude API integration</div>
+                    <div class="feature-tag broken">TypeScript build fails</div>
+                    <div class="feature-tag broken">page.tsx is 3000+ lines</div>
+                </div>
+
+                <div class="action-buttons">
+                    <a href="http://localhost:3006" target="_blank" class="btn btn-primary">
+                        Open App
+                    </a>
+                    <a href="https://github.com/jdagogo/smart-media-logger/tree/v1.8-bugfixes" target="_blank" class="btn btn-secondary">
+                        GitHub
+                    </a>
+                </div>
+            </div>
+
+            <!-- v1.9.2-alpha - Music Sorting & UX Polish (SAFE ROLLBACK) -->
+            <div class="version-card" style="border: 3px solid #22c55e;">
+                <div class="version-header">
+                    <div class="version-title">v1.9.2-alpha</div>
+                    <div class="status stable">SAFE ROLLBACK</div>
+                </div>
+
+                <div class="info-section">
+                    <div class="info-row">
+                        <span class="info-label">Branch:</span>
+                        <span>v1.9-rating-colors</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Port:</span>
+                        <span>3006</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Date:</span>
+                        <span>January 7, 2026</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Focus:</span>
+                        <span>Rating Colors & UI Polish</span>
+                    </div>
+                </div>
+
+                <p style="margin-bottom: 15px; font-weight: 600; color: #166534;">New in this version:</p>
+                <div class="features">
+                    <div class="feature-tag done">Metacritic-style rating colors (red/yellow/green)</div>
+                    <div class="feature-tag done">Gradient color bleeding between ranges</div>
+                    <div class="feature-tag done">Fresh IMDB score scraping (direct)</div>
+                    <div class="feature-tag done">Fresh Metacritic score scraping (direct)</div>
+                    <div class="feature-tag done">Fresh Rotten Tomatoes score scraping (direct)</div>
+                    <div class="feature-tag done">IMDB rating fixed (7.0 not 7)</div>
+                    <div class="feature-tag done">Poster size aligned with video</div>
+                    <div class="feature-tag done">In-place video expansion (not overlay)</div>
+                    <div class="feature-tag done">"My Score" label with blue accent</div>
+                    <div class="feature-tag done">External scores use consistent colors</div>
+                    <div class="feature-tag done">Refresh Data button moved to awards box</div>
+                    <div class="feature-tag done">Awards tooltip on hover</div>
+                    <div class="feature-tag done">Rating slider colors match score</div>
+                    <div class="feature-tag done">Experience section colors match score</div>
+                    <div class="feature-tag done">SVG chevron expand icons (replaces down arrows)</div>
+                    <div class="feature-tag done">Tailwind config fix for rating color classes</div>
+                </div>
+
+                <p style="margin-bottom: 15px; font-weight: 600;">Rating Color Scheme:</p>
+                <div style="background: #F5F1E8; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                    <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 8px;">
+                        <span style="background: #DC2626; color: white; padding: 4px 12px; border-radius: 4px; font-weight: bold;">0-39</span>
+                        <span style="color: #666;">Red (Unfavorable) - Brightest at lowest</span>
+                    </div>
+                    <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 8px;">
+                        <span style="background: #F59E0B; color: white; padding: 4px 12px; border-radius: 4px; font-weight: bold;">40-64</span>
+                        <span style="color: #666;">Yellow/Amber (Mixed)</span>
+                    </div>
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <span style="background: #22C55E; color: white; padding: 4px 12px; border-radius: 4px; font-weight: bold;">65-100</span>
+                        <span style="color: #666;">Green (Favorable) - Brightest at highest</span>
+                    </div>
+                </div>
+
+                <p style="margin-bottom: 15px; font-weight: 600; color: #991B1B;">Still broken (from earlier versions):</p>
+                <div class="features">
+                    <div class="feature-tag broken">Entity recognition weak</div>
+                    <div class="feature-tag broken">No Claude API integration</div>
+                    <div class="feature-tag broken">TypeScript build fails</div>
+                    <div class="feature-tag broken">page.tsx is 3000+ lines</div>
+                </div>
+
+                <div class="action-buttons">
+                    <a href="http://localhost:3006" target="_blank" class="btn btn-primary">
+                        Open App
+                    </a>
+                    <a href="https://github.com/jdagogo/smart-media-logger/tree/v1.9-rating-colors" target="_blank" class="btn btn-secondary">
+                        GitHub
+                    </a>
+                </div>
+            </div>
+
+            <!-- v1.9.3-alpha - Metadata Persistence & A24 Detection -->
+            <div class="version-card" style="border: 3px solid #f59e0b;">
+                <div class="version-header">
+                    <div class="version-title">v1.9.3-alpha</div>
+                    <div class="status development">CURRENT</div>
+                </div>
+
+                <div class="info-section">
+                    <div class="info-row">
+                        <span class="info-label">Commit:</span>
+                        <span><a href="https://github.com/jdagogo/smart-media-logger/commit/4043af3" target="_blank" style="color: #1E40AF; text-decoration: underline;">4043af3</a></span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Branch:</span>
+                        <span>v1.9.2-music-sorting</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Port:</span>
+                        <span>3006</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Date:</span>
+                        <span>January 11, 2026</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Focus:</span>
+                        <span>Metadata Persistence & Distributor Detection</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Rollback:</span>
+                        <span style="font-family: 'Courier New', monospace; font-size: 0.9em;">git checkout 4043af3</span>
+                    </div>
+                </div>
+
+                <p style="margin-bottom: 15px; font-weight: 600; color: #166534;">New in this version:</p>
+                <div class="features">
+                    <div class="feature-tag done">Hardcoded unreleased films (Undertone, The Moment)</div>
+                    <div class="feature-tag done">A24 detection from YouTube title/channel</div>
+                    <div class="feature-tag done">Box office domestic + worldwide (from IMDB)</div>
+                    <div class="feature-tag done">Data persistence fixes (queue + Log It)</div>
+                    <div class="feature-tag done">Distributor badge + Official Site button</div>
+                    <div class="feature-tag done">Hide YouTube stats for trailers</div>
+                    <div class="feature-tag done">Show movie release date (not YT publish)</div>
+                    <div class="feature-tag done">Title extraction fix for foreign films</div>
+                    <div class="feature-tag done">Critic URLs shown even without scores</div>
+                    <div class="feature-tag done">Comprehensive Film Metadata Spec (452 lines)</div>
+                </div>
+
+                <p style="margin-bottom: 15px; font-weight: 600;">Critical Documentation:</p>
+                <div style="background: #F5F1E8; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                    <div style="margin-bottom: 10px;">
+                        <a href="https://github.com/jdagogo/smart-media-logger/blob/main/FILM_METADATA_SPEC.md" target="_blank" style="color: #1E40AF; font-weight: bold; text-decoration: underline;">FILM_METADATA_SPEC.md</a> - Complete spec of all film metadata to capture (452 lines)
+                    </div>
+                    <div style="margin-bottom: 10px;">
+                        <a href="https://github.com/jdagogo/smart-media-logger/blob/main/V1.9.3_SESSION_NOTES.md" target="_blank" style="color: #1E40AF; font-weight: bold; text-decoration: underline;">V1.9.3_SESSION_NOTES.md</a> - Documents all 11 problems fixed today
+                    </div>
+                    <div>
+                        <strong>Data Flow Checklist</strong> - 10-point checklist for adding new fields (in both docs)
+                    </div>
+                </div>
+
+                <p style="margin-bottom: 15px; font-weight: 600; color: #1E40AF;">Data Flow Points Fixed:</p>
+                <div style="background: #EFF6FF; padding: 15px; border-radius: 8px; margin-bottom: 15px; font-size: 0.9em;">
+                    <ol style="margin-left: 20px; line-height: 1.8;">
+                        <li>API response → urlMetadata state</li>
+                        <li>setUrlMetadata copying new fields</li>
+                        <li>addToQueue newItem object</li>
+                        <li>addToQueue previewData object</li>
+                        <li>newLoggedItem (BOTH instances)</li>
+                        <li>logData → currentEntry</li>
+                        <li>currentEntry → MediaCard props</li>
+                        <li>QueueItem/LoggedItem interfaces</li>
+                    </ol>
+                </div>
+
+                <p style="margin-bottom: 15px; font-weight: 600; color: #991B1B;">Still broken (from earlier versions):</p>
+                <div class="features">
+                    <div class="feature-tag broken">Entity recognition weak</div>
+                    <div class="feature-tag broken">No Claude API integration</div>
+                    <div class="feature-tag broken">TypeScript build fails</div>
+                    <div class="feature-tag broken">page.tsx is 3800+ lines</div>
+                </div>
+
+                <div class="action-buttons">
+                    <a href="http://localhost:3006" target="_blank" class="btn btn-primary">
+                        Open App
+                    </a>
+                    <a href="https://github.com/jdagogo/smart-media-logger/blob/main/FILM_METADATA_SPEC.md" target="_blank" class="btn btn-secondary">
+                        Metadata Spec
+                    </a>
+                    <a href="https://github.com/jdagogo/smart-media-logger/blob/main/V1.9.3_SESSION_NOTES.md" target="_blank" class="btn btn-secondary">
+                        Session Notes
                     </a>
                 </div>
             </div>
@@ -594,6 +975,63 @@
                     <div class="feature-tag">Fix all current bugs</div>
                     <div class="feature-tag" style="background: #DC2626; color: white;">YouTube Data API integration</div>
                     <div class="feature-tag" style="background: #7C3AED; color: white;">UnitedTribes video search (port 3002)</div>
+                    <div class="feature-tag" style="background: #0891b2; color: white;">TV/Streaming workflow (Pluribus)</div>
+                </div>
+
+                <div style="background: #F0F9FF; padding: 15px; border-radius: 8px; margin-top: 15px; border: 1px solid #0891b2;">
+                    <strong style="color: #0891b2;">TV/Streaming Note (Pluribus):</strong><br>
+                    <span style="color: #666; font-size: 0.9em;">
+                        TV and streaming media will need a different logging workflow than movies. Consider: episode vs season vs series logging, binge sessions, "currently watching" status, progress tracking, and streaming platform integration.
+                    </span>
+                </div>
+
+                <div style="background: #FEF2F2; padding: 15px; border-radius: 8px; margin-top: 15px; border: 2px solid #DC2626;">
+                    <strong style="color: #DC2626;">CRITICAL: Data Persistence</strong><br>
+                    <span style="color: #666; font-size: 0.9em;">
+                        Currently all data is stored in React state (memory) and localStorage. This means: data is lost on refresh (state), limited to ~5MB (localStorage), no cross-device sync, no backup/restore. Phase 2 MUST implement proper database persistence (Prisma + SQLite already scaffolded but unused).
+                    </span>
+                </div>
+
+                <div style="background: #F5F0FF; padding: 15px; border-radius: 8px; margin-top: 15px; border: 1px solid #7C3AED;">
+                    <strong style="color: #7C3AED;">My Media Model - Auto-Analyze Notes:</strong><br>
+                    <span style="color: #666; font-size: 0.9em;">
+                        User notes should be automatically analyzed to extract entities (people, themes, places, emotions) and feed into My Media Model. Currently notes are just stored as plain text with no AI processing.
+                    </span>
+                </div>
+
+                <div style="background: #FEF9C3; padding: 15px; border-radius: 8px; margin-top: 15px; border: 1px solid #CA8A04;">
+                    <strong style="color: #CA8A04;">YouTube & Playlist Caching:</strong><br>
+                    <span style="color: #666; font-size: 0.9em;">
+                        Currently every soundtrack search hits the YouTube API fresh. Need to: (1) Cache playlist search results and track listings, (2) Persist manually-edited playlist overrides properly, (3) Reduce API calls to avoid rate limits. Reference the caching system in YouTube Analysis app (port 3002) for implementation patterns.
+                    </span>
+                </div>
+
+                <div style="background: #ECFDF5; padding: 15px; border-radius: 8px; margin-top: 15px; border: 1px solid #059669;">
+                    <strong style="color: #059669;">Clickable Talent Discovery:</strong><br>
+                    <span style="color: #666; font-size: 0.9em;">
+                        Make artist/director/talent names clickable to discover more of their work. For music: click "Johnny Greenwood" or "Elton John" to see a list of their songs you can heart and add. For movies: click director name to browse their filmography. Eventually extend to all talent (actors, composers, etc.). Requires API integration to fetch filmographies/discographies.
+                    </span>
+                </div>
+
+                <div style="background: #FDF4FF; padding: 15px; border-radius: 8px; margin-top: 15px; border: 1px solid #A855F7;">
+                    <strong style="color: #A855F7;">My Media Model Redesign:</strong><br>
+                    <span style="color: #666; font-size: 0.9em;">
+                        Completely redesign My Media Model to be more visual, comprehensive, and useful. Current version is basic text-based analysis. Needs: visual data representations (charts, graphs, word clouds), deeper pattern recognition, better entity relationships, timeline views, taste evolution tracking, and actionable insights. Should feel like a personalized media dashboard.
+                    </span>
+                </div>
+
+                <div style="background: #FFF7ED; padding: 15px; border-radius: 8px; margin-top: 15px; border: 1px solid #EA580C;">
+                    <strong style="color: #EA580C;">Upcoming Film Reminders:</strong><br>
+                    <span style="color: #666; font-size: 0.9em;">
+                        For films added to queue that aren't released yet, capture the release date and notify user when it's approaching. Show "Coming Soon" badge on queued items with release dates. Send reminder notifications (email, push, or in-app) a week before and on release day. Essential for tracking anticipated films discovered via trailers.
+                    </span>
+                </div>
+
+                <div style="background: #F0FDFA; padding: 15px; border-radius: 8px; margin-top: 15px; border: 1px solid #0D9488;">
+                    <strong style="color: #0D9488;">Browser Extension for Smart Capture:</strong><br>
+                    <span style="color: #666; font-size: 0.9em;">
+                        Chrome/Safari extension that captures movie data from any page (A24, IMDb, Letterboxd, RT). Extracts title, cast, crew, trailer, release date - even for films not yet in TMDB. Sends directly to Smart Media Logger queue. Solves the "upcoming film" problem where TMDB doesn't have the movie yet but distributor sites do.
+                    </span>
                 </div>
             </div>
 
@@ -680,7 +1118,117 @@
         <div class="ecosystem-section">
             <h2>Changelog</h2>
             <div style="background: #F5F1E8; padding: 20px; border-radius: 8px;">
-                <h3 style="margin-bottom: 10px;">v1.5.0-alpha - December 29, 2024 (Evening)</h3>
+                <h3 style="margin-bottom: 10px;">v1.9.3-alpha - January 11, 2026</h3>
+                <ul style="line-height: 1.8; color: #666; margin-left: 20px;">
+                    <li><strong>NEW:</strong> Hardcoded unreleased film support (Undertone, The Moment A24 films)</li>
+                    <li><strong>NEW:</strong> A24 detection from YouTube title ("| A24") and channel name</li>
+                    <li><strong>NEW:</strong> Box office now shows domestic + worldwide (scraped from IMDB)</li>
+                    <li><strong>NEW:</strong> Distributor badge (black) + Official Site button (orange)</li>
+                    <li><strong>NEW:</strong> Critic URLs shown even without scores (for unreleased films)</li>
+                    <li><strong>NEW:</strong> FILM_METADATA_SPEC.md - comprehensive 452-line metadata specification</li>
+                    <li><strong>NEW:</strong> V1.9.3_SESSION_NOTES.md - documents all 11 problems fixed</li>
+                    <li><strong>FIXED:</strong> Data persistence - officialWebsite, distributor, releaseDate, imdbId now persist to queue</li>
+                    <li><strong>FIXED:</strong> Log It flow now preserves all metadata (both newLoggedItem instances)</li>
+                    <li><strong>FIXED:</strong> currentEntry → MediaCard props now include releaseDate, officialWebsite</li>
+                    <li><strong>FIXED:</strong> Hide YouTube stats (views, publish date) for movie trailers</li>
+                    <li><strong>FIXED:</strong> Title extraction for foreign films ("Capernaum | Official US Trailer" → "Capernaum")</li>
+                    <li><strong>FIXED:</strong> TMDB distributor detection from production_companies</li>
+                    <li><strong>DOCS:</strong> 10-point data flow checklist for adding new metadata fields</li>
+                </ul>
+
+                <h3 style="margin-top: 20px; margin-bottom: 10px;">v1.9.2-alpha - January 8, 2026</h3>
+                <ul style="line-height: 1.8; color: #666; margin-left: 20px;">
+                    <li><strong>NEW:</strong> Music-specific sort options (Date Added, Source A-Z, Song Name A-Z)</li>
+                    <li><strong>NEW:</strong> Name A-Z sort option for movies and all media</li>
+                    <li><strong>NEW:</strong> Multiple soundtrack sources per song (e.g., song appears in multiple movies)</li>
+                    <li><strong>NEW:</strong> Clickable soundtrack links open Soundtrack Modal from My Stuff and item modal</li>
+                    <li><strong>IMPROVED:</strong> Item hover states more prominent (blue border, tint, shadow)</li>
+                    <li><strong>IMPROVED:</strong> Content type filter hover states (blue tint + text)</li>
+                    <li><strong>FIXED:</strong> Video expansion state now resets when switching between items</li>
+                    <li><strong>FIXED:</strong> Rotten Tomatoes URLs for titles starting with "The/A/An" (now tries without article)</li>
+                </ul>
+
+                <h3 style="margin-top: 20px; margin-bottom: 10px;">v1.9.1-alpha - January 7, 2026</h3>
+                <ul style="line-height: 1.8; color: #666; margin-left: 20px;">
+                    <li><strong>NEW:</strong> Metacritic-style rating color scheme (red 0-39, yellow 40-64, green 65-100)</li>
+                    <li><strong>NEW:</strong> Gradient color bleeding - worst scores brightest red, best scores brightest green</li>
+                    <li><strong>NEW:</strong> Direct IMDB scraping for fresh ratings (bypasses stale OMDB data)</li>
+                    <li><strong>NEW:</strong> Direct Metacritic scraping for fresh scores</li>
+                    <li><strong>NEW:</strong> Direct Rotten Tomatoes scraping for fresh scores</li>
+                    <li><strong>NEW:</strong> Centralized ratingColors.ts utility for consistent colors app-wide</li>
+                    <li><strong>NEW:</strong> "My Score" label above user rating in modal header</li>
+                    <li><strong>NEW:</strong> Awards tooltip in awards/box office box (hover to see details)</li>
+                    <li><strong>NEW:</strong> SVG chevron expand icons (replaces confusing down arrows)</li>
+                    <li><strong>NEW:</strong> Music modal matches film modal (65% video width, expandable)</li>
+                    <li><strong>NEW:</strong> Song Details styled with blue accents (white bg, blue border/labels)</li>
+                    <li><strong>NEW:</strong> Notes update immediately after saving (no refresh needed)</li>
+                    <li><strong>NEW:</strong> "Add/Edit Notes" button text after first note saved</li>
+                    <li><strong>FIXED:</strong> Rating colors not showing (added src/lib to Tailwind content config)</li>
+                    <li><strong>FIXED:</strong> IMDB rating format (now shows "7.0" not "7")</li>
+                    <li><strong>FIXED:</strong> RT scraper finding wrong page (tries without year first)</li>
+                    <li><strong>FIXED:</strong> Metacritic scraper parsing multiple JSON-LD blocks</li>
+                    <li><strong>FIXED:</strong> Editing notes now loads current value (not blank)</li>
+                    <li><strong>CHANGED:</strong> Poster size increased ~7% to align with video</li>
+                    <li><strong>CHANGED:</strong> Video expansion now in-place (not separate overlay modal)</li>
+                    <li><strong>CHANGED:</strong> Refresh Data button moved to below awards/box office box</li>
+                    <li><strong>CHANGED:</strong> External scores (IMDB, RT, MC) now use rating color scheme</li>
+                    <li><strong>CHANGED:</strong> Rating slider and stars match score color</li>
+                    <li><strong>CHANGED:</strong> "Your Rating" in experience section uses rating colors</li>
+                </ul>
+
+                <h3 style="margin-top: 20px; margin-bottom: 10px;">v1.8.0-alpha - January 2, 2026</h3>
+                <ul style="line-height: 1.8; color: #666; margin-left: 20px;">
+                    <li><strong>FIXED:</strong> Date display showing wrong day (UTC vs local time issue)</li>
+                    <li><strong>FIXED:</strong> Today button returning wrong date</li>
+                    <li><strong>FIXED:</strong> Duplicate entries in My Stuff (useCallback memoization)</li>
+                    <li><strong>FIXED:</strong> Auto-deduplication removes existing duplicates on page load</li>
+                    <li><strong>FIXED:</strong> Date edits not persisting (dateWatched vs dateConsumed field mismatch)</li>
+                    <li><strong>FIXED:</strong> Edit button now visible during logging flow</li>
+                    <li><strong>FIXED:</strong> Person search API 401 error (wrong TMDB API key)</li>
+                    <li><strong>NEW:</strong> Custom DatePicker component with portal rendering</li>
+                    <li><strong>NEW:</strong> Quick select buttons (Today, Yesterday, Last Week)</li>
+                    <li><strong>NEW:</strong> Theater autofill from localStorage history</li>
+                    <li><strong>NEW:</strong> Notes modal with full-screen editing</li>
+                    <li><strong>NEW:</strong> Preferences section grouped by role</li>
+                    <li><strong>NEW:</strong> Preferences sorted alphabetically within each role</li>
+                    <li><strong>NEW:</strong> Person search autocomplete using TMDB API</li>
+                    <li><strong>CHANGED:</strong> Directors ranking now sorted by highest rating</li>
+                </ul>
+
+                <h3 style="margin-top: 20px; margin-bottom: 10px;">v1.7.0-alpha - December 30, 2024</h3>
+                <ul style="line-height: 1.8; color: #666; margin-left: 20px;">
+                    <li><strong>NEW:</strong> Music player auto-advance - songs automatically play next track when finished</li>
+                    <li><strong>NEW:</strong> YouTube IFrame API integration for detecting video end events</li>
+                    <li><strong>NEW:</strong> Inline music player with Previous/Next navigation</li>
+                    <li><strong>NEW:</strong> Track counter showing current position in playlist</li>
+                    <li><strong>FIXED:</strong> Duplicate music tracks no longer saved</li>
+                    <li><strong>CHANGED:</strong> Navigation buttons now blue (was pink)</li>
+                    <li><strong>ISSUE:</strong> TypeScript build fails due to type mismatches</li>
+                    <li><strong>ISSUE:</strong> Multiple 'as any' casts added as workarounds</li>
+                    <li><strong>ISSUE:</strong> urlMetadata state changed to 'any' type</li>
+                    <li>Dev server works fine despite build errors</li>
+                    <li>All v1.6.0 features still functional</li>
+                </ul>
+
+                <h3 style="margin-top: 20px; margin-bottom: 10px;">v1.6.0-alpha - December 30, 2024</h3>
+                <ul style="line-height: 1.8; color: #666; margin-left: 20px;">
+                    <li><strong>FIXED:</strong> Metadata loss on "Confirm &amp; Log This" - now passes all 30+ fields</li>
+                    <li><strong>FIXED:</strong> Metadata loss on Save &amp; Exit - complete rewrite of saveAndExit()</li>
+                    <li><strong>FIXED:</strong> Trailer audio continues when opening Soundtrack - uses YouTube postMessage API</li>
+                    <li><strong>NEW:</strong> Save &amp; Exit button - saves incomplete logs as drafts</li>
+                    <li><strong>NEW:</strong> Draft management - amber banner, Resume Logging, Delete buttons</li>
+                    <li><strong>NEW:</strong> CharacterGallery component - cast/scene images with note-taking</li>
+                    <li><strong>NEW:</strong> Soundtrack button on MediaCard (next to title, with tooltip)</li>
+                    <li><strong>NEW:</strong> Full metadata preview in Log mode right pane</li>
+                    <li><strong>NEW:</strong> Alert feedback when saving drafts</li>
+                    <li><strong>NEW:</strong> Comprehensive README with session handoff documentation</li>
+                    <li><strong>NEW:</strong> movie-images API endpoint for TMDB cast/scene images</li>
+                    <li>Expanded LogData interface with 30+ metadata fields</li>
+                    <li>handleResumeDraft() function loads draft data back into state</li>
+                    <li>isDraft flag on LoggedItem interface</li>
+                </ul>
+
+                <h3 style="margin-top: 20px; margin-bottom: 10px;">v1.5.0-alpha - December 29, 2024 (Evening)</h3>
                 <ul style="line-height: 1.8; color: #666; margin-left: 20px;">
                     <li><strong>NEW:</strong> Soundtrack modal with 70/30 split layout (video player + track list)</li>
                     <li><strong>NEW:</strong> YouTube playlist API integration for soundtrack fetching</li>

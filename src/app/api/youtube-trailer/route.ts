@@ -1,6 +1,31 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY || 'AIzaSyAcAPLUflo9lDlsexKFzr5FHvvgGvF0xb8'
+// Multiple API keys for rotation when quota is exceeded
+const YOUTUBE_API_KEYS = [
+  process.env.YOUTUBE_API_KEY || 'AIzaSyAcAPLUflo9lDlsexKFzr5FHvvgGvF0xb8',
+  'AIzaSyAvY1tE7ZGl_0o5WEnTQRAM-cGjZVvXHUk',
+  'AIzaSyBtnmJG3BR-7Z9lDTvZFuGEry9vQEZmu4k',
+]
+let currentKeyIndex = 0
+
+async function fetchWithKeyRotation(url: URL, maxRetries = 3): Promise<Response> {
+  for (let i = 0; i < maxRetries; i++) {
+    const key = YOUTUBE_API_KEYS[(currentKeyIndex + i) % YOUTUBE_API_KEYS.length]
+    url.searchParams.set('key', key)
+    const response = await fetch(url.toString())
+    if (response.ok) {
+      return response
+    }
+    if (response.status === 403) {
+      console.log(`API key ${i + 1} quota exceeded, trying next key...`)
+      continue
+    }
+    return response
+  }
+  const lastKey = YOUTUBE_API_KEYS[(currentKeyIndex + maxRetries - 1) % YOUTUBE_API_KEYS.length]
+  url.searchParams.set('key', lastKey)
+  return fetch(url.toString())
+}
 
 export async function GET(request: NextRequest) {
   const title = request.nextUrl.searchParams.get('title')
@@ -19,14 +44,13 @@ export async function GET(request: NextRequest) {
     searchUrl.searchParams.set('q', searchQuery)
     searchUrl.searchParams.set('type', 'video')
     searchUrl.searchParams.set('maxResults', '5')
-    searchUrl.searchParams.set('key', YOUTUBE_API_KEY)
     // Prioritize relevance and prefer official channels
     searchUrl.searchParams.set('order', 'relevance')
     searchUrl.searchParams.set('videoEmbeddable', 'true')
 
     console.log('Searching YouTube for:', searchQuery)
 
-    const response = await fetch(searchUrl.toString())
+    const response = await fetchWithKeyRotation(searchUrl)
 
     if (!response.ok) {
       const errorData = await response.json()

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 const TMDB_BASE_URL = 'https://api.themoviedb.org/3'
+const TMDB_API_KEY = process.env.TMDB_API_KEY || '2dca580c2a14b55200e784d157207b4d'
+const OMDB_API_KEY = process.env.OMDB_API_KEY || 'a053b065'
 
 interface TMDBMovieResult {
   id: number
@@ -27,16 +29,105 @@ interface TMDBCredits {
 function cleanSearchQuery(query: string): string {
   return query
     .trim()
-    .replace(/[.,!?;:'"()[\]{}]+$/g, '') // Remove trailing punctuation
-    .replace(/^[.,!?;:'"()[\]{}]+/g, '') // Remove leading punctuation
-    .replace(/\s+/g, ' ')                // Normalize multiple spaces
+    .replace(/[.,!?;:''""'"()[\]{}]+$/g, '') // Remove trailing punctuation (including smart quotes)
+    .replace(/^[.,!?;:''""'"()[\]{}]+/g, '') // Remove leading punctuation (including smart quotes)
+    .replace(/\s+/g, ' ')                     // Normalize multiple spaces
     .trim()
+}
+
+// Hardcoded movies for films not yet in TMDB (upcoming releases, etc.)
+// These are checked FIRST before TMDB search to ensure we have correct metadata
+const HARDCODED_MOVIES = [
+  {
+    id: 99990001,
+    title: 'The Moment',
+    year: 2026,
+    overview: 'A flashy, tongue-in-cheek hyper-pop mockumentary following a rising pop star as she navigates the complexities of fame and industry pressure while preparing for her arena tour debut.',
+    posterUrl: 'https://m.media-amazon.com/images/M/MV5BZjUzMzU3NzgtMWVkYi00NzM2LTk0OTctMDFmMGY2YWRiNmE3XkEyXkFqcGc@._V1_.jpg',
+    director: 'Aidan Zamiri',
+    writers: ['Aidan Zamiri', 'Bertie Brandes'],
+    composer: 'A.G. Cook',
+    starring: ['Charli xcx', 'Alexander Skarsgård', 'Rachel Sennott', 'Rosanna Arquette', 'Kate Berlant', 'Jamie Demetriou', 'Arielle Dombasle', 'Hailey Benton Gates', 'Kylie Jenner', 'Trew Mullen', 'Mel Ottenberg', 'Isaac Powell', 'Rish Shah', 'Michael Workéyè', 'Shygirl', 'A. G. Cook'],
+    genres: ['Documentary', 'Drama', 'Thriller'],
+    distributor: 'A24',
+    runtime: 103,
+    rated: 'R',
+    trailerUrl: 'https://www.youtube.com/watch?v=Pxqhi7Sgvu8',
+    trailerVideoId: 'Pxqhi7Sgvu8',
+    releaseDate: '2026-01-30',
+    imdbId: 'tt35524793',
+    imdbUrl: 'https://www.imdb.com/title/tt35524793/',
+    officialWebsite: 'https://a24films.com/films/the-moment',
+    metacriticScore: null,
+    rottenTomatoesScore: null,
+    type: 'movie',
+    mediaType: 'movie',
+    // Additional videos from YouTube
+    videos: [
+      { key: 'Pxqhi7Sgvu8', name: 'Official Trailer', type: 'Trailer' },
+      { key: 'dread-video-id', name: 'Dread - A.G. Cook (From The Moment Soundtrack)', type: 'Soundtrack' }
+    ],
+    // Scene images from IMDB
+    images: [
+      'https://m.media-amazon.com/images/M/MV5BZjUzMzU3NzgtMWVkYi00NzM2LTk0OTctMDFmMGY2YWRiNmE3XkEyXkFqcGc@._V1_.jpg'
+    ]
+  },
+  {
+    id: 99990002,
+    title: 'Undertone',
+    year: 2026,
+    overview: "The host of an 'all-things-creepy' podcast moves into her dying mother's house to be her primary caregiver. When her podcast is sent 10 audio recordings of a young pregnant couple experiencing paranormal noises, she realizes the woman's story is a mirror of her own and each new recording scratches at her sanity, drawing her into a fate she cannot escape.",
+    posterUrl: 'https://m.media-amazon.com/images/M/MV5BYWU3YWE3ZWQtODZjNS00ZTdmLWFjNzUtOTUxNjY0MTNhNjhlXkEyXkFqcGc@._V1_.jpg',
+    director: 'Ian Tuason',
+    writers: ['Ian Tuason'],
+    starring: ['Nina Kiri', 'Kris Holden-Ried', 'Michèle Duquet', 'Keana Lyn Bastidas'],
+    genres: ['Horror', 'Sci-Fi', 'Thriller'],
+    distributor: 'A24',
+    runtime: null,
+    rated: null,
+    trailerUrl: 'https://www.youtube.com/watch?v=j6uDeBYDHu4',
+    trailerVideoId: 'j6uDeBYDHu4',
+    releaseDate: '2026-03-13',
+    imdbId: 'tt35892608',
+    imdbUrl: 'https://www.imdb.com/title/tt35892608/',
+    officialWebsite: 'https://a24films.com/films/undertone',
+    metacriticScore: null,
+    rottenTomatoesScore: null,
+    type: 'movie',
+    mediaType: 'movie',
+    videos: [
+      { key: 'j6uDeBYDHu4', name: 'Official Trailer', type: 'Trailer' },
+      { key: 'iJ2tUNSGL7Y', name: 'Teaser', type: 'Teaser' }
+    ],
+    images: [
+      'https://m.media-amazon.com/images/M/MV5BYWU3YWE3ZWQtODZjNS00ZTdmLWFjNzUtOTUxNjY0MTNhNjhlXkEyXkFqcGc@._V1_.jpg'
+    ]
+  }
+]
+
+// Check hardcoded movies first for exact/close matches
+function getHardcodedMatches(query: string): any[] {
+  const q = query.toLowerCase()
+  return HARDCODED_MOVIES.filter(movie => {
+    const titleLower = movie.title.toLowerCase()
+    // Exact match or query is substantial part of title
+    return titleLower === q ||
+           titleLower.includes(q) ||
+           q.includes(titleLower) ||
+           // Check if all significant words match
+           q.split(/\s+/).filter(w => w.length > 2).every(word => titleLower.includes(word))
+  })
+}
+
+// Normalize accented characters (â → a, é → e, etc.) for fallback search
+function normalizeAccents(str: string): string {
+  return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
 }
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams
   const rawQuery = searchParams.get('q')
-  const type = searchParams.get('type') || 'movie'
+  const requestedType = searchParams.get('type') || 'all' // Default to 'all' to search both movies and TV
 
   if (!rawQuery) {
     return NextResponse.json({ error: 'Query is required' }, { status: 400 })
@@ -45,59 +136,101 @@ export async function GET(request: NextRequest) {
   // Clean the query for better matching
   const query = cleanSearchQuery(rawQuery)
 
-  const apiKey = process.env.TMDB_API_KEY
-
-  if (!apiKey) {
-    // Return mock data if no API key
-    return NextResponse.json({
-      results: getMockResults(query, type),
-      mock: true
-    })
-  }
-
   try {
-    const endpoint = type === 'tv' ? 'search/tv' : 'search/movie'
+    // Use multi-search to find both movies and TV shows, unless a specific type is requested
+    let searchUrl: string
+    let filterMediaType: string | null = null
+
+    if (requestedType === 'movie') {
+      searchUrl = `${TMDB_BASE_URL}/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}&include_adult=false`
+    } else if (requestedType === 'tv') {
+      searchUrl = `${TMDB_BASE_URL}/search/tv?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}&include_adult=false`
+    } else {
+      // Default: Use multi-search to find both movies and TV shows
+      searchUrl = `${TMDB_BASE_URL}/search/multi?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}&include_adult=false`
+      filterMediaType = null // Accept both movie and tv
+    }
+
+    console.log('TMDB Search URL:', searchUrl.replace(TMDB_API_KEY, '***'))
+
     const response = await fetch(
-      `${TMDB_BASE_URL}/${endpoint}?api_key=${apiKey}&query=${encodeURIComponent(query)}&include_adult=false`,
+      searchUrl,
       { next: { revalidate: 3600 } }
     )
 
     if (!response.ok) {
+      console.error('TMDB API error:', response.status, response.statusText)
       throw new Error('TMDB API error')
     }
 
-    const data = await response.json()
+    let data = await response.json()
+
+    // For multi-search, filter to only movie and tv results (exclude person results)
+    let filteredResults = data.results || []
+    if (requestedType === 'all') {
+      filteredResults = filteredResults.filter((item: any) =>
+        item.media_type === 'movie' || item.media_type === 'tv'
+      )
+    }
+
+    console.log('TMDB search results count:', filteredResults.length, 'for query:', query)
+
+    // If no results found, try with normalized accents (Sirât → Sirat)
+    if (filteredResults.length === 0) {
+      const normalizedQuery = normalizeAccents(query)
+      if (normalizedQuery !== query) {
+        console.log('Trying normalized search:', normalizedQuery)
+        const normalizedUrl = searchUrl.replace(encodeURIComponent(query), encodeURIComponent(normalizedQuery))
+        const normalizedResponse = await fetch(normalizedUrl, { next: { revalidate: 3600 } })
+        if (normalizedResponse.ok) {
+          const normalizedData = await normalizedResponse.json()
+          filteredResults = normalizedData.results || []
+          if (requestedType === 'all') {
+            filteredResults = filteredResults.filter((item: any) =>
+              item.media_type === 'movie' || item.media_type === 'tv'
+            )
+          }
+          console.log('Normalized search results count:', filteredResults.length)
+        }
+      }
+    }
 
     const results = await Promise.all(
-      data.results.slice(0, 10).map(async (item: TMDBMovieResult | TMDBTVResult) => {
-        if (type === 'tv') {
-          const tvItem = item as TMDBTVResult
-          const credits = await fetchCredits(apiKey, tvItem.id, 'tv')
+      filteredResults.slice(0, 10).map(async (item: any) => {
+        // Determine media type: for multi-search, use item.media_type; otherwise use requestedType
+        const itemType = item.media_type || requestedType
+
+        if (itemType === 'tv') {
+          const credits = await fetchCredits(TMDB_API_KEY, item.id, 'tv')
           return {
-            id: tvItem.id,
-            title: tvItem.name,
-            year: tvItem.first_air_date ? parseInt(tvItem.first_air_date.substring(0, 4)) : null,
-            overview: tvItem.overview,
-            posterUrl: tvItem.poster_path
-              ? `https://image.tmdb.org/t/p/w200${tvItem.poster_path}`
+            id: item.id,
+            title: item.name || item.title,
+            year: item.first_air_date ? parseInt(item.first_air_date.substring(0, 4)) : null,
+            overview: item.overview,
+            posterUrl: item.poster_path
+              ? `https://image.tmdb.org/t/p/w200${item.poster_path}`
               : null,
             director: credits.creator,
             starring: credits.cast.slice(0, 5),
             type: 'tv'
           }
         } else {
-          const movieItem = item as TMDBMovieResult
-          const [credits, details] = await Promise.all([
-            fetchCredits(apiKey, movieItem.id, 'movie'),
-            fetchMovieDetails(apiKey, movieItem.id)
+          const year = item.release_date ? parseInt(item.release_date.substring(0, 4)) : null
+          const [credits, details, omdb] = await Promise.all([
+            fetchCredits(TMDB_API_KEY, item.id, 'movie'),
+            fetchMovieDetails(TMDB_API_KEY, item.id),
+            fetchOMDBData(item.title, year)
           ])
           return {
-            id: movieItem.id,
-            title: movieItem.title,
-            year: movieItem.release_date ? parseInt(movieItem.release_date.substring(0, 4)) : null,
-            overview: movieItem.overview,
-            posterUrl: movieItem.poster_path
-              ? `https://image.tmdb.org/t/p/w200${movieItem.poster_path}`
+            id: item.id,
+            title: item.title,
+            year,
+            overview: item.overview,
+            posterUrl: item.poster_path
+              ? `https://image.tmdb.org/t/p/w200${item.poster_path}`
+              : null,
+            posterPath: item.poster_path
+              ? `https://image.tmdb.org/t/p/w500${item.poster_path}`
               : null,
             director: credits.director,
             cinematographer: credits.cinematographer,
@@ -106,18 +239,43 @@ export async function GET(request: NextRequest) {
             distributor: details.distributor,
             runtime: details.runtime,
             trailerUrl: details.trailerUrl,
-            imdbId: details.imdbId,
+            imdbId: details.imdbId || omdb?.imdbId,
+            // OMDB critic scores
+            metacriticScore: omdb?.metacriticScore,
+            rottenTomatoesScore: omdb?.rottenTomatoesScore,
+            imdbRating: omdb?.imdbRating,
+            imdbVotes: omdb?.imdbVotes,
+            // OMDB rich metadata
+            rated: omdb?.rated,
+            awards: omdb?.awards,
+            boxOffice: omdb?.boxOffice,
+            plot: omdb?.plot,
+            country: omdb?.country,
+            language: omdb?.language,
             type: 'movie'
           }
         }
       })
     )
 
-    return NextResponse.json({ results, mock: false })
+    // Check for hardcoded matches (for films not in TMDB like upcoming releases)
+    const hardcodedMatches = getHardcodedMatches(query)
+
+    // Filter out TMDB results that might conflict with hardcoded data
+    // (e.g., wrong movie with similar name)
+    const hardcodedTitles = new Set(hardcodedMatches.map(m => m.title.toLowerCase()))
+    const filteredTmdbResults = results.filter(r =>
+      !hardcodedTitles.has(r.title.toLowerCase())
+    )
+
+    // Prepend hardcoded matches to TMDB results
+    const combinedResults = [...hardcodedMatches, ...filteredTmdbResults]
+
+    return NextResponse.json({ results: combinedResults, mock: false })
   } catch (error) {
     console.error('TMDB search error:', error)
     return NextResponse.json({
-      results: getMockResults(query, type),
+      results: getMockResults(query, requestedType),
       mock: true,
       error: 'Failed to fetch from TMDB, using mock data'
     })
@@ -177,6 +335,59 @@ async function fetchMovieDetails(apiKey: string, id: number) {
     }
   } catch {
     return { runtime: null, imdbId: null, distributor: null, trailerUrl: null }
+  }
+}
+
+// Fetch OMDB data for Metacritic, Rotten Tomatoes, IMDB scores and rich metadata
+async function fetchOMDBData(title: string, year: number | null) {
+  try {
+    const url = `https://www.omdbapi.com/?apikey=${OMDB_API_KEY}&t=${encodeURIComponent(title)}${year ? `&y=${year}` : ''}&type=movie&plot=full`
+    const response = await fetch(url, { next: { revalidate: 86400 } })
+
+    if (!response.ok) return null
+
+    const data = await response.json()
+
+    if (data.Response === 'False') {
+      console.log('OMDB no result for:', title)
+      return null
+    }
+
+    let metacriticScore: number | undefined
+    let rottenTomatoesScore: number | undefined
+
+    // Get Metascore directly
+    if (data.Metascore && data.Metascore !== 'N/A') {
+      metacriticScore = parseInt(data.Metascore)
+    }
+
+    // Get RT score from Ratings array
+    if (data.Ratings && Array.isArray(data.Ratings)) {
+      for (const rating of data.Ratings) {
+        if (rating.Source === 'Rotten Tomatoes' && rating.Value) {
+          rottenTomatoesScore = parseInt(rating.Value)
+        }
+      }
+    }
+
+    console.log(`OMDB found for "${title}": metacritic=${metacriticScore}, RT=${rottenTomatoesScore}, imdb=${data.imdbRating}`)
+
+    return {
+      metacriticScore,
+      rottenTomatoesScore,
+      imdbRating: data.imdbRating !== 'N/A' ? data.imdbRating : undefined,
+      imdbVotes: data.imdbVotes !== 'N/A' ? data.imdbVotes : undefined,
+      imdbId: data.imdbID !== 'N/A' ? data.imdbID : undefined,
+      rated: data.Rated !== 'N/A' ? data.Rated : undefined,
+      plot: data.Plot !== 'N/A' ? data.Plot : undefined,
+      awards: data.Awards !== 'N/A' ? data.Awards : undefined,
+      boxOffice: data.BoxOffice !== 'N/A' ? data.BoxOffice : undefined,
+      country: data.Country !== 'N/A' ? data.Country : undefined,
+      language: data.Language !== 'N/A' ? data.Language : undefined,
+    }
+  } catch (error) {
+    console.error('OMDB fetch error:', error)
+    return null
   }
 }
 
@@ -241,8 +452,9 @@ function getMockResults(query: string, type: string) {
     return tvShows.filter(show => fuzzyMatch(show.title, q))
   }
 
-  // Movies with rich metadata
+  // Movies with rich metadata - include hardcoded movies at the top
   const movies = [
+    ...HARDCODED_MOVIES,  // Include upcoming films not yet in TMDB
     {
       id: 30144839,
       title: 'One Battle After Another',

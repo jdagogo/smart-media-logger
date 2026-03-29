@@ -9,6 +9,7 @@ interface QuestionCardProps {
   onBack?: () => void
   onSkip?: () => void
   onContinue?: () => void
+  onSaveExit?: () => void // Save current progress and exit logging flow
   onFeedback?: (feedback: { questionId: string; suggestion: string }) => void
   canContinue?: boolean
   showBack?: boolean
@@ -22,6 +23,7 @@ export default function QuestionCard({
   onBack,
   onSkip,
   onContinue,
+  onSaveExit,
   onFeedback,
   canContinue = true,
   showBack = true,
@@ -57,7 +59,7 @@ export default function QuestionCard({
 
   return (
     <div className="bg-paper-50 rounded-2xl p-10 shadow-card animate-fade-in w-full border-2 border-accent-blue">
-      {/* Header with back button and progress */}
+      {/* Header with back button, progress, and save & exit */}
       <div className="flex items-center justify-between mb-8">
         {showBack && onBack ? (
           <button
@@ -71,9 +73,19 @@ export default function QuestionCard({
           <div />
         )}
 
-        <span className="text-ink-800 font-typewriter">
-          {questionNumber} of {totalQuestions}
-        </span>
+        <div className="flex items-center gap-4">
+          <span className="text-ink-800 font-typewriter">
+            {questionNumber} of {totalQuestions}
+          </span>
+          {onSaveExit && (
+            <button
+              onClick={onSaveExit}
+              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium text-sm"
+            >
+              Save & Exit
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Question Content */}
