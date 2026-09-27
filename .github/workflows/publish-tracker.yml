@@ -1,0 +1,117 @@
+name: Publish canonical tracker
+on:
+  push:
+    branches: ['v1.9.5-unified-preview']
+  workflow_dispatch:
+permissions:
+  contents: read
+  id-token: write
+concurrency:
+  group: canonical-tracker-publication
+  cancel-in-progress: false
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/v1.9.5-unified-preview'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: 'v1.9.5-unified-preview'
+      - uses: aws-actions/configure-aws-credentials@ff717079ee2060e4bcee96c4779b553acc87447c # v4
+        with:
+          role-to-assume: arn:aws:iam::805187821622:role/tracker-publish-sml
+          aws-region: us-east-1
+      - name: Preserve and publish committed tracker bytes
+        env:
+          TRACKER_REPO: 'jdagogo/smart-media-logger'
+          TRACKER_BRANCH: 'v1.9.5-unified-preview'
+          TRACKER_PATH: 'public/smart-media-logger-versions.html'
+          TRACKER_LANE: 'sml'
+          TRACKER_BUCKET: loom-workspace-state-805187821622
+        shell: python
+        run: |
+          #!/usr/bin/env python3
+          """Publish only the committed canonical tracker and its existing Markdown links.
+          
+          Run by a serialized GitHub Actions job checked out at the live canonical branch.
+          No HTML rewriting, application execution, or credentials in the receipt.
+          """
+          import hashlib
+          import json
+          import os
+          from pathlib import Path, PurePosixPath
+          import re
+          import subprocess
+          import tempfile
+          from datetime import datetime, timezone
+          from urllib.parse import unquote
+          
+          
+          def run(*args):
+              return subprocess.check_output(args, text=True).strip()
+          
+          
+          def safe(name):
+              return bool(name) and not re.search(r'[\\\x00-\x1f?#]', name) and not name.startswith('/') and all(
+                  part and not part.startswith('.') for part in name.split('/'))
+          
+          
+          def collect(root, tracker):
+              canonical = root / tracker
+              base = canonical.parent.resolve()
+              names = {canonical.name}
+              for href in re.findall(r'href\s*=\s*["\']([^"\']+)["\']', canonical.read_text(), re.I):
+                  if re.match(r'^(?:[a-z]+:|/|#)', href, re.I):
+                      continue
+                  name = unquote(re.split(r'[?#]', href)[0])
+                  if safe(name) and name.endswith('.md') and (base / name).is_file():
+                      names.add(name)
+              files = {}
+              for name in sorted(names):
+                  file = base / name
+                  if not file.resolve().is_relative_to(base):
+                      raise ValueError('Source link escapes the canonical tracker directory')
+                  data = file.read_bytes()
+                  if len(data) > 16 * 1024 * 1024:
+                      raise ValueError('Canonical file exceeds supported size')
+                  # No generated, untracked or working edits may be published.
+                  relative = file.relative_to(root).as_posix()
+                  committed = subprocess.check_output(['git', 'show', 'HEAD:' + relative])
+                  if data != committed:
+                      raise ValueError('Canonical file differs from the checked-out commit')
+                  files[name] = {'sha256': hashlib.sha256(data).hexdigest(), 'bytes': len(data)}
+              return base, files
+          
+          
+          def main():
+              repo, branch, tracker, lane, bucket = [os.environ[key] for key in (
+                  'TRACKER_REPO', 'TRACKER_BRANCH', 'TRACKER_PATH', 'TRACKER_LANE', 'TRACKER_BUCKET')]
+              if not re.fullmatch(r'[a-z0-9-]+', lane) or not safe(tracker):
+                  raise ValueError('Invalid source configuration')
+              root = Path.cwd().resolve()
+              commit = run('git', 'rev-parse', 'HEAD')
+              base, files = collect(root, tracker)
+              prefix = f'tracker/current/{lane}'
+              for name in files:
+                  run('aws', 's3', 'cp', str(base / name), f's3://{bucket}/{prefix}/commits/{commit}/{name}',
+                      '--only-show-errors', '--cache-control', 'no-store')
+              # Jobs are serialized per repo; even re-running an old job checks out current
+              # branch HEAD. If another push overtook this job, its pending run publishes it.
+              latest = run('git', 'ls-remote', 'origin', 'refs/heads/' + branch).split()[0]
+              if latest != commit:
+                  print('Branch advanced; leaving CURRENT unchanged for the queued newer run.')
+                  return
+              receipt = {'schemaVersion': 1, 'repo': repo, 'branch': branch, 'path': tracker,
+                         'commit': commit, 'publishedAt': datetime.now(timezone.utc).isoformat(),
+                         'runUrl': f"https://github.com/{repo}/actions/runs/{os.environ['GITHUB_RUN_ID']}", 'files': files}
+              with tempfile.TemporaryDirectory() as directory:
+                  receipt_path = Path(directory) / 'current.json'
+                  receipt_path.write_text(json.dumps(receipt, indent=2) + '\n')
+                  run('aws', 's3', 'cp', str(receipt_path), f's3://{bucket}/{prefix}/current.json',
+                      '--only-show-errors', '--cache-control', 'no-store', '--content-type', 'application/json')
+              print(json.dumps({'repo': repo, 'commit': commit, 'publishedFiles': len(files)}))
+          
+          
+          if __name__ == '__main__':
+              main()
