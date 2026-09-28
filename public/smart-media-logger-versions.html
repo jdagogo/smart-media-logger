@@ -330,6 +330,19 @@
 <body>
     <div class="container">
         <h1>Smart Media Logger</h1>
+<!-- New dated entry sml-publication-2026-09-27; existing bytes remain immutable. -->
+<section id="sml-publication-2026-09-27" class="card" style="background:#fff;color:#182638;border:2px solid #bd8125;border-radius:8px;padding:18px;margin:18px 0;line-height:1.55;overflow-wrap:anywhere;">
+<h2 style="color:#182638">September 27 — live canonical SML tracker publication</h2>
+<p><strong>Recorded:</strong> 2026-09-27 22:53:24 PDT (UTC-07:00; America/Los_Angeles). <strong>Project:</strong> SML / Workspace tracker. <strong>Status:</strong> Publication verified; no new product functional acceptance claimed.</p>
+<p><strong>Hashtags:</strong> #SML #3006 #TrackerHub #Publication</p>
+<p><strong>Repo / branch / checkpoint:</strong> <a href="https://github.com/jdagogo/smart-media-logger">jdagogo/smart-media-logger</a> · <a href="https://github.com/jdagogo/smart-media-logger/tree/v1.9.5-unified-preview">v1.9.5-unified-preview</a> · <a href="https://github.com/jdagogo/smart-media-logger/commit/0986db28d886b32cc8b3bd3c68e5024460913141"><code>0986db28d886b32cc8b3bd3c68e5024460913141</code></a></p>
+<p><strong>What changed / observed:</strong> The Sep 27 implementation changed only <code>.github/workflows/publish-tracker.yml</code>. Canonical <code>public/smart-media-logger-versions.html</code> is automatically published on push to private <code>s3://loom-workspace-state-805187821622/tracker/current/sml/</code>; Workspace reads the new receipt on refresh. Local 8899 reads the working tracker immediately.</p>
+<p><strong>Why:</strong> Make accepted tracker updates durable across machines without a second Hub edit. Publication transports exact bytes and never authors history.</p>
+<p><strong>Verification:</strong> <a href="https://github.com/jdagogo/smart-media-logger/actions/runs/36336356084">Run 36336356084</a> succeeded. Earlier Sep 27 browser checks opened 3006 from hosted/local Hub in a separate tab and reused the existing process. No fresh SML logging/editing/ingestion test is claimed.</p>
+<p><strong>Open issues:</strong> The restored local tracker already orders historical cards differently from canonical Git. Both baselines are preserved; this same dated entry is appended to each without publishing the old local reorder. The pre-existing Film Data Bible rename/deletion remains uncommitted and untouched. Resolving that old divergence is separate work.</p>
+<p><strong>Rollback / reference:</strong> <a href="https://github.com/jdagogo/smart-media-logger/commit/6f3b2c80e67c4f41c6415a97894c892d7f74b933"><code>6f3b2c80e67c4f41c6415a97894c892d7f74b933</code></a> · <a href="https://github.com/United-Tribes/loom/issues/104">Loom #104 reconciliation</a></p>
+</section>
+
         <p class="subtitle">AI-powered media consumption tracking | Part of UnitedTribes Ecosystem | Port 3006</p>
 
         <!-- LOCAL LINKS -->
