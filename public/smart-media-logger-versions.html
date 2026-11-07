@@ -330,6 +330,16 @@
 <body>
     <div class="container">
         <h1>Smart Media Logger</h1>
+<!-- New dated entry sml-workspace-reader-2026-11-06; existing bytes remain immutable. -->
+<section id="sml-workspace-reader-2026-11-06" class="version-card">
+<h2>November 6 — Claude and Claude Design can read SML through UnitedTribes Workspace</h2>
+<p><strong>Recorded:</strong> 2026-11-06 17:40:16 PST (UTC-0800; America/Los_Angeles). <strong>Status:</strong> SML library and tracker reads verified in both clients. #SML #3006 #Workspace #TrackerHub #ClaudeDesign</p>
+<p><strong>What changed and why:</strong> A background component in SML now mirrors its allowed library, queue, draft and preference data locally so the authenticated Workspace reader can return it without manual exports. Existing read-only lookups and configured source files are available. The connector cannot edit SML records.</p>
+<p><strong>Verification:</strong> Regular Claude and standalone Claude Design each read the live SML tracker and the library mirror. Design received a fresh observation; Claude correctly identified a stale heartbeat on an earlier read. A separate authenticated lookup returned a provider search result.</p>
+<p><strong>Limits:</strong> The Mac must be awake and logged in. The per-origin mirror reports its observation time and may become stale when the SML tab is closed or throttled. The existing local historical ordering and unrelated Film Data Bible changes were not published.</p>
+<p><strong>Source:</strong> <a href="https://github.com/jdagogo/smart-media-logger/tree/v1.9.5-unified-preview">jdagogo/smart-media-logger · v1.9.5-unified-preview</a> · <a href="https://github.com/jdagogo/smart-media-logger/commit/6120564911f371d3e88a49e186154cc6cf72c934">6120564911f371d3e88a49e186154cc6cf72c934</a>.</p>
+<p><strong>Rollback:</strong> Previous canonical SML checkpoint <a href="https://github.com/jdagogo/smart-media-logger/commit/607a53a0e65b6fd312c9ec26039705ff137058d6">607a53a0e65b6fd312c9ec26039705ff137058d6</a>. Revert only the three integration changes after checking current state. <a href="https://workspace.unitedtribes.ai/tracker/hub/overview.html#workspace-reader-2026-11-06">Workspace overview and connector instructions</a>.</p>
+</section>
 <!-- New dated entry sml-publication-2026-09-27; existing bytes remain immutable. -->
 <section id="sml-publication-2026-09-27" class="card" style="background:#fff;color:#182638;border:2px solid #bd8125;border-radius:8px;padding:18px;margin:18px 0;line-height:1.55;overflow-wrap:anywhere;">
 <h2 style="color:#182638">September 27 — live canonical SML tracker publication</h2>
