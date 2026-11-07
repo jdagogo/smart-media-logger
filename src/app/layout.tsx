@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import './globals.css'
 import DataManager from '@/components/DataManager'
+import WorkspaceReaderSync from '@/components/WorkspaceReaderSync'
 
 export const metadata: Metadata = {
   title: 'Smart Media Logger',
@@ -32,6 +33,7 @@ export default function RootLayout({
               </a>
             </div>
             <DataManager />
+            <WorkspaceReaderSync />
           </div>
         </nav>
         <main>
